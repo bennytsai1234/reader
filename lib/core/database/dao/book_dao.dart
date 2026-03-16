@@ -1,5 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:legado_reader/core/models/book.dart';
+import 'package:legado_reader/core/models/book_group.dart';
+import 'package:legado_reader/core/constant/book_type.dart';
 import '../app_database.dart';
 
 /// BookDao - SQLite 實作 (對標 Android BookDao.kt)
@@ -10,6 +12,17 @@ class BookDao extends BaseDao<Book> {
   Future<List<Book>> getAll() async {
     final List<Map<String, dynamic>> maps = await queryAll();
     return maps.map((m) => Book.fromJson(m)).toList();
+  }
+
+  /// 根據分組獲取書籍 (對標 Android: flowByGroup)
+  Future<List<Book>> getInGroup(int groupId) async {
+    if (groupId == BookGroup.idAll) return getInBookshelf();
+    if (groupId == BookGroup.idAudio) return getAudioBooks();
+    if (groupId == BookGroup.idLocal) return getLocalBooks();
+    if (groupId == BookGroup.idError) return getUpdateErrorBooks();
+    
+    // 預設為使用者自定義分組 (位運算)
+    return getByUserGroup(groupId);
   }
 
   /// 獲取所有書架上的書籍 (對標 Android: flowAll)
@@ -23,8 +36,56 @@ class BookDao extends BaseDao<Book> {
     return maps.map((m) => Book.fromJson(m)).toList();
   }
 
-  /// getInBookshelf 的別名，兼容舊代碼呼叫
+  /// getInBookshelf 的別名，相容舊代碼
   Future<List<Book>> getAllInBookshelf() => getInBookshelf();
+
+  /// 獲取音訊書籍 (對標 Android: flowAudio)
+  Future<List<Book>> getAudioBooks() async {
+    final client = await db;
+    final List<Map<String, dynamic>> maps = await client.query(
+      tableName,
+      where: '(type & ?) > 0 AND isInBookshelf = 1',
+      whereArgs: [BookType.audio],
+      orderBy: 'durChapterTime DESC',
+    );
+    return maps.map((m) => Book.fromJson(m)).toList();
+  }
+
+  /// 獲取本地書籍 (對標 Android: flowLocal)
+  Future<List<Book>> getLocalBooks() async {
+    final client = await db;
+    final List<Map<String, dynamic>> maps = await client.query(
+      tableName,
+      where: '(type & ?) > 0 AND isInBookshelf = 1',
+      whereArgs: [BookType.local],
+      orderBy: 'durChapterTime DESC',
+    );
+    return maps.map((m) => Book.fromJson(m)).toList();
+  }
+
+  /// 獲取更新失敗書籍 (對標 Android: flowUpdateError)
+  Future<List<Book>> getUpdateErrorBooks() async {
+    final client = await db;
+    final List<Map<String, dynamic>> maps = await client.query(
+      tableName,
+      where: '(type & ?) > 0 AND isInBookshelf = 1',
+      whereArgs: [BookType.updateError],
+      orderBy: 'durChapterTime DESC',
+    );
+    return maps.map((m) => Book.fromJson(m)).toList();
+  }
+
+  /// 獲取使用者分組書籍 (對標 Android: flowByUserGroup)
+  Future<List<Book>> getByUserGroup(int groupMask) async {
+    final client = await db;
+    final List<Map<String, dynamic>> maps = await client.query(
+      tableName,
+      where: '(`group` & ?) > 0 AND isInBookshelf = 1',
+      whereArgs: [groupMask],
+      orderBy: 'durChapterTime DESC',
+    );
+    return maps.map((m) => Book.fromJson(m)).toList();
+  }
 
   /// 獲取最後閱讀的書籍 (對標 Android: lastReadBook)
   Future<Book?> getLastReadBook() async {
@@ -52,18 +113,6 @@ class BookDao extends BaseDao<Book> {
     return Book.fromJson(maps.first);
   }
 
-  /// 搜尋書籍 (對標 Android: flowSearch)
-  Future<List<Book>> search(String key) async {
-    final client = await db;
-    final List<Map<String, dynamic>> maps = await client.query(
-      tableName,
-      where: '(name LIKE ? OR author LIKE ?) AND isInBookshelf = 1',
-      whereArgs: ['%$key%', '%$key%'],
-      orderBy: 'durChapterTime DESC',
-    );
-    return maps.map((m) => Book.fromJson(m)).toList();
-  }
-
   /// 根據書名與作者獲取書籍
   Future<Book?> getByNameAndAuthor(String name, String author) async {
     final client = await db;
@@ -75,6 +124,46 @@ class BookDao extends BaseDao<Book> {
     );
     if (maps.isEmpty) return null;
     return Book.fromJson(maps.first);
+  }
+
+  /// 獲取書架上正在使用的所有書源 URL (對標 Android: getAllUseBookSource)
+  Future<List<String>> getAllUsedSourceUrls() async {
+    final client = await db;
+    final List<Map<String, dynamic>> maps = await client.rawQuery(
+      '''SELECT DISTINCT origin FROM books 
+         WHERE isInBookshelf = 1 
+         AND origin NOT LIKE '${BookType.localTag}%' 
+         AND origin NOT LIKE '${BookType.webDavTag}%'''
+    );
+    return maps.map((m) => m['origin'] as String).toList();
+  }
+
+  /// getByUserGroup 的別名，相容舊代碼
+  Future<List<Book>> getBooksInGroup(int groupMask) => getByUserGroup(groupMask);
+
+  /// 檢查本地檔案是否存在 (對標 Android: hasFile)
+  Future<bool> hasFile(String fileName) async {
+    final client = await db;
+    final List<Map<String, dynamic>> maps = await client.query(
+      tableName,
+      where: '''(type & ?) > 0 
+                AND (originName = ? OR (origin != ? AND origin LIKE ?))''',
+      whereArgs: [BookType.local, fileName, BookType.localTag, '%$fileName'],
+      limit: 1,
+    );
+    return maps.isNotEmpty;
+  }
+
+  /// 搜尋書籍 (對標 Android: flowSearch)
+  Future<List<Book>> search(String key) async {
+    final client = await db;
+    final List<Map<String, dynamic>> maps = await client.query(
+      tableName,
+      where: '(name LIKE ? OR author LIKE ?) AND isInBookshelf = 1',
+      whereArgs: ['%$key%', '%$key%'],
+      orderBy: 'durChapterTime DESC',
+    );
+    return maps.map((m) => Book.fromJson(m)).toList();
   }
 
   /// 檢查是否存在 (對標 Android: has)
@@ -132,19 +221,12 @@ class BookDao extends BaseDao<Book> {
     );
   }
 
-  /// 獲取指定分組的書籍 (對標 Android: flowByUserGroup)
-  /// 支持位運算分組過濾
-  Future<List<Book>> getByGroup(int groupMask) async {
+  /// 清理未在書架上的書籍 (對標 Android: deleteNotShelfBook)
+  Future<void> deleteNotShelfBooks() async {
     final client = await db;
-    final List<Map<String, dynamic>> maps = await client.query(
+    await client.delete(
       tableName,
-      where: '(`group` & ?) > 0 AND isInBookshelf = 1',
-      whereArgs: [groupMask],
-      orderBy: 'durChapterTime DESC',
+      where: 'isInBookshelf = 0',
     );
-    return maps.map((m) => Book.fromJson(m)).toList();
   }
-
-  /// getByGroup 的別名，支持位運算
-  Future<List<Book>> getBooksInGroup(int groupMask) => getByGroup(groupMask);
 }
