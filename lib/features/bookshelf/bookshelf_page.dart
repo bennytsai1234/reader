@@ -1,14 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:legado_reader/core/models/book.dart';
 import 'package:legado_reader/features/bookshelf/bookshelf_provider.dart';
 import 'package:legado_reader/features/reader/reader_page.dart';
+import 'package:legado_reader/features/reader/reader_provider.dart';
 import 'package:legado_reader/features/search/search_page.dart';
 import 'package:legado_reader/features/explore/explore_page.dart';
-import 'package:legado_reader/features/source_manager/source_manager_page.dart';
 import 'package:legado_reader/features/settings/settings_page.dart';
 import 'package:legado_reader/features/reader/audio_player_page.dart';
+import 'package:file_picker/file_picker.dart';
 import 'widgets/group_select_dialog.dart';
 
 class BookshelfPage extends StatefulWidget {
@@ -75,8 +77,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
                   const PopupMenuItem(value: 'export', child: Row(children: [Icon(Icons.file_upload_outlined, size: 20), SizedBox(width: 12), Text('匯出書架')])),
                   const PopupMenuItem(value: 'log', child: Row(children: [Icon(Icons.bug_report_outlined, size: 20), SizedBox(width: 12), Text('日誌')])),
                 ],
-import 'package:file_picker/file_picker.dart';
-...
                 onSelected: (value) async {
                   switch (value) {
                     case 'grid': provider.setGridView(!provider.isGridView); break;
@@ -88,7 +88,9 @@ import 'package:file_picker/file_picker.dart';
                       );
                       if (result != null && result.files.single.path != null) {
                         await provider.importLocalBookPath(result.files.single.path!);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在解析本地書籍...')));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在解析本地書籍...')));
+                        }
                       }
                       break;
                     case 'manage': setState(() { _isMultiSelect = true; }); break;
@@ -175,6 +177,9 @@ import 'package:file_picker/file_picker.dart';
 
   Widget _buildGridItem(BuildContext context, Book book) {
     final isSelected = _selectedUrls.contains(book.bookUrl);
+    final coverUrl = book.coverUrl ?? '';
+    final isLocalCover = coverUrl.startsWith('local://');
+
     return InkWell(
       onLongPress: () => setState(() { _isMultiSelect = true; _selectedUrls.add(book.bookUrl); }),
       onTap: () {
@@ -192,13 +197,20 @@ import 'package:file_picker/file_picker.dart';
               Expanded(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: CachedNetworkImage(
-                    imageUrl: book.coverUrl ?? '',
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    placeholder: (context, url) => Container(color: Colors.grey[200], child: const Icon(Icons.book, color: Colors.grey)),
-                    errorWidget: (context, url, error) => Container(color: Colors.grey[200], child: const Icon(Icons.book, color: Colors.grey)),
-                  ),
+                  child: isLocalCover 
+                    ? Image.file(
+                        File(coverUrl.replaceFirst('local://', '')),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (_, __, ___) => Container(color: Colors.grey[200], child: const Icon(Icons.book, color: Colors.grey)),
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: coverUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        placeholder: (context, url) => Container(color: Colors.grey[200], child: const Icon(Icons.book, color: Colors.grey)),
+                        errorWidget: (context, url, error) => Container(color: Colors.grey[200], child: const Icon(Icons.book, color: Colors.grey)),
+                      ),
                 ),
               ),
               const SizedBox(height: 4),
@@ -218,6 +230,9 @@ import 'package:file_picker/file_picker.dart';
 
   Widget _buildBookItem(BuildContext context, Book book) {
     final isSelected = _selectedUrls.contains(book.bookUrl);
+    final coverUrl = book.coverUrl ?? '';
+    final isLocalCover = coverUrl.startsWith('local://');
+
     return InkWell(
       onLongPress: () => setState(() { _isMultiSelect = true; _selectedUrls.add(book.bookUrl); }),
       onTap: () {
@@ -239,11 +254,17 @@ import 'package:file_picker/file_picker.dart';
           children: [
             ClipRRect(
               borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
-              child: CachedNetworkImage(
-                imageUrl: book.coverUrl ?? '',
-                width: 80, height: 110, fit: BoxFit.cover,
-                errorWidget: (context, url, error) => Container(width: 80, color: Colors.grey[200], child: const Icon(Icons.book, color: Colors.grey)),
-              ),
+              child: isLocalCover
+                ? Image.file(
+                    File(coverUrl.replaceFirst('local://', '')),
+                    width: 80, height: 110, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(width: 80, color: Colors.grey[200], child: const Icon(Icons.book, color: Colors.grey)),
+                  )
+                : CachedNetworkImage(
+                    imageUrl: coverUrl,
+                    width: 80, height: 110, fit: BoxFit.cover,
+                    errorWidget: (context, url, error) => Container(width: 80, color: Colors.grey[200], child: const Icon(Icons.book, color: Colors.grey)),
+                  ),
             ),
             Expanded(
               child: Padding(
@@ -272,7 +293,15 @@ import 'package:file_picker/file_picker.dart';
     if (book.type == 2) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => AudioPlayerPage(book: book, chapterIndex: book.durChapterIndex)));
     } else {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => ReaderPage(book: book, chapterIndex: book.durChapterIndex, chapterPos: book.durChapterPos)));
+      Navigator.push(
+        context, 
+        MaterialPageRoute(
+          builder: (_) => ChangeNotifierProvider(
+            create: (ctx) => ReaderProvider(book: book, initialChapterIndex: book.durChapterIndex, initialChapterPos: book.durChapterPos),
+            child: ReaderPage(book: book, chapterIndex: book.durChapterIndex, chapterPos: book.durChapterPos),
+          )
+        )
+      );
     }
   }
 
