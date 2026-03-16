@@ -23,7 +23,7 @@ class AppDatabase {
 
     return await openDatabase(
       path,
-      version: 1, // 初始版本
+      version: 2, // 升級版本
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -37,31 +37,37 @@ class AppDatabase {
     
     _createTable(batch, 'books', '''
       bookUrl TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      author TEXT,
-      coverUrl TEXT,
-      intro TEXT,
-      customCoverUrl TEXT,
-      customIntro TEXT,
-      customName TEXT,
-      customTag TEXT,
-      `group` INTEGER DEFAULT 0,
+      tocUrl TEXT,
       origin TEXT,
       originName TEXT,
+      name TEXT NOT NULL,
+      author TEXT,
+      kind TEXT,
+      customTag TEXT,
+      coverUrl TEXT,
+      customCoverUrl TEXT,
+      intro TEXT,
+      customIntro TEXT,
+      charset TEXT,
       type INTEGER DEFAULT 0,
-      isInBookshelf INTEGER DEFAULT 0,
-      durChapterIndex INTEGER DEFAULT 0,
-      durChapterPos INTEGER DEFAULT 0,
-      durChapterTitle TEXT,
-      durChapterTime INTEGER DEFAULT 0,
+      `group` INTEGER DEFAULT 0,
+      latestChapterTitle TEXT,
+      latestChapterTime INTEGER DEFAULT 0,
       lastCheckTime INTEGER DEFAULT 0,
       lastCheckCount INTEGER DEFAULT 0,
       totalChapterNum INTEGER DEFAULT 0,
-      latestChapterTitle TEXT,
-      latestChapterTime INTEGER DEFAULT 0,
+      durChapterTitle TEXT,
+      durChapterIndex INTEGER DEFAULT 0,
+      durChapterPos INTEGER DEFAULT 0,
+      durChapterTime INTEGER DEFAULT 0,
+      wordCount TEXT,
       canUpdate INTEGER DEFAULT 1,
       `order` INTEGER DEFAULT 0,
-      variable TEXT
+      originOrder INTEGER DEFAULT 0,
+      variable TEXT,
+      readConfig TEXT,
+      syncTime INTEGER DEFAULT 0,
+      isInBookshelf INTEGER DEFAULT 0
     ''');
 
     _createTable(batch, 'chapters', '''
@@ -356,7 +362,20 @@ class AppDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // 留待未來升級使用
+    if (oldVersion < 2) {
+      final batch = db.batch();
+      // 為 books 表格補上缺失欄位
+      batch.execute('ALTER TABLE books ADD COLUMN tocUrl TEXT');
+      batch.execute('ALTER TABLE books ADD COLUMN kind TEXT');
+      batch.execute('ALTER TABLE books ADD COLUMN charset TEXT');
+      batch.execute('ALTER TABLE books ADD COLUMN wordCount TEXT');
+      batch.execute('ALTER TABLE books ADD COLUMN originOrder INTEGER DEFAULT 0');
+      batch.execute('ALTER TABLE books ADD COLUMN readConfig TEXT');
+      batch.execute('ALTER TABLE books ADD COLUMN syncTime INTEGER DEFAULT 0');
+      // 移除 Model 不存在的 customName (選用，SQLite 不直接支援 DROP COLUMN, 這裡先留著或無視)
+      await batch.commit();
+      debugPrint('Database Upgraded to v2: Added missing columns to books table');
+    }
   }
 
   Future<void> close() async {
