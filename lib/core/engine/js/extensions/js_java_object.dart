@@ -1,0 +1,53 @@
+import '../js_extensions_base.dart';
+
+/// JsExtensions 的 JS 端封裝物件注入
+extension JsJavaObject on JsExtensionsBase {
+  void injectJavaObjectJs() {
+    runtime.evaluate('''
+      var java = {
+        ajax: function(url) { return sendMessage('ajax', JSON.stringify(url)); },
+        ajaxAll: function(urlList) { return sendMessage('ajaxAll', JSON.stringify(urlList)); },
+        connect: function(url) { return sendMessage('connect', JSON.stringify(url)); },
+        get: function(url, headers) { 
+          var res = sendMessage('get', JSON.stringify([url, headers]));
+          return { body: function() { return res.body; }, url: function() { return res.url; }, statusCode: function() { return res.code; }, headers: function() { return res.headers; } };
+        },
+        post: function(url, body, headers) {
+          var res = sendMessage('post', JSON.stringify([url, body, headers]));
+          return { body: function() { return res.body; }, url: function() { return res.url; }, statusCode: function() { return res.code; }, headers: function() { return res.headers; } };
+        },
+        head: function(url, headers) { return this.get(url, headers); },
+        getCookie: function(tag, key) { return sendMessage('getCookie', JSON.stringify([tag, key])); },
+        createSymmetricCrypto: function(transformation, key, iv) {
+          return {
+            decrypt: function(data) { return sendMessage('symmetricCrypto', JSON.stringify(['decrypt', transformation, key, iv, data, 'bytes'])); },
+            decryptStr: function(data) { return sendMessage('symmetricCrypto', JSON.stringify(['decrypt', transformation, key, iv, data, 'string'])); },
+            encrypt: function(data) { return sendMessage('symmetricCrypto', JSON.stringify(['encrypt', transformation, key, iv, data, 'bytes'])); },
+            encryptBase64: function(data) { return sendMessage('symmetricCrypto', JSON.stringify(['encrypt', transformation, key, iv, data, 'base64'])); },
+            encryptHex: function(data) { return sendMessage('symmetricCrypto', JSON.stringify(['encrypt', transformation, key, iv, data, 'hex'])); }
+          };
+        },
+        log: function(msg) { sendMessage('log', JSON.stringify(msg)); },
+        toast: function(msg) { sendMessage('toast', JSON.stringify(msg)); },
+        md5Encode: function(str) { return sendMessage('_md5Encode', JSON.stringify(str)); },
+        base64Encode: function(str) { return sendMessage('_base64Encode', JSON.stringify(str)); },
+        t2s: function(text) { return sendMessage('t2s', JSON.stringify(text)); },
+        s2t: function(text) { return sendMessage('s2t', JSON.stringify(text)); },
+        strToBytes: function(str, charset) { return sendMessage('strToBytes', JSON.stringify([str, charset])); },
+        bytesToStr: function(bytes, charset) { return sendMessage('bytesToStr', JSON.stringify([bytes, charset])); },
+        readFile: function(path) { return sendMessage('readFile', JSON.stringify(path)); },
+        readTxtFile: function(path, charset) { return sendMessage('readTxtFile', JSON.stringify([path, charset])); },
+        downloadFile: function(url) { return sendMessage('downloadFile', JSON.stringify(url)); },
+        queryTTF: function(data, useCache) {
+          var ttfId = sendMessage('queryTTF', JSON.stringify([data, useCache === undefined ? true : useCache]));
+          return ttfId ? { _ttfId: ttfId } : null;
+        },
+        replaceFont: function(text, errTTF, correctTTF) {
+          return sendMessage('replaceFont', JSON.stringify([text, errTTF ? errTTF._ttfId : null, correctTTF ? correctTTF._ttfId : null]));
+        },
+        webView: function(html, url, js) { return sendMessage('webView', JSON.stringify([html, url, js])); }
+      };
+    ''');
+  }
+}
+

@@ -1,0 +1,76 @@
+import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:legado_reader/core/models/book.dart';
+import '../book_detail_provider.dart';
+
+class BookInfoHeader extends StatelessWidget {
+  final Book book;
+  final BookDetailProvider provider;
+  final Function(BuildContext, String) showPhotoView;
+  final VoidCallback onEdit;
+  final Function(BuildContext, Book) showSourceOptions;
+  final Function(BuildContext, Book, int) navigateToReader;
+  final Function(BuildContext, BookDetailProvider) showChangeSource;
+
+  const BookInfoHeader({
+    super.key, required this.book, required this.provider, 
+    required this.showPhotoView, required this.onEdit, 
+    required this.showSourceOptions, required this.navigateToReader,
+    required this.showChangeSource
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final coverUrl = book.getDisplayCover();
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onLongPress: () { if (coverUrl != null && coverUrl.isNotEmpty) showPhotoView(context, coverUrl); },
+            child: Hero(
+              tag: 'book_cover',
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: coverUrl != null && coverUrl.isNotEmpty
+                    ? CachedNetworkImage(imageUrl: coverUrl, width: 100, height: 140, fit: BoxFit.cover, errorWidget: (_, __, ___) => _buildCoverPlaceholder())
+                    : _buildCoverPlaceholder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: GestureDetector(
+              onTap: onEdit,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(book.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text('作者：${book.author}', style: const TextStyle(fontSize: 16)),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () => showSourceOptions(context, book),
+                    child: Text('來源：${book.originName}', style: const TextStyle(fontSize: 14, color: Colors.blue, decoration: TextDecoration.underline)),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      ElevatedButton(onPressed: () => navigateToReader(context, book, book.durChapterIndex), child: Text(book.durChapterIndex == 0 && book.durChapterPos == 0 ? '開始閱讀' : '繼續閱讀')),
+                      const SizedBox(width: 8),
+                      TextButton(onPressed: () => showChangeSource(context, provider), child: const Text('換源', style: TextStyle(fontSize: 12))),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoverPlaceholder() => Container(width: 100, height: 140, color: Colors.grey.shade200, child: const Icon(Icons.book, size: 50, color: Colors.grey));
+}
+

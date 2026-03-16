@@ -1,0 +1,88 @@
+import 'package:get_it/get_it.dart';
+import 'package:logger/logger.dart';
+import '../services/network_service.dart';
+import '../database/app_database.dart';
+import '../database/dao/book_dao.dart';
+import '../database/dao/book_source_dao.dart';
+import '../database/dao/chapter_dao.dart';
+import '../database/dao/book_group_dao.dart';
+import '../database/dao/bookmark_dao.dart';
+import '../database/dao/cache_dao.dart';
+import '../database/dao/cookie_dao.dart';
+import '../database/dao/dict_rule_dao.dart';
+import '../database/dao/download_dao.dart';
+import '../database/dao/http_tts_dao.dart';
+import '../database/dao/read_record_dao.dart';
+import '../database/dao/replace_rule_dao.dart';
+import '../database/dao/rss_article_dao.dart';
+import '../database/dao/rss_read_record_dao.dart';
+import '../database/dao/rss_source_dao.dart';
+import '../database/dao/rss_star_dao.dart';
+import '../database/dao/rule_sub_dao.dart';
+import '../database/dao/search_book_dao.dart';
+import '../database/dao/search_history_dao.dart';
+import '../database/dao/search_keyword_dao.dart';
+import '../database/dao/txt_toc_rule_dao.dart';
+import '../database/dao/keyboard_assist_dao.dart';
+import '../services/tts_service.dart';
+import '../services/crash_handler.dart';
+
+final getIt = GetIt.instance;
+
+/// Dependency Injection Setup
+/// 註冊所有全域服務與單例
+Future<void> configureDependencies() async {
+  // 1. 日誌服務 (優先註冊)
+  getIt.registerSingleton<Logger>(
+    Logger(
+      printer: PrettyPrinter(
+        methodCount: 2,
+        errorMethodCount: 8,
+        lineLength: 120,
+        colors: true,
+        printEmojis: true,
+        dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
+      ),
+    ),
+  );
+
+  // 2. 核心資料庫服務 (切換為 SQLite)
+  final appDatabase = AppDatabase();
+  getIt.registerSingleton<AppDatabase>(appDatabase);
+
+  // 3. DAO 註冊 (統一使用 SQLite 實作)
+  getIt.registerLazySingleton<BookDao>(() => BookDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<BookSourceDao>(() => BookSourceDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<ChapterDao>(() => ChapterDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<BookGroupDao>(() => BookGroupDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<BookmarkDao>(() => BookmarkDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<CacheDao>(() => CacheDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<CookieDao>(() => CookieDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<DictRuleDao>(() => DictRuleDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<DownloadDao>(() => DownloadDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<HttpTtsDao>(() => HttpTtsDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<ReadRecordDao>(() => ReadRecordDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<ReplaceRuleDao>(() => ReplaceRuleDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<RssArticleDao>(() => RssArticleDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<RssReadRecordDao>(() => RssReadRecordDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<RssSourceDao>(() => RssSourceDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<RssStarDao>(() => RssStarDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<RuleSubDao>(() => RuleSubDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<SearchBookDao>(() => SearchBookDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<SearchHistoryDao>(() => SearchHistoryDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<SearchKeywordDao>(() => SearchKeywordDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<TxtTocRuleDao>(() => TxtTocRuleDao(getIt<AppDatabase>()));
+  getIt.registerLazySingleton<KeyboardAssistDao>(() => KeyboardAssistDao(getIt<AppDatabase>()));
+
+  // 4. 其它核心服務註冊
+  getIt.registerSingleton<NetworkService>(NetworkService());
+  getIt.registerSingleton<TTSService>(TTSService());
+  
+  // 5. 初始化所有服務
+  await Future.wait([
+    CrashHandler.init(),
+    getIt<AppDatabase>().database, // 確保資料庫已開啟
+    getIt<NetworkService>().init(),
+    getIt<TTSService>().init(),
+  ]);
+}

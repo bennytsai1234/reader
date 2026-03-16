@@ -1,0 +1,164 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:legado_reader/core/database/dao/book_dao.dart';
+import 'package:legado_reader/core/database/dao/chapter_dao.dart';
+import 'package:legado_reader/core/database/dao/book_source_dao.dart';
+import 'package:legado_reader/core/models/book.dart';
+import 'package:legado_reader/core/models/chapter.dart';
+import 'package:legado_reader/core/models/book_source.dart';
+import 'package:legado_reader/core/models/search_book.dart';
+import 'package:legado_reader/core/services/book_source_service.dart';
+import 'package:legado_reader/core/engine/app_event_bus.dart';
+import 'package:legado_reader/core/di/injection.dart';
+
+class BookDetailProvider extends ChangeNotifier {
+  final BookDao _bookDao = getIt<BookDao>();
+  final ChapterDao _chapterDao = getIt<ChapterDao>();
+  final BookSourceDao _sourceDao = getIt<BookSourceDao>();
+  final BookSourceService _service = BookSourceService();
+
+  late Book _book;
+  List<BookChapter> _allChapters = [];
+  List<BookChapter> _displayChapters = [];
+  bool _isLoading = true;
+  bool _isInBookshelf = false;
+  BookSource? _currentSource;
+
+  Book get book => _book;
+  List<BookChapter> get filteredChapters => _displayChapters;
+  int get totalChapterCount => _allChapters.length;
+  bool get isLoading => _isLoading;
+  bool get isInBookshelf => _isInBookshelf;
+
+  String _searchQuery = '';
+  bool _isReversed = false;
+  bool get isReversed => _isReversed;
+  
+  Timer? _debounce;
+
+  BookDetailProvider(AggregatedSearchBook searchBook) {
+    _book = searchBook.book is Book ? searchBook.book as Book : Book(
+      bookUrl: searchBook.book.bookUrl,
+      name: searchBook.book.name,
+      author: searchBook.book.author ?? '未知',
+      coverUrl: searchBook.book.coverUrl,
+      intro: searchBook.book.intro,
+      origin: searchBook.book.origin,
+      originName: searchBook.book.originName ?? '發現',
+      type: searchBook.book.type,
+    );
+    _init();
+  }
+
+  Future<void> _init() async {
+    final existing = await _bookDao.getByUrl(_book.bookUrl);
+    if (existing != null) {
+      _book = existing;
+      _isInBookshelf = true;
+    }
+    await _loadSource();
+    await _loadChapters();
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> _loadSource() async {
+    _currentSource = await _sourceDao.getByUrl(_book.origin);
+  }
+
+  Future<void> _loadChapters() async {
+    _allChapters = await _chapterDao.getChapters(_book.bookUrl);
+    
+    if (_allChapters.isEmpty && _currentSource != null) {
+      try {
+        _allChapters = await _service.getChapterList(_currentSource!, _book);
+        if (_isInBookshelf) await _chapterDao.insertChapters(_allChapters);
+      } catch (e) { debugPrint('加載目錄失敗: $e'); }
+    }
+    _applyFilter();
+  }
+
+  void setSearchQuery(String q) {
+    _searchQuery = q;
+    if (_debounce?.isActive ?? false) _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _applyFilter();
+    });
+  }
+
+  void toggleSort() {
+    _isReversed = !_isReversed;
+    _applyFilter();
+  }
+
+  void _applyFilter() {
+    var list = _allChapters;
+    if (_searchQuery.isNotEmpty) {
+      list = list.where((c) => c.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    }
+    _displayChapters = _isReversed ? list.reversed.toList() : List.from(list);
+    notifyListeners();
+  }
+
+  /// 執行換源 (繼承舊版實作)
+  Future<void> changeSource(SearchBook newSource) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final oldUrl = _book.bookUrl;
+      _book.bookUrl = newSource.bookUrl;
+      _book.origin = newSource.origin;
+      _book.originName = newSource.originName ?? '未知';
+      _book.tocUrl = newSource.tocUrl ?? '';
+      await _loadSource();
+      _allChapters = [];
+      if (_currentSource != null) {
+        _allChapters = await _service.getChapterList(_currentSource!, _book);
+      }
+      if (_isInBookshelf) {
+        await _bookDao.deleteByUrl(oldUrl);
+        await _bookDao.upsert(_book);
+        await _chapterDao.insertChapters(_allChapters);
+      }
+      _applyFilter();
+      AppEventBus().fire(AppEventBus.upBookshelf);
+    } catch (e) { debugPrint('換源失敗: $e'); }
+    finally { _isLoading = false; notifyListeners(); }
+  }
+
+  Future<void> toggleInBookshelf() async {
+    _isInBookshelf = !_isInBookshelf;
+    _book.isInBookshelf = _isInBookshelf;
+    await _bookDao.upsert(_book);
+    if (_isInBookshelf && _allChapters.isNotEmpty) await _chapterDao.insertChapters(_allChapters);
+    AppEventBus().fire(AppEventBus.upBookshelf);
+    notifyListeners();
+  }
+
+  Future<void> updateBookInfo(String name, String author, String intro, String coverUrl) async {
+    _book.name = name; _book.author = author; _book.intro = intro; _book.coverUrl = coverUrl;
+    if (_isInBookshelf) await _bookDao.upsert(_book);
+    notifyListeners();
+  }
+
+  Future<void> updateCover(String url) async {
+    _book.customCoverUrl = url;
+    if (_isInBookshelf) await _bookDao.upsert(_book);
+    notifyListeners();
+  }
+
+  void clearCache() {
+    _chapterDao.deleteContentByBook(_book.bookUrl);
+  }
+
+  void preloadChapters(int start, int count) {
+    // 預加載邏輯實作
+    debugPrint('Preloading $count chapters from $start');
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+}

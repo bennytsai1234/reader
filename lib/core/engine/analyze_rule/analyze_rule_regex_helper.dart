@@ -1,0 +1,93 @@
+import 'analyze_rule_base.dart';
+import 'analyze_rule_support.dart';
+
+/// AnalyzeRule 的正則工具與輔助邏輯擴展
+mixin AnalyzeRuleRegexHelper on AnalyzeRuleBase {
+  List<SourceRule> splitSourceRuleCacheString(String ruleStr) {
+    if (ruleStr.isEmpty) {
+      return [];
+    }
+    if (AnalyzeRuleBase.stringRuleCache.containsKey(ruleStr)) {
+      return AnalyzeRuleBase.stringRuleCache[ruleStr]!;
+    }
+    final ruleList = splitSourceRule(ruleStr);
+    if (AnalyzeRuleBase.stringRuleCache.length > 50) {
+      AnalyzeRuleBase.stringRuleCache.clear();
+    }
+    AnalyzeRuleBase.stringRuleCache[ruleStr] = ruleList;
+    return ruleList;
+  }
+
+  List<SourceRule> splitSourceRule(String ruleStr) {
+    final ruleList = <SourceRule>[];
+    final jsPattern = RegExp(r'@js:|(<js>([\w\W]*?)</js>)', caseSensitive: false);
+    var start = 0;
+    final matches = jsPattern.allMatches(ruleStr);
+
+    for (final match in matches) {
+      if (match.start > start) {
+        final tmp = ruleStr.substring(start, match.start).trim();
+        if (tmp.isNotEmpty) {
+          ruleList.add(SourceRule(tmp));
+        }
+      }
+      if (match.group(0)!.toLowerCase() == '@js:') {
+        final jsCode = ruleStr.substring(match.end).trim();
+        ruleList.add(SourceRule(jsCode, mode: Mode.js));
+        return ruleList;
+      } else {
+        final jsCode = match.group(2)!.trim();
+        ruleList.add(SourceRule(jsCode, mode: Mode.js));
+      }
+      start = match.end;
+    }
+    if (ruleStr.length > start) {
+      final tmp = ruleStr.substring(start).trim();
+      if (tmp.isNotEmpty) {
+        ruleList.add(SourceRule(tmp));
+      }
+    }
+    return ruleList;
+  }
+
+  String replaceRegexLogic(String result, SourceRule rule) {
+    if (rule.replaceRegex.isEmpty) {
+      return result;
+    }
+    RegExp? regex;
+    if (AnalyzeRuleBase.regexCache.containsKey(rule.replaceRegex)) {
+      regex = AnalyzeRuleBase.regexCache[rule.replaceRegex];
+    } else {
+      try {
+        regex = RegExp(rule.replaceRegex, multiLine: true, dotAll: true);
+        if (AnalyzeRuleBase.regexCache.length > 100) {
+          AnalyzeRuleBase.regexCache.clear();
+        }
+        AnalyzeRuleBase.regexCache[rule.replaceRegex] = regex;
+      } catch (e) {
+        return result;
+      }
+    }
+    if (regex == null) {
+      return result;
+    }
+    if (rule.replaceFirst) {
+      return result.replaceFirstMapped(regex, (match) {
+        var res = rule.replacement;
+        for (var i = 0; i <= match.groupCount; i++) {
+          res = res.replaceAll('\$$i', match.group(i) ?? '');
+        }
+        return res;
+      });
+    } else {
+      return result.replaceAllMapped(regex, (match) {
+        var res = rule.replacement;
+        for (var i = 0; i <= match.groupCount; i++) {
+          res = res.replaceAll('\$$i', match.group(i) ?? '');
+        }
+        return res;
+      });
+    }
+  }
+}
+

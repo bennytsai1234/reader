@@ -1,0 +1,72 @@
+import 'dart:io';
+/// NetworkUtils - 網路輔助工具 (原 Android utils/NetworkUtils.kt)
+class NetworkUtils {
+  NetworkUtils._();
+
+  /// 獲取絕對地址 (對標 getAbsoluteURL)
+  static String getAbsoluteURL(String? baseURL, String relativePath) {
+    if (baseURL == null || baseURL.isEmpty) return relativePath.trim();
+    final relativePathTrim = relativePath.trim();
+    
+    if (relativePathTrim.startsWith('http://') || 
+        relativePathTrim.startsWith('https://') ||
+        relativePathTrim.startsWith('data:')) {
+      return relativePathTrim;
+    }
+    
+    if (relativePathTrim.startsWith('javascript')) return '';
+
+    try {
+      final baseUri = Uri.parse(baseURL.split(',')[0]);
+      final absoluteUri = baseUri.resolve(relativePathTrim);
+      return absoluteUri.toString();
+    } catch (_) {
+      return relativePathTrim;
+    }
+  }
+
+  /// 獲取 Base URL (例如 http://example.com)
+  static String? getBaseUrl(String? url) {
+    if (url == null) return null;
+    try {
+      final uri = Uri.parse(url);
+      return "${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}";
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 獲取域名 (對標 getDomain)
+  static String getDomain(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.host;
+    } catch (_) {
+      return url;
+    }
+  }
+
+  /// 檢查字串是否為 IP 地址
+  static bool isIPAddress(String input) {
+    try {
+      InternetAddress(input);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 獲取子域名 (對標 getSubDomain)
+  /// 注意：此處為簡易實作，不含 PublicSuffixDatabase
+  static String getSubDomain(String url) {
+    final host = getDomain(url);
+    if (isIPAddress(host)) return host;
+    
+    final parts = host.split('.');
+    if (parts.length >= 2) {
+      return parts.sublist(parts.length - 2).join('.');
+    }
+    return host;
+  }
+}
+
