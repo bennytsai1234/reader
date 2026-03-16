@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'package:legado_reader/core/utils/logger.dart';
 
 class HeadlessWebViewService {
@@ -7,7 +7,7 @@ class HeadlessWebViewService {
   factory HeadlessWebViewService() => _instance;
   HeadlessWebViewService._internal();
 
-  HeadlessInAppWebView? _headlessWebView;
+  WebViewController? _controller;
 
   /// 獲取網頁渲染後的 HTML
   Future<String> getRenderedHtml({
@@ -19,47 +19,61 @@ class HeadlessWebViewService {
   }) async {
     final completer = Completer<String>();
     
-    _headlessWebView = HeadlessInAppWebView(
-      initialUrlRequest: URLRequest(
-        url: WebUri(url),
-        headers: headers,
-      ),
-      initialSettings: InAppWebViewSettings(
-        userAgent: userAgent,
-        javaScriptEnabled: true,
-        useShouldInterceptRequest: true,
-      ),
-      onLoadStop: (controller, webUri) async {
-        // 如果有延遲要求，先等待
-        if (delayTime > 0) {
-          await Future.delayed(Duration(milliseconds: delayTime));
-        }
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setUserAgent(userAgent)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (String finishedUrl) async {
+            // 如果有延遲要求，先等待
+            if (delayTime > 0) {
+              await Future.delayed(Duration(milliseconds: delayTime));
+            }
 
-        // 執行額外的 JS 腳本
-        if (js != null && js.isNotEmpty) {
-          try {
-            await controller.evaluateJavascript(source: js);
-          } catch (e) {
-            Logger.e('WebView JS 執行失敗: $e');
-          }
-        }
+            // 執行額外的 JS 腳本
+            if (js != null && js.isNotEmpty) {
+              try {
+                await _controller?.runJavaScript(js);
+              } catch (e) {
+                Logger.e('WebView JS 執行失敗: $e');
+              }
+            }
 
-        // 獲取最終 HTML ((原 Android document.documentElement.outerHTML))
-        final html = await controller.evaluateJavascript(source: 'document.documentElement.outerHTML');
-        completer.complete(html?.toString() ?? '');
-      },
-      onReceivedError: (controller, request, error) {
-        completer.completeError('WebView 加載失敗: ${error.description} (代碼: ${error.type})');
-      },
-    );
+            // 獲取最終 HTML
+            try {
+              final html = await _controller?.runJavaScriptReturningResult('document.documentElement.outerHTML');
+              String result = html?.toString() ?? '';
+              // WebView 會將結果包裝成 JSON 字串，需要處理引號
+              if (result.startsWith('"') && result.endsWith('"')) {
+                result = result.substring(1, result.length - 1);
+                // 處理轉義
+                result = result.replaceAll('\\u003C', '<').replaceAll('\\"', '"');
+              }
+              if (!completer.isCompleted) completer.complete(result);
+            } catch (e) {
+              if (!completer.isCompleted) completer.completeError('獲取 HTML 失敗: $e');
+            }
+          },
+          onWebResourceError: (error) {
+            if (!completer.isCompleted) completer.completeError('WebView 加載失敗: ${error.description}');
+          },
+        ),
+      );
 
     try {
-      await _headlessWebView?.run();
-      final result = await completer.future;
+      if (headers != null && headers.isNotEmpty) {
+        await _controller?.loadRequest(Uri.parse(url), headers: headers);
+      } else {
+        await _controller?.loadRequest(Uri.parse(url));
+      }
+      
+      final result = await completer.future.timeout(const Duration(seconds: 30));
       return result;
+    } catch (e) {
+      Logger.e('HeadlessWebView Error: $e');
+      rethrow;
     } finally {
-      await _headlessWebView?.dispose();
-      _headlessWebView = null;
+      _controller = null;
     }
   }
 }

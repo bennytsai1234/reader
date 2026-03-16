@@ -19,7 +19,6 @@ dependencies:
   dio_cookie_manager: ^3.1.2
   cookie_jar: ^4.0.8
   convert: ^3.1.1
-  flutter_inappwebview: ^6.1.5
 
   # === Database ===
   sqflite: ^2.4.1
@@ -130,8 +129,3 @@ flutter:
     - assets/default_sources/
     - assets/fonts/
     - assets/web/
-
-  # fonts:
-  #   - family: CustomFont
-  #     fonts:
-  #       - asset: assets/fonts/CustomFont.ttf
