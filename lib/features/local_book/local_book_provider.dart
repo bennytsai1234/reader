@@ -77,7 +77,7 @@ class LocalBookProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _importTxt(File file, String name, String author, List<Map<String, String>> chaptersData) async {
+  Future<void> _importTxt(File file, String name, String author, List<Map<String, dynamic>> chaptersData) async {
     final book = Book(
       bookUrl: 'local://${file.path}',
       name: name,
