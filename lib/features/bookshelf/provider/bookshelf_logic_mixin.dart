@@ -57,7 +57,7 @@ mixin BookshelfLogicMixin on BookshelfProviderBase {
       final book = books.cast<Book?>().firstWhere((b) => b?.bookUrl == url, orElse: () => null);
       if (book != null) {
         book.group = groupId;
-        await bookDao.updateProgress(book.bookUrl, book.durChapterPos);
+        await bookDao.upsert(book);
       }
     }
     isBatchMode = false; selectedBookUrls.clear();

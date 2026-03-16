@@ -228,17 +228,22 @@ class BookDao extends BaseDao<Book> {
     });
   }
 
-  /// 更新進度 (對標 Android: upProgress)
-  Future<void> updateProgress(String bookUrl, int pos) async {
+  /// 更新閱讀進度 (對標 Android Room @Query updateProgress)
+  Future<void> updateProgress(String bookUrl, int chapterIndex, String? chapterTitle, int pos) async {
     final client = await db;
+    final now = DateTime.now().millisecondsSinceEpoch;
     await client.update(
       tableName,
-      {'durChapterPos': pos, 'durChapterTime': DateTime.now().millisecondsSinceEpoch},
+      {
+        'durChapterIndex': chapterIndex,
+        'durChapterTitle': chapterTitle,
+        'durChapterPos': pos,
+        'durChapterTime': now,
+      },
       where: 'bookUrl = ?',
       whereArgs: [bookUrl],
     );
   }
-
   /// 根據 URL 刪除書籍
   Future<void> deleteByUrl(String url) async {
     final client = await db;
