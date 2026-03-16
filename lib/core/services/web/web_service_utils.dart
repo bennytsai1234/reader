@@ -99,7 +99,7 @@ extension WebServiceUtils on WebServiceBase {
         final progress = BookProgress.fromJson(jsonDecode(body));
         final book = await bookDao.getByNameAndAuthor(progress.name, progress.author);
         if (book != null) {
-          await bookDao.updateProgress(book.bookUrl, progress.durChapterPos);
+          await bookDao.updateProgress(book.bookUrl, progress.durChapterIndex, progress.durChapterTitle, progress.durChapterPos);
           return '';
         }
         return null;

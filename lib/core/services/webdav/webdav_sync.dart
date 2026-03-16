@@ -59,8 +59,11 @@ mixin WebDAVSync on WebDAVBase {
           if (remoteProgress.durChapterTime > book.durChapterTime) {
             await bookDao.updateProgress(
               book.bookUrl, 
+              remoteProgress.durChapterIndex,
+              remoteProgress.durChapterTitle,
               remoteProgress.durChapterPos
             );
+
           } else {
             // 否則上傳本地進度
             await uploadBookProgress(book);
