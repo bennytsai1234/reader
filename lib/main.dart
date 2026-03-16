@@ -12,6 +12,8 @@ import 'app_providers.dart';
 import 'shared/theme/app_theme.dart';
 import 'features/settings/settings_provider.dart';
 import 'features/welcome/splash_page.dart';
+import 'core/services/app_log_service.dart';
+import 'features/about/app_log_page.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -35,47 +37,127 @@ void callbackDispatcher() {
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    AppLog.i('WidgetsFlutterBinding Initialized');
 
-  // 1. 初始化依賴注入與全域服務 (包含 CrashHandler, Network, TTS)
-  await configureDependencies();
-  
-  // 2. 初始化背景任務
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: kDebugMode);
+    // 自定義錯誤畫面，避免黑屏
+    ErrorWidget.builder = (FlutterErrorDetails details) {
+      AppLog.e('Rendering Error: ${details.exception}', error: details.exception, stackTrace: details.stack);
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Container(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Detected an Error:', style: TextStyle(color: Colors.red, fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                Text(details.exceptionAsString(), style: const TextStyle(color: Colors.white, fontSize: 14)),
+                const SizedBox(height: 10),
+                Text(details.stack.toString(), style: const TextStyle(color: Colors.grey, fontSize: 10)),
+              ],
+            ),
+          ),
+        ),
+      );
+    };
 
-  // 3. 全域錯誤捕獲 (除了 CrashHandler 內部的捕獲，這裡補足一些邊際情況)
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-    SharedPreferences.getInstance().then((prefs) => prefs.setBool('app_crash', true));
-  };
+    try {
+      AppLog.i('Configuring Dependencies...');
+      await configureDependencies();
+      AppLog.i('Dependencies Configured Successfully');
 
-  getIt<Logger>().i('Legado Reader Started Successfully');
+      // 強制開啟日誌記錄模式
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('recordLog', true);
+      AppLog.i('Debug Mode: recordLog forced to TRUE');
+      
+      AppLog.i('Initializing Workmanager...');
+      Workmanager().initialize(callbackDispatcher, isInDebugMode: kDebugMode);
 
-  runApp(
-    MultiProvider(
-      providers: AppProviders.providers,
-      child: const LegadoReaderApp(),
-    ),
-  );
+      FlutterError.onError = (details) {
+        FlutterError.presentError(details);
+        AppLog.e('Flutter Error: ${details.exception}', error: details.exception, stackTrace: details.stack);
+      };
+
+      AppLog.i('Legado Reader Ready to Run');
+
+      runApp(
+        MultiProvider(
+          providers: AppProviders.providers,
+          child: const LegadoReaderApp(),
+        ),
+      );
+    } catch (e, stack) {
+      AppLog.e('Startup Critical Error: $e', error: e, stackTrace: stack);
+      runApp(MaterialApp(
+        home: Scaffold(
+          backgroundColor: Colors.black,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SelectableText('Startup Failed:\n$e\n\n$stack', style: const TextStyle(color: Colors.red)),
+            ),
+          ),
+        ),
+      ));
+    }
+  }, (error, stack) {
+    AppLog.e('Uncaught Error: $error', error: error, stackTrace: stack);
+  });
 }
 
-class LegadoReaderApp extends StatelessWidget {
+class LegadoReaderApp extends StatefulWidget {
   const LegadoReaderApp({super.key});
+
+  @override
+  State<LegadoReaderApp> createState() => _LegadoReaderAppState();
+}
+
+class _LegadoReaderAppState extends State<LegadoReaderApp> {
+  int _debugTapCount = 0;
+  int _lastTapTime = 0;
+
+  void _handleDebugTap() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastTapTime > 1000) {
+      _debugTapCount = 1;
+    } else {
+      _debugTapCount++;
+    }
+    _lastTapTime = now;
+
+    if (_debugTapCount >= 5) {
+      _debugTapCount = 0;
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('Opening Debug Log...'), duration: Duration(seconds: 1)),
+      );
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const AppLogPage()),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
       builder: (context, settings, child) {
-        return MaterialApp(
-          title: 'Legado Reader',
-          scaffoldMessengerKey: scaffoldMessengerKey,
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: settings.themeMode,
-          locale: settings.locale,
-          home: const SplashPage(),
+        return GestureDetector(
+          onTap: _handleDebugTap,
+          behavior: HitTestBehavior.translucent,
+          child: MaterialApp(
+            title: 'Legado Reader',
+            scaffoldMessengerKey: scaffoldMessengerKey,
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: settings.themeMode,
+            locale: settings.locale,
+            home: const SplashPage(),
+          ),
         );
       },
     );

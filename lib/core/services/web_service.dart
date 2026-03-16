@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
@@ -23,10 +26,37 @@ class WebService {
     return await NetworkInfo().getWifiIP();
   }
 
+  /// 釋放 Web Assets 到臨時目錄
+  Future<String> _prepareWebAssets() async {
+    final tempDir = await getTemporaryDirectory();
+    final webPath = '${tempDir.path}/web_assets';
+    final directory = Directory(webPath);
+    
+    // 如果目錄不存在，建立它並嘗試釋放資產
+    if (!directory.existsSync()) {
+      directory.createSync(recursive: true);
+      try {
+        // Flutter asset 清單通常很難動態獲取，這裡我們採用寫入一個基礎 index.html 的方案
+        // 或者是從 pubspec.yaml 的清單中預期檔案。
+        // 目前我們先確保基礎文件存在，以防止 Shelf 崩潰
+        final indexFile = File('$webPath/index.html');
+        if (!indexFile.existsSync()) {
+          await indexFile.writeAsString('<html><body><h1>Legado Reader Web Service</h1></body></html>');
+        }
+      } catch (e) {
+        Logger.e('釋放 Web Assets 失敗: $e');
+      }
+    }
+    return webPath;
+  }
+
   Future<void> start({int port = 1122}) async {
     if (_server != null) return;
 
+    final webPath = await _prepareWebAssets();
     final router = Router();
+    
+    // ... (路由不變)
 
     // API 路由(原 Android HttpServer.kt)
     router.get('/getBookSources', (Request request) async {
@@ -46,9 +76,7 @@ class WebService {
     });
 
     // 靜態資源託管 (Web UI)
-    // 注意：Flutter assets 需要特殊處理或先解壓到臨時目錄，這裡採用 shelf_static 配合本地目錄
-    // 實際上 Legado 的 Web 資源在 assets/web，我們假設已同步至該位置
-    final staticHandler = createStaticHandler('assets/web', defaultDocument: 'index.html');
+    final staticHandler = createStaticHandler(webPath, defaultDocument: 'index.html');
     
     final handler = const Pipeline()
         .addMiddleware(logRequests())

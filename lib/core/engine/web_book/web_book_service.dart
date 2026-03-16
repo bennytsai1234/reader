@@ -13,7 +13,6 @@ import 'package:legado_reader/core/services/book_source_service.dart';
 
 /// WebBookService - 書源抓取業務調度服務 (原 Android model/webBook/WebBook.kt)
 class WebBookService {
-  final BookSourceService _sourceService = BookSourceService();
 
   Future<List<SearchBook>> searchBook(
     BookSource source,
@@ -25,7 +24,7 @@ class WebBookService {
       throw Exception('搜尋 URL 不能為空');
     }
 
-    if (_sourceService.is18Plus(source.bookSourceUrl)) {
+    if (BookSourceService.is18Plus(source.bookSourceUrl)) {
       throw Exception('該網址為 18+ 網站，禁止訪問。');
     }
 
@@ -62,7 +61,7 @@ class WebBookService {
     String url, {
     int page = 1,
   }) async {
-    if (_sourceService.is18Plus(source.bookSourceUrl)) {
+    if (BookSourceService.is18Plus(source.bookSourceUrl)) {
       throw Exception('該網址為 18+ 網站，禁止訪問。');
     }
 
@@ -81,7 +80,7 @@ class WebBookService {
   }
 
   Future<Book> getBookInfo(BookSource source, Book book) async {
-    if (_sourceService.is18Plus(source.bookSourceUrl)) {
+    if (BookSourceService.is18Plus(source.bookSourceUrl)) {
       throw Exception('該網址為 18+ 網站，禁止訪問。');
     }
 
@@ -100,7 +99,7 @@ class WebBookService {
   }
 
   Future<List<BookChapter>> getChapterList(BookSource source, Book book) async {
-    if (_sourceService.is18Plus(source.bookSourceUrl)) {
+    if (BookSourceService.is18Plus(source.bookSourceUrl)) {
       throw Exception('該網址為 18+ 網站，禁止訪問。');
     }
 
@@ -125,7 +124,7 @@ class WebBookService {
     BookChapter chapter, {
     String? nextChapterUrl,
   }) async {
-    if (_sourceService.is18Plus(source.bookSourceUrl)) {
+    if (BookSourceService.is18Plus(source.bookSourceUrl)) {
       throw Exception('該網址為 18+ 網站，禁止訪問。');
     }
 

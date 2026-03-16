@@ -32,10 +32,15 @@ class AppLog {
     _logs.addFirst(entry);
 
     if (kDebugMode) {
-      if (error != null) {
-        getIt<Logger>().e(message, error: error, stackTrace: stackTrace);
+      if (getIt.isRegistered<Logger>()) {
+        if (error != null) {
+          getIt<Logger>().e(message, error: error, stackTrace: stackTrace);
+        } else {
+          getIt<Logger>().d(message);
+        }
       } else {
-        getIt<Logger>().d(message);
+        // 如果 GetIt 還沒準備好，或者是啟動階段，使用 print
+        print('>>> [AppLog] $message ${error ?? ""}');
       }
     }
 

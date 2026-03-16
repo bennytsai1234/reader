@@ -3,11 +3,11 @@ package com.legado.legado_reader
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import androidx.annotation.NonNull
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "com.legado.reader/launcher_icon"
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {

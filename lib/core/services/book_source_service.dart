@@ -43,7 +43,7 @@ class BookSourceService {
   }
 
   /// 檢查是否為 18+ 網站
-  bool is18Plus(String? url) {
+  static bool is18Plus(String? url) {
     if (url == null) return false;
     // 這裡暫時實作簡單判斷，完整功能需讀取 18PlusList.txt
     final lowerUrl = url.toLowerCase();
