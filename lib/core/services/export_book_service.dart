@@ -38,7 +38,7 @@ class ExportBookService {
       await WebDavService().uploadFile(file.path, fileName);
     } catch (_) {}
 
-    // 使用 Share.shareXFiles
+    // ignore: deprecated_member_use
     await Share.shareXFiles([XFile(file.path)], subject: '匯出書籍: ${book.name}');
   }
 }

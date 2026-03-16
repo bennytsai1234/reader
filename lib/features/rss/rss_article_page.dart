@@ -202,6 +202,7 @@ class RssArticlePage extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.share_outlined),
               title: const Text('分享'),
+              // ignore: deprecated_member_use
               onTap: () { Share.share(article.link); Navigator.pop(ctx); },
             ),
             ListTile(

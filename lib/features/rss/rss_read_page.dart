@@ -139,6 +139,7 @@ class _RssReadPageState extends State<RssReadPage> {
     final link = widget.article.link;
     switch (value) {
       case 'share':
+        // ignore: deprecated_member_use
         await Share.share(link, subject: '分享文章: ${widget.article.title}');
         break;
       case 'copy':

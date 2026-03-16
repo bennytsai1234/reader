@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:legado_reader/core/constant/book_type.dart';
 import 'book_base.dart';
 
 /// Book 擴展 - 類型感知與業務屬性
@@ -17,15 +18,16 @@ extension BookExtensions on BookBase {
     return {};
   }
 
-  // --- 類型感知 ---
-  bool get isAudio => (type & 2) != 0; // BookType.audio = 2
-  bool get isImage => (type & 4) != 0; // BookType.image = 4
+  // --- 類型感知 (對齊 Android BookType 位元) ---
+  bool get isAudio => (type & BookType.audio) != 0;
+  bool get isImage => (type & BookType.image) != 0;
+  bool get isText => (type & BookType.text) != 0;
   bool get isEpub => bookUrl.toLowerCase().endsWith('.epub');
-  bool get isLocal => origin == 'local' || origin.startsWith('webdav');
+  bool get isLocal => origin == BookType.localTag || origin.startsWith(BookType.webDavTag);
   bool get isUpdate => lastCheckCount > 0;
 
   // --- 顯示輔助 ---
-  String getRealAuthor() => author.replaceAll(RegExp(r'\(.*?\)|\[.*?\]|（.*?）|【.*?】'), '').trim();
+  String getRealAuthor() => author.replaceAll(RegExp(r'\s+作\s*者.*|\s+\S+\s+著'), '').trim();
   String? getDisplayCover() => (customCoverUrl == null || customCoverUrl!.isEmpty) ? coverUrl : customCoverUrl;
   String? getDisplayIntro() => (customIntro == null || customIntro!.isEmpty) ? intro : customIntro;
 
@@ -33,17 +35,28 @@ extension BookExtensions on BookBase {
   bool getUseReplaceRule() {
     final explicitValue = readConfig?.useReplaceRule;
     if (explicitValue != null) return explicitValue;
+    // 圖片類、音訊類、Epub 本地 預設關閉淨化
     if (isImage || isAudio || isEpub) return false;
+    // TODO: 這裡應串接 AppConfig.replaceEnableDefault (預設開啟)
     return true;
   }
 
   bool getReSegment() => readConfig?.reSegment ?? false;
 
+  int getPageAnim() {
+    int? pageAnim = readConfig?.pageAnim;
+    if (pageAnim != null && pageAnim >= 0) return pageAnim;
+    // 圖片類預設滾動翻頁 (PageAnim.scrollPageAnim = 3)
+    if (isImage) return 3;
+    // TODO: 這裡應串接 ReadBookConfig.pageAnim (預設 0)
+    return 0;
+  }
+
   // --- 進度與模擬計算 (對齊 Android Book.kt) ---
   int get simulatedTotalChapterNum {
     if (readConfig?.readSimulating ?? false) {
-      // 簡單實作模擬邏輯：起始章節 + 天數 * 每日章節
-      return (readConfig?.startChapter ?? 0) + 100; // 簡化 Placeholder
+      // 這裡應實作真正的模擬邏輯：起始章節 + (今天 - 開始日期) * 每日章節
+      return totalChapterNum; 
     }
     return totalChapterNum;
   }

@@ -1,44 +1,61 @@
 import 'dart:convert';
-import 'book_base.dart';
+import 'package:legado_reader/core/models/chapter.dart';
+import 'package:legado_reader/core/models/search_book.dart';
+import '../book.dart';
 
 /// Book 業務邏輯擴展
-extension BookLogic on BookBase {
+extension BookLogic on Book {
   void setVariable(String key, String value) {
-    Map<String, String> map;
-    if (variable != null && variable!.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(variable!);
-        map = (decoded as Map).map((k, v) => MapEntry(k.toString(), v.toString()));
-      } catch (_) { map = {}; }
-    } else { map = {}; }
-    
+    var map = variableMap;
     map[key] = value;
     variable = jsonEncode(map);
   }
 
+  /// 轉換為 SearchBook (原 Android Book.toSearchBook)
+  SearchBook toSearchBook() {
+    return SearchBook(
+      name: name,
+      author: author,
+      kind: kind,
+      bookUrl: bookUrl,
+      origin: origin,
+      originName: originName,
+      type: type,
+      wordCount: wordCount,
+      latestChapterTitle: latestChapterTitle,
+      coverUrl: coverUrl,
+      intro: intro,
+      tocUrl: tocUrl,
+      originOrder: originOrder,
+      variable: variable,
+    );
+  }
+
   /// 書籍遷移邏輯 (原 Android Book.migrateTo)
-  BookBase migrateTo(BookBase newBook, List<dynamic>? newChapters) {
+  Book migrateTo(Book newBook, List<BookChapter>? toc) {
     var alignedIndex = durChapterIndex;
-    if (newChapters != null && newChapters.isNotEmpty) {
+    if (toc != null && toc.isNotEmpty) {
       alignedIndex = _getDurChapter(
         durChapterIndex,
         durChapterTitle,
-        newChapters,
+        toc,
         totalChapterNum,
       );
     }
 
-    // 透過 Book (子類) 的 copyWith 實現，這裡假設 Book 已經實作了 copyWith
-    return (this as dynamic).copyWith(
+    return newBook.copyWith(
+      durChapterIndex: alignedIndex,
+      durChapterTitle: (toc != null && alignedIndex < toc.length)
+          ? toc[alignedIndex].title
+          : durChapterTitle,
+      durChapterPos: durChapterPos,
+      durChapterTime: durChapterTime,
       group: group,
       order: order,
+      customCoverUrl: customCoverUrl,
+      customIntro: customIntro,
+      customTag: customTag,
       canUpdate: canUpdate,
-      durChapterIndex: alignedIndex,
-      durChapterPos: durChapterPos,
-      durChapterTitle: alignedIndex < (newChapters?.length ?? 0)
-          ? newChapters![alignedIndex].title
-          : durChapterTitle,
-      durChapterTime: durChapterTime,
       readConfig: readConfig,
     );
   }
@@ -46,19 +63,21 @@ extension BookLogic on BookBase {
   int _getDurChapter(
     int oldIndex,
     String? oldName,
-    List<dynamic> newChapters,
+    List<BookChapter> newChapters,
     int oldTotalNum,
   ) {
     if (oldIndex <= 0) return 0;
     if (newChapters.isEmpty) return oldIndex;
 
     final newSize = newChapters.length;
+    // 1. 按名稱匹配
     if (oldName != null && oldName.isNotEmpty) {
       for (var i = 0; i < newSize; i++) {
         if (newChapters[i].title == oldName) return i;
       }
     }
 
+    // 2. 按章節序號匹配 (例如 "第123章")
     final oldChapterNum = _extractChapterNum(oldName);
     if (oldChapterNum != null) {
       for (var i = 0; i < newSize; i++) {
@@ -66,6 +85,7 @@ extension BookLogic on BookBase {
       }
     }
 
+    // 3. 按百分比估算
     var estimateIndex = oldIndex;
     if (oldTotalNum > 0) {
       estimateIndex = (oldIndex * newSize / oldTotalNum).round();
@@ -76,7 +96,7 @@ extension BookLogic on BookBase {
 
   int? _extractChapterNum(String? title) {
     if (title == null) return null;
-    final match = RegExp(r'第\s*(\d+)\s*[章节篇回集话]').firstMatch(title);
+    final match = RegExp(r'第\s*(\d+)\s*[章節篇回集話]').firstMatch(title);
     if (match != null) return int.tryParse(match.group(1)!);
     return null;
   }

@@ -141,7 +141,7 @@ class _ChangeChapterSourceSheetState extends State<ChangeChapterSourceSheet> {
         
         if (tempBook.type != widget.book.type) {
           if (!context.mounted) return;
-          _showMigrationDialog(context, widget.book.migrateTo(tempBook, chapters) as Book);
+          _showMigrationDialog(context, widget.book.migrateTo(tempBook, chapters));
         } else {
           readerProvider.replaceChapterSource(widget.chapterIndex, source, content);
           // Pop sheet

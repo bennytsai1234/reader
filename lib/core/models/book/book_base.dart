@@ -2,6 +2,14 @@
 /// Book - 基礎書籍模型
 /// (原 Android data/entities/Book.kt)
 class BookBase {
+  // --- Constants from Book.kt companion object ---
+  static const int hTag = 2;
+  static const int rubyTag = 4;
+  static const String imgStyleDefault = 'DEFAULT';
+  static const String imgStyleFull = 'FULL';
+  static const String imgStyleText = 'TEXT';
+  static const String imgStyleSingle = 'SINGLE';
+
   String bookUrl; // 書籍 URL (唯一識別)
   String tocUrl; // 目錄 URL
   String origin; // 書源 URL 或 localTag
@@ -15,7 +23,7 @@ class BookBase {
   String? intro; // 簡介 (書源獲取)
   String? customIntro; // 簡介 (用戶修改)
   String? charset; // 自定義字符集 (本地書)
-  int type; // 書籍類型 (0: 文本, 2: 音訊, 等)
+  int type; // 書籍類型 (位運算, 詳見 BookType)
   int group; // 自定義分組索引 (位運算)
   String? latestChapterTitle; // 最新章節標題
   int latestChapterTime; // 最新章節更新時間

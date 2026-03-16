@@ -1,13 +1,38 @@
 class BookType {
-  static const int text = 0;
-  static const int audio = 2;
-  static const int image = 4;
-  static const int file = 3;
+  /// 8 文本
+  static const int text = 0x08;
 
-  // --- 狀態位元 ---
-  static const int local = 8;
-  static const int notShelf = 16;
-  static const int updateError = 32;
+  /// 16 更新失敗
+  static const int updateError = 0x10;
+
+  /// 32 音訊
+  static const int audio = 0x20;
+
+  /// 64 圖片
+  static const int image = 0x40;
+
+  /// 128 只提供下載服務的網站
+  static const int webFile = 0x80;
+
+  /// 256 本地
+  static const int local = 0x100;
+
+  /// 512 壓縮包 表明書籍文件是從壓縮包內解壓來的
+  static const int archive = 0x200;
+
+  /// 1024 未正式加入到書架的臨時閱讀書籍
+  static const int notShelf = 0x400;
+
+  /// 所有可以從書源轉換的書籍類型
+  static const int allBookType = text | image | audio | webFile;
+
+  static const int allBookTypeLocal = text | image | audio | webFile | local;
+
+  /// 本地書籍書源標誌
+  static const String localTag = 'loc_book';
+
+  /// 書源已webDav::開頭的書籍,可以從webDav更新或重新下載
+  static const String webDavTag = 'webDav::';
 
   static bool isAudio(int type) => (type & audio) != 0;
   static bool isImage(int type) => (type & image) != 0;
