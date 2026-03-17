@@ -4,13 +4,13 @@ import '../app_database.dart';
 /// sqflite ConflictAlgorithm 相容 enum
 enum ConflictAlgorithm { rollback, abort, fail, ignore, replace }
 
-/// DriftCompatDao - 取代舊版 BaseDao<T>
+/// DriftCompatDao - 取代舊版 BaseDao
 /// 繼承 Drift DatabaseAccessor，同時提供 sqflite 相容介面
 /// 讓現有 DAO 代碼可以最小化改動
 abstract class DriftCompatDao<T> extends DatabaseAccessor<AppDatabase> {
   final String tableName;
 
-  DriftCompatDao(AppDatabase db, this.tableName) : super(db);
+  DriftCompatDao(super.db, this.tableName);
 
   /// sqflite 相容的非同步 db 存取器
   Future<DriftSqfliteCompat> get db async => DriftSqfliteCompat(this);
@@ -145,24 +145,34 @@ class DriftSqfliteCompat {
   }
 
   static Variable _toVar(dynamic v) {
-    if (v == null) return Variable(null);
+    if (v == null) return const Variable(null);
+    if (v is Variable) return v;
     if (v is String) return Variable.withString(v);
     if (v is int) return Variable.withInt(v);
     if (v is double) return Variable.withReal(v);
     if (v is bool) return Variable.withBool(v);
+    if (v is Uint8List) return Variable.withBlob(v);
     return Variable.withString(v.toString());
+  }
+
+  static dynamic _toSqlValue(dynamic v) {
+    if (v == null) return null;
+    if (v is bool) return v ? 1 : 0;
+    if (v is String || v is int || v is double || v is Uint8List) return v;
+    if (v is Variable) return v.value;
+    return v.toString();
   }
 }
 
 /// sqflite Batch 的 Drift 相容實作
 class DriftBatchCompat {
   final DatabaseConnectionUser _conn;
-  final List<(String, List<Variable>)> _ops = [];
+  final List<(String, List<dynamic>)> _ops = [];
 
   DriftBatchCompat(this._conn);
 
   void execute(String sql, [List<dynamic>? args]) {
-    _ops.add((sql, (args ?? []).map(DriftSqfliteCompat._toVar).toList()));
+    _ops.add((sql, (args ?? []).map(DriftSqfliteCompat._toSqlValue).toList()));
   }
 
   void insert(
