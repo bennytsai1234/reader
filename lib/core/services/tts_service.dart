@@ -4,13 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
 import 'audio_handler.dart';
 
-/// TTSService - TTS 朗讀服務 (專業升級版：整合 AudioService)
-/// (原 Android service/TTSReadAloudService.kt)
+/// TTSService - 系統 TTS 朗讀服務（單例）
+/// 對應 Android TTSReadAloudService.kt
+///
+/// 修復要點：
+/// 1. 唯一 FlutterTts 引擎，避免與 ReaderAudioHandler 雙引擎衝突
+/// 2. 完成事件透過 ReaderAudioHandler.emitEvent('onComplete') 廣播
+/// 3. _audioHandler 改為 nullable，init() 失敗不影響基本 TTS 功能
 class TTSService extends ChangeNotifier {
   static final TTSService _instance = TTSService._internal();
   factory TTSService() => _instance;
 
-  late ReaderAudioHandler _audioHandler;
+  /// nullable：init() 失敗時不崩潰，只是缺少系統通知欄控制
+  ReaderAudioHandler? _audioHandler;
   final FlutterTts _flutterTts = FlutterTts();
 
   bool _isPlaying = false;
@@ -19,8 +25,7 @@ class TTSService extends ChangeNotifier {
   double _rate = 0.5;
   String? _language;
   List<dynamic> _languages = [];
-  
-  VoidCallback? onComplete;
+
   Timer? _sleepTimer;
   int _remainingMinutes = 0;
 
@@ -38,40 +43,57 @@ class TTSService extends ChangeNotifier {
 
   TTSService._internal();
 
-  /// 在 main.dart 中初始化
+  /// 必須在 main.dart 的 runApp 之前呼叫
   Future<void> init() async {
-    _audioHandler = await AudioService.init(
-      builder: () => ReaderAudioHandler(),
-      config: const AudioServiceConfig(
-        androidNotificationChannelId: 'com.your.app.tts',
-        androidNotificationChannelName: 'Legado TTS',
-        androidNotificationOngoing: true,
-      ),
-    );
-
+    try {
+      _audioHandler = await AudioService.init(
+        builder: () => ReaderAudioHandler(),
+        config: const AudioServiceConfig(
+          androidNotificationChannelId: 'com.legado.reader.tts',
+          androidNotificationChannelName: 'Legado TTS',
+          androidNotificationOngoing: true,
+        ),
+      );
+    } catch (e) {
+      debugPrint('TTSService: AudioService.init failed (notification disabled): $e');
+    }
     await _initTts();
   }
 
   Future<void> _initTts() async {
-    await _flutterTts.setIosAudioCategory(
-      IosTextToSpeechAudioCategory.playback,
-      [
-        IosTextToSpeechAudioCategoryOptions.allowBluetooth,
-        IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
-        IosTextToSpeechAudioCategoryOptions.duckOthers,
-      ],
-      IosTextToSpeechAudioMode.voicePrompt,
-    );
+    try {
+      await _flutterTts.setIosAudioCategory(
+        IosTextToSpeechAudioCategory.playback,
+        [
+          IosTextToSpeechAudioCategoryOptions.allowBluetooth,
+          IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
+          IosTextToSpeechAudioCategoryOptions.duckOthers,
+        ],
+        IosTextToSpeechAudioMode.voicePrompt,
+      );
+    } catch (e) {
+      debugPrint('TTSService: iOS audio category setup failed: $e');
+    }
 
     _flutterTts.setStartHandler(() {
       _isPlaying = true;
+      _audioHandler?.setPlaying(true);
       notifyListeners();
     });
 
+    // 【關鍵修復】完成時：更新狀態並廣播事件給 ReaderProvider
     _flutterTts.setCompletionHandler(() {
       _isPlaying = false;
+      _audioHandler?.setPlaying(false);
+      ReaderAudioHandler.emitEvent('onComplete');
       notifyListeners();
-      if (onComplete != null) onComplete!();
+    });
+
+    _flutterTts.setErrorHandler((msg) {
+      debugPrint('TTSService: TTS error: $msg');
+      _isPlaying = false;
+      _audioHandler?.setPlaying(false);
+      notifyListeners();
     });
 
     _flutterTts.setProgressHandler((String text, int start, int end, String word) {
@@ -82,36 +104,60 @@ class TTSService extends ChangeNotifier {
     });
 
     _languages = await _flutterTts.getLanguages;
-    _language = _languages.contains('zh-CN') ? 'zh-CN' : (_languages.contains('zh-TW') ? 'zh-TW' : _languages.first.toString());
+    // 優先繁中 → 簡中 → 第一個可用語言
+    _language = _languages.contains('zh-TW')
+        ? 'zh-TW'
+        : _languages.contains('zh-CN')
+            ? 'zh-CN'
+            : (_languages.isNotEmpty ? _languages.first.toString() : 'zh-CN');
+
     await _flutterTts.setLanguage(_language!);
+    await _flutterTts.setSpeechRate(_rate);
+    await _flutterTts.setPitch(_pitch);
+    await _flutterTts.setVolume(_volume);
   }
 
-  /// 更新系統通知欄資訊
+  /// 更新系統通知欄書名/作者/封面
   void updateMediaInfo({required String title, required String author, String? coverUrl}) {
-    _audioHandler.updateMetadata(title: title, author: author, artUri: coverUrl);
+    _audioHandler?.updateMetadata(title: title, author: author, artUri: coverUrl);
   }
 
   Future<void> speak(String text) async {
-    if (text.isNotEmpty) {
-      await _flutterTts.speak(text);
-    }
+    if (text.trim().isEmpty) return;
+    await _flutterTts.speak(text);
   }
 
   Future<void> stop() async {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _remainingMinutes = 0;
     await _flutterTts.stop();
     _isPlaying = false;
+    _audioHandler?.setPlaying(false);
     notifyListeners();
   }
 
   Future<void> pause() async {
     await _flutterTts.pause();
     _isPlaying = false;
+    _audioHandler?.setPlaying(false);
     notifyListeners();
   }
 
+  Future<void> resume() async {
+    if (currentSpokenText.isNotEmpty) {
+      // 從暫停位置繼續，而非從段落開頭重播
+      final start = currentWordStart.clamp(0, currentSpokenText.length);
+      final remaining = currentSpokenText.substring(start);
+      if (remaining.trim().isNotEmpty) {
+        await _flutterTts.speak(remaining);
+      }
+    }
+  }
+
   void setSleepTimer(int minutes) {
-    _remainingMinutes = minutes;
     _sleepTimer?.cancel();
+    _remainingMinutes = minutes;
     if (minutes > 0) {
       _sleepTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
         if (_remainingMinutes > 0) {
@@ -126,12 +172,30 @@ class TTSService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setLanguage(String lang) async { _language = lang; await _flutterTts.setLanguage(lang); notifyListeners(); }
-  Future<void> setPitch(double pitch) async { _pitch = pitch; await _flutterTts.setPitch(pitch); notifyListeners(); }
-  Future<void> setRate(double rate) async { _rate = rate; await _flutterTts.setSpeechRate(rate); notifyListeners(); }
-  Future<void> setVolume(double volume) async { _volume = volume; await _flutterTts.setVolume(volume); notifyListeners(); }
+  Future<void> setLanguage(String lang) async {
+    _language = lang;
+    await _flutterTts.setLanguage(lang);
+    notifyListeners();
+  }
 
-  // 對外暴露音訊事件流
+  Future<void> setPitch(double pitch) async {
+    _pitch = pitch;
+    await _flutterTts.setPitch(pitch);
+    notifyListeners();
+  }
+
+  Future<void> setRate(double rate) async {
+    _rate = rate;
+    await _flutterTts.setSpeechRate(rate);
+    notifyListeners();
+  }
+
+  Future<void> setVolume(double volume) async {
+    _volume = volume;
+    await _flutterTts.setVolume(volume);
+    notifyListeners();
+  }
+
+  /// 訂閱媒體控制事件 (onComplete / onPlay / onPause / onStop / onSkipToNext…)
   Stream<String> get audioEvents => ReaderAudioHandler.eventStream;
 }
-

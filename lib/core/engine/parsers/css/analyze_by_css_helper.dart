@@ -19,7 +19,7 @@ extension AnalyzeByCssHelper on AnalyzeByCssBase {
     switch (lastRule) {
       case 'text':
         for (final el in elements) {
-          final t = el.text.trim();
+          final t = el.text.trim().replaceAll(RegExp(r'\s+'), ' ');
           if (t.isNotEmpty) textS.add(t);
         }
         break;

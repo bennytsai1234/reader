@@ -14,6 +14,8 @@ import 'widgets/reader_brightness_bar.dart';
 import 'widgets/reader_chapters_drawer.dart';
 import 'widgets/reader_settings_sheets.dart';
 import 'widgets/reader_view_builder.dart';
+import 'tts_dialog.dart';
+import 'auto_read_dialog.dart';
 
 class ReaderPage extends StatefulWidget {
   final Book book;
@@ -31,7 +33,9 @@ class _ReaderPageState extends State<ReaderPage> {
   @override
   void initState() {
     super.initState();
-    _pageCtrl = PageController(initialPage: widget.chapterPos + (widget.chapterIndex > 0 ? 1 : 0));
+    // chapterPos 現在儲存字元偏移量，不再代表頁碼
+    // 實際頁面跳轉由 _jumpSub 監聽 jumpPageStream 處理（_init 完成後觸發）
+    _pageCtrl = PageController(initialPage: 0);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<ReaderProvider>();
@@ -102,7 +106,21 @@ class _ReaderPageState extends State<ReaderPage> {
             IgnorePointer(child: Container(color: Colors.black.withValues(alpha: (1.0 - p.brightness).clamp(0.0, 0.8)))),
             ReaderTopMenu(provider: p, onMore: () => _showMore(context)),
             ReaderBrightnessBar(provider: p),
-            ReaderBottomMenu(provider: p, onOpenDrawer: () => _key.currentState?.openDrawer(), onTts: p.toggleTts, onInterface: () => ReaderSettingsSheets.showInterfaceSettings(context, p), onSettings: () => ReaderSettingsSheets.showMoreSettings(context, p), onAutoPage: p.toggleAutoPage, onToggleDayNight: () => p.setTheme(p.themeIndex == 1 ? 0 : 1)),
+            ReaderBottomMenu(
+              provider: p,
+              onOpenDrawer: () => _key.currentState?.openDrawer(),
+              onTts: () => TtsDialog.show(context),
+              onInterface: () => ReaderSettingsSheets.showInterfaceSettings(context, p),
+              onSettings: () => ReaderSettingsSheets.showMoreSettings(context, p),
+              onAutoPage: () async {
+                if (!p.isAutoPaging) p.toggleAutoPage();
+                // 對話框開啟期間暫停自動翻頁，關閉後恢復（對標 Android onMenuShow）
+                p.pauseAutoPage();
+                await AutoReadDialog.show(context);
+                if (p.isAutoPaging) p.resumeAutoPage();
+              },
+              onToggleDayNight: () => p.setTheme(p.themeIndex == 1 ? 0 : 1),
+            ),
           ]),
         );
       }),

@@ -1,20 +1,21 @@
 import 'dart:async';
 import 'package:audio_service/audio_service.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 
-/// ReaderAudioHandler - 處理系統媒體控制與 TTS 狀態
-/// 深度還原 Android 版的背景播放與媒體通知中心功能
+/// ReaderAudioHandler - 負責系統媒體控制通知 (鎖屏、耳機按鍵等)
+/// 實際 TTS 語音由 TTSService._flutterTts 統一管理，避免雙引擎衝突
 class ReaderAudioHandler extends BaseAudioHandler {
-  final FlutterTts _tts = FlutterTts();
-  
-  // 用於通知 ReaderProvider 跳轉章節
-  static final StreamController<String> _eventController = StreamController<String>.broadcast();
+  static final StreamController<String> _eventController =
+      StreamController<String>.broadcast();
+
+  /// 供 TTSService 訂閱的媒體控制事件流
   static Stream<String> get eventStream => _eventController.stream;
 
+  /// TTSService 用此方法發送事件 (onComplete, onPlay, onPause…)
+  static void emitEvent(String event) {
+    if (!_eventController.isClosed) _eventController.add(event);
+  }
+
   ReaderAudioHandler() {
-    _initTts();
-    
-    // 初始化播放狀態
     playbackState.add(playbackState.value.copyWith(
       controls: [
         MediaControl.skipToPrevious,
@@ -31,67 +32,42 @@ class ReaderAudioHandler extends BaseAudioHandler {
     ));
   }
 
-  void _initTts() {
-    _tts.setCompletionHandler(() {
-      playbackState.add(playbackState.value.copyWith(
-        playing: false,
-        processingState: AudioProcessingState.completed,
-      ));
-      // 廣播「播放完成」，讓 Provider 自動下一頁
-      _eventController.add('onComplete');
-    });
-
-    _tts.setStartHandler(() {
-      playbackState.add(playbackState.value.copyWith(
-        playing: true,
-        processingState: AudioProcessingState.ready,
-      ));
-    });
+  /// 同步播放狀態到系統通知欄
+  void setPlaying(bool playing) {
+    playbackState.add(playbackState.value.copyWith(
+      playing: playing,
+      processingState:
+          playing ? AudioProcessingState.ready : AudioProcessingState.idle,
+    ));
   }
 
-  @override
-  Future<void> skipToNext() async {
-    _eventController.add('onSkipToNext');
-  }
-
-  @override
-  Future<void> skipToPrevious() async {
-    _eventController.add('onSkipToPrevious');
-  }
-
+  /// 更新通知欄書名/作者/封面
   void updateMetadata({required String title, required String author, String? artUri}) {
     mediaItem.add(MediaItem(
       id: 'legado_tts',
       album: title,
       title: author,
       artist: title,
-      // 如果有封面圖 URL 則顯示，否則可以使用佔位圖
-      artUri: artUri != null && artUri.startsWith('http') ? Uri.parse(artUri) : null,
+      artUri: artUri != null && artUri.startsWith('http')
+          ? Uri.parse(artUri)
+          : null,
     ));
   }
 
-  @override
-  Future<void> play() async {
-    _eventController.add('onPlay');
-  }
+  // ---- 媒體按鍵回調：全部轉為事件，由 ReaderProvider 處理 ----
 
   @override
-  Future<void> pause() async {
-    await _tts.pause();
-    playbackState.add(playbackState.value.copyWith(playing: false));
-  }
+  Future<void> skipToNext() async => emitEvent('onSkipToNext');
 
   @override
-  Future<void> stop() async {
-    await _tts.stop();
-    playbackState.add(playbackState.value.copyWith(
-      playing: false,
-      processingState: AudioProcessingState.idle,
-    ));
-  }
+  Future<void> skipToPrevious() async => emitEvent('onSkipToPrevious');
 
-  Future<void> speak(String text) async {
-    await _tts.speak(text);
-  }
+  @override
+  Future<void> play() async => emitEvent('onPlay');
+
+  @override
+  Future<void> pause() async => emitEvent('onPause');
+
+  @override
+  Future<void> stop() async => emitEvent('onStop');
 }
-

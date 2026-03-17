@@ -8,6 +8,7 @@ import 'text_page.dart';
 /// 對應 Android: ui/book/read/page/PageView.kt 與 ContentTextView.kt
 class PageViewWidget extends StatelessWidget {
   final TextPage page;
+  final TextPage? nextPage; // 用於分頁模式掃描線效果
   final TextStyle contentStyle;
   final TextStyle titleStyle;
   final double paddingTop;
@@ -19,10 +20,15 @@ class PageViewWidget extends StatelessWidget {
   final int ttsStart;
   final int ttsEnd;
   final bool isScrollMode;
+  final void Function(int lineIndex)? onLineTap;
+  final Color pageBackgroundColor;
+  /// TTS 正在朗讀的章節索引，用於過濾跨章節時的重複高亮（-1 表示不過濾）
+  final int ttsChapterIndex;
 
   const PageViewWidget({
     super.key,
     required this.page,
+    this.nextPage,
     required this.contentStyle,
     required this.titleStyle,
     this.paddingTop = 40.0,
@@ -33,13 +39,20 @@ class PageViewWidget extends StatelessWidget {
     this.autoPageProgress = 0.0,
     this.ttsStart = -1,
     this.ttsEnd = -1,
+    this.ttsChapterIndex = -1,
     this.isScrollMode = false,
+    this.onLineTap,
+    this.pageBackgroundColor = Colors.white,
   });
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ReaderProvider>();
-    
+
+    // 分頁模式自動翻頁：使用 ValueListenableBuilder 實現 60fps 掃描線動畫
+    final bool needsScanLine = isAutoPaging && !isScrollMode && nextPage != null;
+    final scanLineColor = provider.currentTheme.textColor.withValues(alpha: 0.6);
+
     return SelectionArea(
       contextMenuBuilder: (context, selectableRegionState) {
         return AdaptiveTextSelectionToolbar.buttonItems(
@@ -51,17 +64,53 @@ class PageViewWidget extends StatelessWidget {
         children: [
           // 1. 文字繪製層
           Positioned.fill(
-            child: CustomPaint(
-              painter: _TextPagePainter(
-                page: page,
-                contentStyle: contentStyle,
-                titleStyle: titleStyle,
-                paddingLeft: paddingLeft,
-                isAutoPaging: isAutoPaging,
-                autoPageProgress: autoPageProgress,
-                ttsStart: ttsStart,
-                ttsEnd: ttsEnd,
-              ),
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTapUp: (details) {
+                if (onLineTap == null) return;
+                // 扣除 paddingTop (40.0) 後，判斷點擊落在哪一行
+                final tapY = details.localPosition.dy - 40.0;
+                for (int i = 0; i < page.lines.length; i++) {
+                  final line = page.lines[i];
+                  if (tapY >= line.lineTop && tapY < line.lineBottom) {
+                    onLineTap!(i);
+                    break;
+                  }
+                }
+              },
+              child: needsScanLine
+                  ? ValueListenableBuilder<double>(
+                      valueListenable: provider.autoPageProgressNotifier,
+                      builder: (_, progress, __) => CustomPaint(
+                        painter: _TextPagePainter(
+                          page: page,
+                          nextPage: nextPage,
+                          contentStyle: contentStyle,
+                          titleStyle: titleStyle,
+                          paddingLeft: paddingLeft,
+                          isAutoPaging: true,
+                          autoPageProgress: progress,
+                          scanLineColor: scanLineColor,
+                          pageBackgroundColor: pageBackgroundColor,
+                          ttsStart: ttsStart,
+                          ttsEnd: ttsEnd,
+                          ttsChapterIndex: ttsChapterIndex,
+                        ),
+                      ),
+                    )
+                  : CustomPaint(
+                      painter: _TextPagePainter(
+                        page: page,
+                        contentStyle: contentStyle,
+                        titleStyle: titleStyle,
+                        paddingLeft: paddingLeft,
+                        isAutoPaging: false,
+                        autoPageProgress: 0.0,
+                        ttsStart: ttsStart,
+                        ttsEnd: ttsEnd,
+                        ttsChapterIndex: ttsChapterIndex,
+                      ),
+                    ),
             ),
           ),
           // 2. 圖片互動層 (原 Android：支援點擊查看圖片)
@@ -118,42 +167,92 @@ class PageViewWidget extends StatelessWidget {
 
 class _TextPagePainter extends CustomPainter {
   final TextPage page;
+  final TextPage? nextPage;
   final TextStyle contentStyle;
   final TextStyle titleStyle;
   final double paddingLeft;
   final bool isAutoPaging;
   final double autoPageProgress;
+  final Color scanLineColor;
+  final Color pageBackgroundColor;
   final int ttsStart;
   final int ttsEnd;
+  final int ttsChapterIndex;
 
   _TextPagePainter({
     required this.page,
+    this.nextPage,
     required this.contentStyle,
     required this.titleStyle,
     required this.paddingLeft,
     this.isAutoPaging = false,
     this.autoPageProgress = 0.0,
+    this.scanLineColor = Colors.blue,
+    this.pageBackgroundColor = Colors.white,
     this.ttsStart = -1,
     this.ttsEnd = -1,
+    this.ttsChapterIndex = -1,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    // 1. 繪製當前頁面 (底層)
+    _drawPageLines(canvas, size, page);
+
+    // 2. 分頁模式掃描線效果 (對標 Android AutoPager.onDraw)
+    if (isAutoPaging && nextPage != null && autoPageProgress > 0) {
+      final double scanY = size.height * autoPageProgress;
+
+      // 繪製下一頁覆蓋內容 (頂層)
+      canvas.save();
+      canvas.clipRect(Rect.fromLTWH(0, 0, size.width, scanY));
+      
+      // 繪製下一頁背景 (遮蓋底層當前頁文字，避免重疊閃爍)
+      final bgPaint = Paint()..color = pageBackgroundColor;
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, scanY), bgPaint);
+      
+      _drawPageLines(canvas, size, nextPage!);
+      canvas.restore();
+
+      // 繪製掃描線漸變陰影 (提升立體感)
+      final shadowPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withValues(alpha: 0.0),
+            Colors.black.withValues(alpha: 0.15),
+          ],
+        ).createShader(Rect.fromLTWH(0, scanY - 20, size.width, 20));
+      canvas.drawRect(Rect.fromLTWH(0, scanY - 20, size.width, 20), shadowPaint);
+
+      // 繪製掃描進度橫線 (1.5px)
+      final scanPaint = Paint()
+        ..color = scanLineColor
+        ..strokeWidth = 1.5
+        ..strokeCap = StrokeCap.butt;
+      canvas.drawLine(Offset(0, scanY), Offset(size.width, scanY), scanPaint);
+    }
+  }
+
+  /// 繪製單頁內容的所有文字行
+  void _drawPageLines(Canvas canvas, Size size, TextPage targetPage) {
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
     final width = size.width - paddingLeft * 2;
 
-    // 繪製每一行
-    for (var line in page.lines) {
+    for (var line in targetPage.lines) {
       if (line.image != null) continue;
 
-      // 處理 TTS 高亮 (對位 Android：朗讀時背景高亮)
-      final bool isTtsActive = ttsStart != -1 && 
-          line.chapterPosition >= ttsStart && 
+      // 處理 TTS 高亮（對位 Android：朗讀時背景高亮）
+      // 同時限制章節索引，避免多章節合併時不同 chapter 的相同 chapterPosition 誤觸發
+      final bool isTtsActive = ttsStart != -1 &&
+          (ttsChapterIndex < 0 || targetPage.chapterIndex == ttsChapterIndex) &&
+          line.chapterPosition >= ttsStart &&
           line.chapterPosition < ttsEnd;
 
       if (isTtsActive) {
         final highlightPaint = Paint()
-          ..color = contentStyle.color?.withOpacity(0.2) ?? Colors.yellow.withOpacity(0.3);
+          ..color = contentStyle.color?.withValues(alpha: 0.2) ?? Colors.yellow.withValues(alpha: 0.3);
         canvas.drawRect(
           Rect.fromLTWH(paddingLeft, 40.0 + line.lineTop, width, line.height),
           highlightPaint,
@@ -161,18 +260,26 @@ class _TextPagePainter extends CustomPainter {
       }
 
       textPainter.text = TextSpan(
-        text: line.text, 
-        style: line.isTitle ? titleStyle : contentStyle
+        text: line.text,
+        style: line.isTitle ? titleStyle : contentStyle,
       );
-      
+
       // 關鍵：對位 Android 的兩端對齊繪製
       textPainter.textAlign = line.shouldJustify ? TextAlign.justify : TextAlign.left;
-      
       textPainter.layout(minWidth: width, maxWidth: width);
       textPainter.paint(canvas, Offset(paddingLeft, 40.0 + line.lineTop));
     }
   }
 
   @override
-  bool shouldRepaint(covariant _TextPagePainter oldDelegate) => true;
+  bool shouldRepaint(covariant _TextPagePainter oldDelegate) {
+    return oldDelegate.autoPageProgress != autoPageProgress ||
+        oldDelegate.page != page ||
+        oldDelegate.nextPage != nextPage ||
+        oldDelegate.ttsStart != ttsStart ||
+        oldDelegate.ttsEnd != ttsEnd ||
+        oldDelegate.ttsChapterIndex != ttsChapterIndex ||
+        oldDelegate.isAutoPaging != isAutoPaging ||
+        oldDelegate.pageBackgroundColor != pageBackgroundColor;
+  }
 }

@@ -8,6 +8,7 @@ import 'package:logger/logger.dart';
 
 import 'core/di/injection.dart';
 import 'core/database/dao/book_dao.dart';
+import 'core/services/tts_service.dart';
 import 'app_providers.dart';
 import 'shared/theme/app_theme.dart';
 import 'features/settings/settings_provider.dart';
@@ -75,6 +76,9 @@ void main() {
       await prefs.setBool('recordLog', true);
       AppLog.i('Debug Mode: recordLog forced to TRUE');
       
+      AppLog.i('Initializing TTSService...');
+      await TTSService().init();
+
       AppLog.i('Initializing Workmanager...');
       Workmanager().initialize(callbackDispatcher, isInDebugMode: kDebugMode);
 

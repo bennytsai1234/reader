@@ -21,7 +21,7 @@ mixin RuleAnalyzerSplit on RuleAnalyzerBase, RuleAnalyzerMatch {
       return ruleList;
     }
 
-    final end = pos;
+    var end = pos;
     pos = start;
 
     while (true) {
@@ -30,7 +30,7 @@ mixin RuleAnalyzerSplit on RuleAnalyzerBase, RuleAnalyzerMatch {
         ruleList = [queue.substring(startX, end)];
         elementsType = queue.substring(end, end + step);
         pos = end + step;
-        
+
         while (consumeTo(elementsType)) {
           ruleList.add(queue.substring(start, pos));
           pos += step;
@@ -44,10 +44,16 @@ mixin RuleAnalyzerSplit on RuleAnalyzerBase, RuleAnalyzerMatch {
       if (!chompBalanced(queue[pos], next)) {
         return [queue];
       }
-      
+
       if (pos >= end) {
         start = pos;
-        return splitRule(split);
+        // startX 保持不變（仍為第一個 token 的起點）
+        if (!consumeToAny(split)) {
+          ruleList.add(queue.substring(startX));
+          return ruleList;
+        }
+        end = pos;
+        pos = start;
       }
     }
   }
@@ -60,6 +66,7 @@ mixin RuleAnalyzerSplit on RuleAnalyzerBase, RuleAnalyzerMatch {
       final st = findToAny(['[', '(']);
       if (st == -1 || st > end) {
         ruleList.add(queue.substring(startX, end));
+        startX = end + step;
         pos = end + step;
         if (!consumeTo(elementsType)) {
           ruleList.add(queue.substring(pos));

@@ -1,11 +1,11 @@
-import 'dart:async';
 import 'package:legado_reader/core/services/tts_service.dart';
 import 'package:legado_reader/features/reader/engine/text_page.dart';
 
+/// ReaderTtsController - 已廢棄，TTS 邏輯已整合至 ReaderProvider
+/// 保留此檔案僅為編譯相容，實際不使用
+@Deprecated('Use ReaderProvider.toggleTts() and TTSService directly')
 class ReaderTtsController {
   final TTSService tts = TTSService();
-  double rate = 1.0;
-  double pitch = 1.0;
 
   void toggleTts({
     required List<TextPage> pages,
@@ -19,14 +19,6 @@ class ReaderTtsController {
       final text = pages.sublist(currentPageIndex).map((p) {
         return p.lines.where((l) => !l.isTitle).map((l) => l.text).join('');
       }).join('\n');
-
-      tts.onComplete = () {
-        if (currentPageIndex < pages.length - 1) {
-          onNextPage();
-        } else {
-          onNextChapter();
-        }
-      };
       tts.speak(text);
     }
   }
@@ -34,4 +26,3 @@ class ReaderTtsController {
   void stop() => tts.stop();
   bool get isPlaying => tts.isPlaying;
 }
-

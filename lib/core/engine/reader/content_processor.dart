@@ -40,10 +40,11 @@ class ContentProcessor {
     final bool sameTitleRemoved = resultData['sameTitleRemoved'];
 
     // 2. 簡繁轉換 (這部分保持在主 Isolate 呼叫 OpenCC 插件)
+    // value 1 = 簡轉繁 (s2t), value 2 = 繁轉簡 (t2s)
     if (chineseConvertType == 1) {
-      content = await ChineseUtils.t2s(content);
-    } else if (chineseConvertType == 2) {
       content = await ChineseUtils.s2t(content);
+    } else if (chineseConvertType == 2) {
+      content = await ChineseUtils.t2s(content);
     }
 
     // 3. 重新添加處理後的標題

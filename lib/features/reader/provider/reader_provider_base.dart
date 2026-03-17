@@ -23,6 +23,9 @@ abstract class ReaderProviderBase extends ChangeNotifier {
   final BookmarkDao bookmarkDao = getIt<BookmarkDao>();
   final StreamController<int> jumpPageController = StreamController<int>.broadcast();
   final StreamController<double> scrollOffsetController = StreamController<double>.broadcast();
+  /// 捲動模式 trim 補償：從頂部移除章節頁面後，需向上偏移等量像素才能維持視覺位置
+  /// 值為正數，代表「向上移動 N 像素」
+  final StreamController<double> scrollTrimAdjustController = StreamController<double>.broadcast();
 
 
   final Book book;
@@ -34,6 +37,7 @@ abstract class ReaderProviderBase extends ChangeNotifier {
   List<TextPage> pages = [];
   Size? viewSize;
   final Set<int> loadingChapters = {};
+  final Set<int> silentLoadingChapters = {}; // 新增：用於追蹤靜默預加載，不觸發 UI 轉圈
   bool get isLoading => loadingChapters.isNotEmpty;
 
   bool showControls = false;
@@ -45,7 +49,6 @@ abstract class ReaderProviderBase extends ChangeNotifier {
 
   final Map<int, List<TextPage>> chapterCache = {};
   final Map<int, String> chapterContentCache = {};
-  bool isPreloading = false;
   List<Bookmark> bookmarks = [];
 
   // 精準更新組件
@@ -54,10 +57,15 @@ abstract class ReaderProviderBase extends ChangeNotifier {
 
   ReaderProviderBase(this.book);
 
+  bool _isDisposed = false;
+  bool get isDisposed => _isDisposed;
+
   @override
   void dispose() {
+    _isDisposed = true;
     jumpPageController.close();
     scrollOffsetController.close();
+    scrollTrimAdjustController.close();
     batteryLevelNotifier.dispose();
     autoPageProgressNotifier.dispose();
     super.dispose();

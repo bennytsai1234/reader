@@ -22,7 +22,7 @@ mixin RuleAnalyzerRange on RuleAnalyzerBase, RuleAnalyzerMatch {
       pos += inner.length; // 不平衡則跳過
     }
 
-    if (startX == 0) return "";
+    if (startX == 0) return queue;
     st.write(queue.substring(startX));
     return st.toString();
   }
