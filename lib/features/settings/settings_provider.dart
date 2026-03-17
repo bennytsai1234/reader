@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:legado_reader/core/config/app_config.dart';
 import 'package:legado_reader/core/constant/prefer_key.dart';
 import 'package:legado_reader/core/services/web_service.dart';
 import 'package:legado_reader/core/services/webdav_service.dart';
@@ -140,7 +141,7 @@ class SettingsProvider extends SettingsProviderBase {
   void setThreadCount(int v) { threadCount = v; save(PreferKey.threadCount, v); update(); }
   void setUserAgent(String v) { userAgent = v; save(PreferKey.userAgent, v); update(); }
   void setAntiAlias(bool v) { antiAlias = v; save(PreferKey.antiAlias, v); update(); }
-  void setReplaceEnableDefault(bool v) { replaceEnableDefault = v; save(PreferKey.replaceEnableDefault, v); update(); }
+  void setReplaceEnableDefault(bool v) { replaceEnableDefault = v; AppConfig.replaceEnableDefault = v; save(PreferKey.replaceEnableDefault, v); update(); }
   void setEnableCronet(bool v) { enableCronet = v; save(PreferKey.cronet, v); update(); }
   void setWebServiceWakeLock(bool v) { webServiceWakeLock = v; save(PreferKey.webServiceWakeLock, v); update(); }
   void setBookStorageDir(String v) { bookStorageDir = v; save('book_storage_dir', v); update(); }
@@ -294,6 +295,7 @@ class SettingsProvider extends SettingsProviderBase {
     autoRefresh = prefs.getBool(PreferKey.autoRefresh) ?? true;
     defaultToRead = prefs.getBool(PreferKey.defaultToRead) ?? false;
     replaceEnableDefault = prefs.getBool(PreferKey.replaceEnableDefault) ?? true;
+    AppConfig.replaceEnableDefault = replaceEnableDefault; // 同步至 AppConfig
     autoClearExpired = prefs.getBool(PreferKey.autoClearExpired) ?? true;
     showMangaUi = prefs.getBool(PreferKey.showMangaUi) ?? true;
     antiAlias = prefs.getBool(PreferKey.antiAlias) ?? true;

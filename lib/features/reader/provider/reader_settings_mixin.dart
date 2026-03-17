@@ -1,3 +1,4 @@
+import 'package:legado_reader/core/config/app_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'reader_provider_base.dart';
 
@@ -23,6 +24,7 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
     themeIndex = p.getInt('reader_theme_index') ?? 0;
     brightness = p.getDouble('reader_brightness') ?? 0.5;
     pageTurnMode = p.getInt('reader_page_turn_mode') ?? 0;
+    AppConfig.readerPageAnim = pageTurnMode; // 同步至 AppConfig
     chineseConvert = p.getInt('reader_chinese_convert_v2') ?? 0;
     final actionsStr = p.getString('reader_click_actions') ?? '2,2,1,2,0,1,2,1,1';
     clickActions = actionsStr.split(',').map((e) => int.parse(e)).toList();
@@ -47,7 +49,7 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
   void setLineHeight(double v) { lineHeight = v; saveSetting('line_height', v); clearReaderCache(); (this as dynamic).doPaginate(); }
   void setTextFullJustify(bool v) { textFullJustify = v; saveSetting('text_full_justify', v); clearReaderCache(); (this as dynamic).doPaginate(); }
   void setTextIndent(int v) { textIndent = v; saveSetting('text_indent', v); clearReaderCache(); (this as dynamic).doPaginate(); }
-  void setPageTurnMode(int v) { pageTurnMode = v; saveSetting('page_turn_mode', v); notifyListeners(); }
+  void setPageTurnMode(int v) { pageTurnMode = v; AppConfig.readerPageAnim = v; saveSetting('page_turn_mode', v); notifyListeners(); }
   void setTheme(int i) { themeIndex = i; saveSetting('theme_index', i); clearReaderCache(); (this as dynamic).doPaginate(); }
   void setBrightness(double v) { brightness = v; saveSetting('brightness', v); notifyListeners(); }
   

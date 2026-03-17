@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:legado_reader/core/config/app_config.dart';
 import 'package:legado_reader/core/constant/book_type.dart';
 import 'package:legado_reader/core/models/search_book.dart';
 import 'package:legado_reader/core/engine/book/book_help.dart';
@@ -59,8 +60,7 @@ extension BookExtensions on BookBase {
     if (explicitValue != null) return explicitValue;
     // 圖片類、音訊類、Epub 本地 預設關閉淨化
     if (isImage || isAudio || isEpub) return false;
-    // TODO: 這裡應串接 AppConfig.replaceEnableDefault (預設開啟)
-    return true;
+    return AppConfig.replaceEnableDefault;
   }
 
   bool getReSegment() => readConfig?.reSegment ?? false;
@@ -70,8 +70,7 @@ extension BookExtensions on BookBase {
     if (pageAnim != null && pageAnim >= 0) return pageAnim;
     // 圖片類預設滾動翻頁 (PageAnim.scrollPageAnim = 3)
     if (isImage) return 3;
-    // TODO: 這裡應串接 ReadBookConfig.pageAnim (預設 0)
-    return 0;
+    return AppConfig.readerPageAnim;
   }
 
   // --- 進度與模擬計算 (對齊 Android Book.kt) ---

@@ -1,10 +1,11 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:legado_reader/core/engine/analyze_rule.dart';
+import 'package:legado_reader/core/engine/rule_analyzer.dart';
 import 'package:legado_reader/core/models/rule_data_interface.dart';
 import '../../test_helper.dart';
 
-class MockRuleData extends RuleDataInterface {
+// ─── 測試輔助 ──────────────────────────────────────────────────────────────────
+class _MockRuleData extends RuleDataInterface {
   @override
   final Map<String, String> variableMap = {};
 
@@ -23,99 +24,130 @@ class MockRuleData extends RuleDataInterface {
 
 void main() {
   setupTestDI();
-  group('Reference Logic Extension Tests', () {
-    late MockRuleData mockData;
+
+  // ─── RuleAnalyzer.splitRule() 直接測試 ─────────────────────────────────────
+  //
+  // 這組測試直接驗證 splitRule() 的分割邏輯，不依賴 JsonPath/JS 引擎。
+  // 測試目標：括號內的分隔符不應被視為規則邊界。
+
+  group('RuleAnalyzer.splitRule() — 括號感知分割', () {
+    test('簡單 && 分割：兩個規則', () {
+      final ra = RuleAnalyzer(r'$.a && $.b');
+      final parts = ra.splitRule(['&&']);
+      expect(parts.length, equals(2));
+      expect(parts[0].trim(), equals(r'$.a'));
+      expect(parts[1].trim(), equals(r'$.b'));
+    });
+
+    test('[] 括號內的 && 不視為分隔符', () {
+      // $.a[?(@.x=='&&')] && $.b
+      // 第一部分的 && 在 [] 內，不應被分割
+      final ra = RuleAnalyzer(r"$.a[?(@.x=='&&')] && $.b");
+      final parts = ra.splitRule(['&&']);
+      expect(parts.length, equals(2));
+      expect(parts[0].trim(), equals(r"$.a[?(@.x=='&&')]"));
+      expect(parts[1].trim(), equals(r'$.b'));
+    });
+
+    test('() 括號內的 || 不視為分隔符', () {
+      final ra = RuleAnalyzer(r'func(a || b) || $.fallback');
+      final parts = ra.splitRule(['||']);
+      expect(parts.length, equals(2));
+      expect(parts[0].trim(), equals(r'func(a || b)'));
+      expect(parts[1].trim(), equals(r'$.fallback'));
+    });
+
+    test('無分隔符時回傳整個字串（單元素 list）', () {
+      final ra = RuleAnalyzer(r'$.simple.path');
+      final parts = ra.splitRule(['&&']);
+      expect(parts.length, equals(1));
+      expect(parts[0], equals(r'$.simple.path'));
+    });
+
+    test('連續三個規則正確分割', () {
+      final ra = RuleAnalyzer(r'$.a && $.b && $.c');
+      final parts = ra.splitRule(['&&']);
+      expect(parts.length, equals(3));
+      expect(parts[0].trim(), equals(r'$.a'));
+      expect(parts[1].trim(), equals(r'$.b'));
+      expect(parts[2].trim(), equals(r'$.c'));
+    });
+
+    test('巢狀括號內的分隔符不被分割', () {
+      // ([?(@.x == '&&' || @.y == '||')]) 中同時含 && 與 ||
+      final ra = RuleAnalyzer(r"$.a[?(@.x == '&&' || @.y == '||')] && $.b");
+      final parts = ra.splitRule(['&&']);
+      expect(parts.length, equals(2));
+      expect(parts[0], contains('[?'));
+      expect(parts[1].trim(), equals(r'$.b'));
+    });
+  });
+
+  // ─── AnalyzeRule 透過 JsonPath 的端對端分割驗證 ────────────────────────────
+  //
+  // 這組測試驗證 AnalyzeRule 對真實 JSON 資料做 && 規則串聯時，
+  // 括號內的 && 不被錯誤切開，導致 JsonPath 語法損壞。
+  //
+  // 注意：若 AnalyzeByJsonPath 實作有 bug，這組測試也會失敗。
+  // 測試失敗的根因在 lib/core/engine/parsers/analyze_by_json_path.dart，
+  // 而非本測試檔。
+
+  group('AnalyzeRule && 串聯 — 括號感知（需 JsonPath 正確運作）', () {
+    late _MockRuleData mockData;
     late AnalyzeRule analyzer;
 
     setUp(() {
-      mockData = MockRuleData();
+      mockData = _MockRuleData();
       analyzer = AnalyzeRule(ruleData: mockData);
     });
 
-    test('1. Real World: JsonPath + JS with java.put', () {
-      // Rule from Legado assets: $.id@js:java.put('bookId', result);'https://example.com/'+result
-      // We mock the JS evaluation for this test since flutter_js might not be available in VM
-      
-      const jsonContent = {'id': '12345'};
-      analyzer.setContent(jsonContent);
-      
-      const rule = r"$.id@js:java.put('bookId', result); 'https://example.com/' + result";
-      
-      // In our current implementation, AnalyzeRule splits this into JsonPath and JS.
-      // We want to ensure it correctly extracts the '12345' first.
-      
-      final result = analyzer.getString(rule);
-      
-      // Note: In a real environment, the JS engine would execute and return the URL.
-      // In our test environment, if JS engine fails to init, it might return empty or error.
-      // But we can verify the 'bookId' was put if our JS bridge is working.
-      
-      debugPrint('Result: $result');
-    });
-
-    test('2. Real World: Nested {{ }} with complex JS', () {
-      // Rule: ...keyId={{var keyId = '1632'; keyId + '&ks=val'}}
-      const rule = r"keyId={{var keyId = '1632'; keyId + '&ks=val'}}";
-      
-      // This tests RuleAnalyzer's ability to find and evaluate {{ }}.
-      final result = analyzer.getString(rule);
-      
-      // If JS evaluation is mocked/fails, it should fallback to the template or return evaluated string.
-      debugPrint('Result: $result');
-    });
-
-    test('3. RuleAnalyzer: && splitting aware of brackets', () {
-      // This is a logic from Legado's RuleAnalyzer.kt that we want to ensure we match.
-      // Inside [ ] or ( ), && should not be split.
-      
-      final analyzer = AnalyzeRule(ruleData: mockData);
-      // We use a custom string to test splitting
-      const complexRule = r"$.content[?(@.type=='&&')] && $.other";
-      
-      // Historically, a simple split('&&') would break the first part.
-      // Our implementation should keep the first part intact.
-      
-      // We can't directly call splitRule but we can observe behavior.
-      // If it splits incorrectly, JsonPath will fail.
-      
+    test('含 && 的 JsonPath filter 不被誤切，兩條規則各自正確執行', () {
+      // 規則語義：
+      //   Part 1: $.items[?(@.type=='&&')]  → 取 type 為 '&&' 的元素
+      //   Part 2: $.label                  → 取頂層 label
+      // && 串聯代表兩個結果用 \n 合併
       analyzer.setContent({
-        'content': [{'type': '&&'}],
-        'other': 'val2'
+        'items': [
+          {'type': '&&', 'name': 'match'},
+          {'type': 'other', 'name': 'skip'},
+        ],
+        'label': 'top-label',
       });
-      
-      final result = analyzer.getString(complexRule);
-      // Expected: result of first rule + \n + result of second rule
-      // First rule should match the object with type '&&'
-      expect(result, contains('&&'));
-      expect(result, contains('val2'));
+
+      const rule = r"$.items[?(@.type=='&&')].name && $.label";
+      final result = analyzer.getString(rule);
+
+      // 兩段結果都應出現在最終字串中
+      expect(result, contains('match'),     reason: 'Part 1 應取到 name=match');
+      expect(result, contains('top-label'), reason: 'Part 2 應取到 label');
     });
 
-    test('4. RuleAnalyzer: Exhaustive splitting test (nested brackets)', () {
-      final analyzer = AnalyzeRule(ruleData: mockData);
-      
-      // A very complex rule that shouldn't be split at the wrong places
-      // 1. $.content[?(@.val == '&&' || @.val == '||')]  (contains separators inside brackets)
-      // 2. %% (custom separator)
-      // 3. $.other[(@.x == '%%')]
-      const exhaustiveRule = r"$.content[?(@.val == '&&' || @.val == '||')] %% $.other[?(@.x == '%%')]";
-      
-      analyzer.setContent({
-        'content': [{'val': '&&'}],
-        'other': [{'x': '%%'}]
-      });
-      
-      // In Legado, %% is often used to join results.
-      // RuleAnalyzer should split this into TWO rules using %% as the separator.
-      
-      final elements = analyzer.getElements(exhaustiveRule);
-      
-      // If split correctly:
-      // Part 1: $.content[?(@.val == '&&' || @.val == '||')] -> matches [{"val": "&&"}]
-      // Part 2: $.other[?(@.x == '%%')] -> matches [{"x": "%%"}]
-      
-      expect(elements.length, 2);
-      expect(elements[0].toString(), contains('val: &&'));
-      expect(elements[1].toString(), contains('x: %%'));
+    test('|| 作為 fallback：第一條規則有結果時不執行第二條', () {
+      analyzer.setContent({'primary': 'found'});
+
+      const rule = r'$.primary || $.fallback';
+      final result = analyzer.getString(rule);
+
+      expect(result, equals('found'));
     });
+
+    test('|| 作為 fallback：第一條規則無結果時執行第二條', () {
+      analyzer.setContent({'fallback': 'backup-value'});
+
+      const rule = r'$.missing || $.fallback';
+      final result = analyzer.getString(rule);
+
+      expect(result, equals('backup-value'));
+    });
+  });
+
+  // ─── JS 依賴測試（需要 JS 引擎，暫時略過）─────────────────────────────────
+  //
+  // 以下場景需要 flutter_js 在 VM 環境正常執行，
+  // 目前測試環境不支援，待 JS engine 整合後啟用。
+
+  group('JS 依賴場景', () {
+    test('JsonPath + java.put() 邊際行為', () {}, skip: 'flutter_js 在 VM 測試環境不可用');
+    test('{{ }} 模板 JS 求值', () {}, skip: 'flutter_js 在 VM 測試環境不可用');
   });
 }

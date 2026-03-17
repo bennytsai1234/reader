@@ -29,7 +29,9 @@ lib/
 ```
 
 ## 開發規範
-- 遵循現有的 Provider 模式，不引入其他狀態管理套件
+- 不引入其他狀態管理套件（已統一使用 Provider）
+- 繼承 `BaseProvider` 的 Provider 請用 `runTask()` 處理非同步，不要手動寫 loading/error 流程
+  （注意：`BookshelfProviderBase` 繼承 `ChangeNotifier` 而非 `BaseProvider`，是例外）
 - 資料庫操作統一走 `DatabaseBase`，不直接呼叫 sqflite
 - 新的解析邏輯放在 `core/engine/` 對應子目錄
 - 保持 Dart 空安全（null-safety）
