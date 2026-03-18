@@ -23,6 +23,7 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
   late ScrollController _scrollController;
   bool _isUserScrolling = false;
   Timer? _autoScrollTimer;
+  Timer? _userScrollResetTimer;
   int _lastTtsScrolledStart = -1;
   int _lastKnownPagesLength = 0;
 
@@ -90,6 +91,7 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
   void dispose() {
     widget.provider.removeListener(_onProviderStateChanged);
     _stopScrollAutoPage();
+    _userScrollResetTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -115,7 +117,7 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
       });
     }
 
-    if (p.pageTurnMode == PageAnim.scroll && p.ttsStart >= 0 && p.ttsStart != _lastTtsScrolledStart) {
+    if (p.pageTurnMode == PageAnim.scroll && p.ttsStart >= 0 && p.ttsStart != _lastTtsScrolledStart && !_isUserScrolling) {
       _lastTtsScrolledStart = p.ttsStart;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _scrollToTtsHighlight();
@@ -213,29 +215,33 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
     if (provider.ttsStart < 0 || provider.pages.isEmpty) return;
 
     final firstPage = provider.pages.firstOrNull;
-    final double headOffset = (firstPage != null && firstPage.chapterIndex > 0) ? 26.0 : 0.0;
+    final double headOffset = (firstPage != null && firstPage.chapterIndex > 0) ? 2.0 : 0.0;
     double cumHeight = 0;
     for (int i = 0; i < provider.pages.length; i++) {
       final page = provider.pages[i];
-      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom + 40.0;
+      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
 
       for (final line in page.lines) {
         if (line.image != null) continue;
         final lEnd = line.chapterPosition + line.text.length;
         if (provider.ttsStart >= line.chapterPosition && provider.ttsStart < lEnd) {
-          final lineTop = headOffset + cumHeight + 40.0 + line.lineTop;
+          final lineTop = headOffset + cumHeight + line.lineTop;
           final viewportH = _scrollController.position.viewportDimension;
           final currentOffset = _scrollController.offset;
           final comfortZoneBottom = currentOffset + viewportH * 0.65;
           if (lineTop < currentOffset || lineTop > comfortZoneBottom) {
             final target = (lineTop - viewportH * 0.25).clamp(0.0, _scrollController.position.maxScrollExtent);
-            _scrollController.animateTo(target, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+            final distance = (target - currentOffset).abs();
+            if (distance > viewportH * 0.5) {
+              _scrollController.animateTo(target, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+            } else {
+              _scrollController.jumpTo(target);
+            }
           }
           return;
         }
       }
       cumHeight += pageHeight;
-      if (i < provider.pages.length - 1) cumHeight += 24.0;
     }
   }
 
@@ -360,33 +366,47 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
     final showHead = firstPage != null && firstPage.chapterIndex > 0;
     final showTail = lastPage != null && lastPage.chapterIndex < widget.provider.chapters.length - 1;
 
-    return ListView.separated(
-      controller: _scrollController,
-      padding: EdgeInsets.zero,
-      itemCount: widget.provider.pages.length + (showHead ? 1 : 0) + (showTail ? 1 : 0),
-      separatorBuilder: (ctx, i) => const SizedBox.shrink(),
-      itemBuilder: (ctx, i) {
-        if (showHead && i == 0) return _buildScrollLoadingHead();
-        final actualIndex = showHead ? i - 1 : i;
-        if (showTail && actualIndex == widget.provider.pages.length) return _buildScrollLoadingTail();
-        if (actualIndex < 0 || actualIndex >= widget.provider.pages.length) return const SizedBox.shrink();
-
-        final page = widget.provider.pages[actualIndex];
-        return SizedBox(
-          height: page.lines.isEmpty ? 0 : page.lines.last.lineBottom,
-          child: PageViewWidget(
-            page: page,
-            contentStyle: _getContentStyle(),
-            titleStyle: _getTitleStyle(),
-            isScrollMode: true,
-            paddingTop: 0,
-            paddingBottom: 0,
-            ttsStart: widget.provider.ttsStart,
-            ttsEnd: widget.provider.ttsEnd,
-            ttsChapterIndex: widget.provider.ttsChapterIndex,
-          ),
-        );
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollStartNotification && notification.dragDetails != null) {
+          _isUserScrolling = true;
+          _userScrollResetTimer?.cancel();
+        } else if (notification is ScrollEndNotification) {
+          _userScrollResetTimer?.cancel();
+          _userScrollResetTimer = Timer(const Duration(seconds: 2), () {
+            if (mounted) _isUserScrolling = false;
+          });
+        }
+        return false;
       },
+      child: ListView.separated(
+        controller: _scrollController,
+        padding: EdgeInsets.zero,
+        itemCount: widget.provider.pages.length + (showHead ? 1 : 0) + (showTail ? 1 : 0),
+        separatorBuilder: (ctx, i) => const SizedBox.shrink(),
+        itemBuilder: (ctx, i) {
+          if (showHead && i == 0) return _buildScrollLoadingHead();
+          final actualIndex = showHead ? i - 1 : i;
+          if (showTail && actualIndex == widget.provider.pages.length) return _buildScrollLoadingTail();
+          if (actualIndex < 0 || actualIndex >= widget.provider.pages.length) return const SizedBox.shrink();
+
+          final page = widget.provider.pages[actualIndex];
+          return SizedBox(
+            height: page.lines.isEmpty ? 0 : page.lines.last.lineBottom,
+            child: PageViewWidget(
+              page: page,
+              contentStyle: _getContentStyle(),
+              titleStyle: _getTitleStyle(),
+              isScrollMode: true,
+              paddingTop: 0,
+              paddingBottom: 0,
+              ttsStart: widget.provider.ttsStart,
+              ttsEnd: widget.provider.ttsEnd,
+              ttsChapterIndex: widget.provider.ttsChapterIndex,
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -404,7 +424,7 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
   }
 
   Widget _buildScrollLoadingHead() {
-    // 高度固定為 2px，配合 _scrollHeadOffset = 26（2px head + 24px separator）的位置計算
+    // 高度固定為 2px，配合 _scrollHeadOffset = 2.0 的位置計算
     // 作為一條細線視覺指示器，不佔用大量空間以免干擾位置精度
     return SizedBox(
       height: 2,

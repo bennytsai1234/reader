@@ -40,6 +40,10 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     isRestoring = true;
     _pendingRestorePos = _initialCharOffset;
 
+    // 關鍵優復：延後 200ms 啟動首章載入，避開 App 啟動時的 CPU 尖峰，解決 Skipped frames 問題
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (isDisposed) return;
+
     await loadChapter(currentChapterIndex);
 
     if (isDisposed) return;
@@ -276,8 +280,9 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     if (_ttsCancelled) return; // 使用者已按停止，不繼續推進頁面
     if (currentPageIndex < pages.length - 1) {
       final nextIdx = currentPageIndex + 1;
-      onPageChanged(nextIdx);
-      // 通知 PageView 實際翻頁（分頁模式才需要，捲動模式由 _scrollToTtsHighlight 處理）
+      // 直接更新索引，不呼叫 onPageChanged 避免雙重存進度
+      // 分頁模式由 PageView 回呼負責 onPageChanged；捲動模式由 _scrollToTtsHighlight 處理
+      currentPageIndex = nextIdx;
       if (pageTurnMode != PageAnim.scroll) jumpPageController.add(nextIdx);
       // 使用預取好的數據，消除銜接停頓；同時重置高亮快取
       _lastTtsHighlightStart = -1;
@@ -540,8 +545,23 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
 
   @override
   void dispose() {
-    // 退出閱讀器時確保當前進度已儲存（補足未翻頁就關閉的場景）
-    _saveProgress(currentChapterIndex, currentPageIndex);
+    // 退出閱讀器時確保當前進度已儲存
+    // 若 TTS 正在播放，保存朗讀位置而非頁面/捲動位置
+    if (TTSService().isPlaying || _ttsStart >= 0) {
+      TTSService().stop();
+      if (_ttsStart >= 0) {
+        book.durChapterIndex = currentChapterIndex;
+        book.durChapterPos = _ttsStart;
+        final title = chapters.isNotEmpty && currentChapterIndex < chapters.length
+            ? chapters[currentChapterIndex].title : '';
+        book.durChapterTitle = title;
+        unawaited(bookDao.updateProgress(book.bookUrl, currentChapterIndex, title, _ttsStart));
+      } else {
+        _saveProgress(currentChapterIndex, currentPageIndex);
+      }
+    } else {
+      _saveProgress(currentChapterIndex, currentPageIndex);
+    }
     _scrollSaveTimer?.cancel();
     _heartbeatTimer?.cancel();
     _autoPageTimer?.cancel();
@@ -764,6 +784,7 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     } else if (_ttsStart >= 0) {
       TTSService().resume(); // 恢復
     } else {
+      if (pages.isEmpty || isLoading) return; // 頁面未就緒時不啟動
       _ttsCancelled = false; // 重置取消旗標，開始新一輪朗讀
       _startTts();
     }
@@ -773,6 +794,7 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
   void _startTts({int startLineIndex = -1}) async {
     if (_ttsCancelled) return; // 取消旗標已設，不啟動新朗讀
     if (pages.isEmpty) return;
+    if (isAutoPaging) stopAutoPage(); // TTS 與自動翻頁互斥
 
     // 決定起始頁與起始行
     int pageIdx = currentPageIndex.clamp(0, pages.length - 1);
@@ -788,7 +810,14 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     if (page.lines.isEmpty) return;
 
     final linesToRead = page.lines.sublist(lineIdx).where((l) => l.image == null).toList();
-    if (linesToRead.isEmpty) return;
+    if (linesToRead.isEmpty) {
+      // 純圖片頁面：自動跳到下一頁重試
+      if (currentPageIndex < pages.length - 1) {
+        currentPageIndex++;
+        _startTts();
+      }
+      return;
+    }
 
     final (text, map) = _prepareTtsData(linesToRead);
     if (text.trim().isEmpty) return;
@@ -801,6 +830,7 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     _ttsTextOffsetMap = map;
 
     await TTSService().speak(text);
+    TTSService().updateMediaInfo(title: book.name, author: book.author);
     _prefetchNextPage(); // 開始朗讀當前頁後，立即預取下一頁（含跨章節邊界）
     notifyListeners();
   }
@@ -812,15 +842,14 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     double cumHeight = 0;
     for (int i = 0; i < pages.length; i++) {
       final page = pages[i];
-      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom + 40.0;
+      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
       for (int j = 0; j < page.lines.length; j++) {
         final line = page.lines[j];
         if (line.image != null) continue;
-        final lineAbsBottom = headOffset + cumHeight + 40.0 + line.lineBottom;
+        final lineAbsBottom = headOffset + cumHeight + line.lineBottom;
         if (lineAbsBottom > _lastScrollY) return (i, j);
       }
       cumHeight += pageHeight;
-      if (i < pages.length - 1) cumHeight += 24.0;
     }
     return (currentPageIndex.clamp(0, pages.length - 1), 0);
   }
@@ -834,6 +863,8 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
   void toggleAutoPage() {
     isAutoPaging = !isAutoPaging;
     if (isAutoPaging) {
+      // 自動翻頁與 TTS 互斥
+      if (TTSService().isPlaying || _ttsStart >= 0) stopTts();
       _isAutoPagePaused = false;
       _startAutoPage();
       // 這裡可以呼叫 WakelockPlus 保持螢幕常亮
@@ -866,6 +897,7 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     // 採用 16ms (約 60fps) 的高頻 tick 以支援像素級平滑捲動，同時兼容分頁模式
     _autoPageTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) {
       if (_isAutoPagePaused || !isAutoPaging) return;
+      if (TTSService().isPlaying) return; // TTS 播放中不自動翻頁
 
       // 如果是分頁模式 (pageTurnMode != PageAnim.scroll)，則按時間進度翻頁
       if (pageTurnMode != PageAnim.scroll) {
@@ -906,4 +938,11 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     notifyListeners();
   }
 
+  @override
+  Future<void> doPaginate({bool fromEnd = false}) async {
+    await super.doPaginate(fromEnd: fromEnd);
+    // 重新分頁後重置 TTS 高亮快取，確保下次進度更新重新掃描新的頁面佈局
+    _lastTtsHighlightStart = -1;
+    _lastTtsHighlightEnd = -1;
+  }
 }

@@ -41,7 +41,7 @@ class _ReaderPageState extends State<ReaderPage> {
       final provider = context.read<ReaderProvider>();
       _jumpSub = provider.jumpPageStream.listen((p) {
         if (!mounted) return;
-        final target = p + (provider.currentChapterIndex > 0 ? 1 : 0);
+        final target = p;
         if (_pageCtrl.hasClients && _pageCtrl.page?.round() != target) {
           _pageCtrl.jumpToPage(target);
         }
