@@ -98,17 +98,6 @@ class OtherSettingsPage extends StatelessWidget {
     ));
   }
 
-  void _showThreadCountDialog(BuildContext context, SettingsProvider settings) {
-    showDialog(context: context, builder: (context) {
-      var val = settings.threadCount.toDouble();
-      return StatefulBuilder(builder: (context, setState) => AlertDialog(
-        title: Text('執行緒數量: ${val.toInt()}'),
-        content: Slider(value: val, min: 1, max: 32, divisions: 31, onChanged: (v) => setState(() => val = v)),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')), TextButton(onPressed: () { settings.setThreadCount(val.toInt()); Navigator.pop(context); }, child: const Text('確定'))],
-      ));
-    });
-  }
-
   void _showAdvancedCoverConfig(BuildContext context, SettingsProvider settings) {
     final controller = TextEditingController(text: settings.globalCoverRule);
     showDialog(context: context, builder: (context) {

@@ -29,7 +29,7 @@ class SourceSubscriptionProvider extends ChangeNotifier {
   }
 
   Future<void> addSub(String name, String url) async {
-    final sub = SourceSubscription(name: name, url: url, autoUpdate: true);
+    final sub = SourceSubscription(name: name, url: url);
     await _dao.upsert(sub);
     await loadSubs();
   }

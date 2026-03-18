@@ -1,12 +1,14 @@
 /// ReadRecord - 閱讀紀錄模型
 /// (原 Android data/entities/ReadRecord.kt)
 class ReadRecord {
+  int id;
   String deviceId;
   String bookName;
   int readTime;
   int lastRead;
 
   ReadRecord({
+    this.id = 0,
     this.deviceId = '',
     this.bookName = '',
     this.readTime = 0,

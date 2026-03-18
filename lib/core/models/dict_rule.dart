@@ -1,6 +1,7 @@
 /// DictRule - 字典規則模型
 /// (原 Android data/entities/DictRule.kt)
 class DictRule {
+  int id;
   String name;
   String urlRule;
   String showRule;
@@ -8,6 +9,7 @@ class DictRule {
   int sortNumber;
 
   DictRule({
+    this.id = 0,
     this.name = '',
     this.urlRule = '',
     this.showRule = '',
@@ -17,6 +19,7 @@ class DictRule {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id == 0 ? null : id,
       'name': name,
       'urlRule': urlRule,
       'showRule': showRule,
@@ -27,6 +30,7 @@ class DictRule {
 
   factory DictRule.fromJson(Map<String, dynamic> json) {
     return DictRule(
+      id: json['id'] ?? 0,
       name: json['name'] ?? '',
       urlRule: json['urlRule'] ?? '',
       showRule: json['showRule'] ?? '',

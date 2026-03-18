@@ -1,0 +1,99 @@
+Analyzing ios...                                                
+
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\book_dao.dart:11:3 - use_super_parameters
+  error - Undefined class 'BookRow' - lib\core\database\dao\book_dao.dart:14:13 - undefined_class
+  error - The argument type 'int' can't be assigned to the parameter type 'bool'.  - lib\core\database\dao\book_dao.dart:27:49 - argument_type_not_assignable
+  error - Undefined name 'OrderMode' - lib\core\database\dao\book_dao.dart:28:78 - undefined_identifier
+  error - The argument type 'int' can't be assigned to the parameter type 'bool'.  - lib\core\database\dao\book_dao.dart:36:49 - argument_type_not_assignable
+  error - Undefined name 'OrderMode' - lib\core\database\dao\book_dao.dart:37:78 - undefined_identifier
+  error - Undefined name 'BookRow' - lib\core\database\dao\book_dao.dart:50:47 - undefined_identifier
+  error - Undefined name 'BookRow' - lib\core\database\dao\book_dao.dart:58:29 - undefined_identifier
+  error - The argument type 'int' can't be assigned to the parameter type 'Expression<int>'.  - lib\core\database\dao\book_dao.dart:71:72 - argument_type_not_assignable
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\book_group_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'BookGroupRow' - lib\core\database\dao\book_group_dao.dart:12:18 - undefined_class
+  error - Undefined name 'BookGroupRow' - lib\core\database\dao\book_group_dao.dart:31:52 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\book_source_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'BookSourceRow' - lib\core\database\dao\book_source_dao.dart:12:19 - undefined_class
+  error - Undefined name 'BookSourceRow' - lib\core\database\dao\book_source_dao.dart:36:53 - undefined_identifier
+  error - Undefined name 'BookSourceRow' - lib\core\database\dao\book_source_dao.dart:43:28 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\bookmark_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'BookmarkRow' - lib\core\database\dao\bookmark_dao.dart:12:17 - undefined_class
+  error - Undefined name 'BookmarkRow' - lib\core\database\dao\bookmark_dao.dart:28:51 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\cache_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'CacheRow' - lib\core\database\dao\cache_dao.dart:12:14 - undefined_class
+  error - Undefined name 'CacheRow' - lib\core\database\dao\cache_dao.dart:19:77 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\chapter_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'ChapterRow' - lib\core\database\dao\chapter_dao.dart:12:20 - undefined_class
+  error - Undefined name 'ChapterRow' - lib\core\database\dao\chapter_dao.dart:36:32 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\cookie_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'CookieRow' - lib\core\database\dao\cookie_dao.dart:12:15 - undefined_class
+  error - Undefined name 'CookieRow' - lib\core\database\dao\cookie_dao.dart:22:49 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\dict_rule_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'DictRuleRow' - lib\core\database\dao\dict_rule_dao.dart:12:17 - undefined_class
+  error - Undefined name 'DictRuleRow' - lib\core\database\dao\dict_rule_dao.dart:28:51 - undefined_identifier
+  error - Undefined name 'DictRuleRow' - lib\core\database\dao\dict_rule_dao.dart:38:26 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\download_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'DownloadTaskRow' - lib\core\database\dao\download_dao.dart:12:21 - undefined_class
+  error - Undefined name 'DownloadTaskRow' - lib\core\database\dao\download_dao.dart:23:88 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\http_tts_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'HttpTtsTableRow' - lib\core\database\dao\http_tts_dao.dart:12:16 - undefined_class
+  error - Undefined name 'HttpTtsTableRow' - lib\core\database\dao\http_tts_dao.dart:26:54 - undefined_identifier
+  error - Undefined name 'HttpTtsTableRow' - lib\core\database\dao\http_tts_dao.dart:36:28 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\keyboard_assist_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'KeyboardAssistRow' - lib\core\database\dao\keyboard_assist_dao.dart:12:23 - undefined_class
+  error - Undefined name 'KeyboardAssistRow' - lib\core\database\dao\keyboard_assist_dao.dart:25:94 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\read_record_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'ReadRecordRow' - lib\core\database\dao\read_record_dao.dart:12:19 - undefined_class
+  error - Undefined name 'ReadRecordRow' - lib\core\database\dao\read_record_dao.dart:22:53 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\replace_rule_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'ReplaceRuleRow' - lib\core\database\dao\replace_rule_dao.dart:12:20 - undefined_class
+  error - Undefined name 'ReplaceRuleRow' - lib\core\database\dao\replace_rule_dao.dart:28:54 - undefined_identifier
+  error - Undefined name 'ReplaceRuleRow' - lib\core\database\dao\replace_rule_dao.dart:35:26 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\rule_sub_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'RuleSubRow' - lib\core\database\dao\rule_sub_dao.dart:12:16 - undefined_class
+  error - Undefined name 'RuleSubRow' - lib\core\database\dao\rule_sub_dao.dart:23:77 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\search_book_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'SearchBookRow' - lib\core\database\dao\search_book_dao.dart:12:19 - undefined_class
+  error - Undefined name 'SearchBookRow' - lib\core\database\dao\search_book_dao.dart:19:84 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\search_history_dao.dart:9:3 - use_super_parameters
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\search_keyword_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'SearchKeywordRow' - lib\core\database\dao\search_keyword_dao.dart:12:22 - undefined_class
+  error - Undefined name 'OrderMode' - lib\core\database\dao\search_keyword_dao.dart:15:105 - undefined_identifier
+  error - Undefined name 'SearchKeywordRow' - lib\core\database\dao\search_keyword_dao.dart:19:93 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\server_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'ServerRow' - lib\core\database\dao\server_dao.dart:12:15 - undefined_class
+  error - Undefined name 'ServerRow' - lib\core\database\dao\server_dao.dart:19:78 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\source_subscription_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'SourceSubscriptionRow' - lib\core\database\dao\source_subscription_dao.dart:12:27 - undefined_class
+  error - Undefined name 'SourceSubscriptionRow' - lib\core\database\dao\source_subscription_dao.dart:25:99 - undefined_identifier
+   info - Parameter 'db' could be a super parameter - lib\core\database\dao\txt_toc_rule_dao.dart:10:3 - use_super_parameters
+  error - Undefined class 'TxtTocRuleRow' - lib\core\database\dao\txt_toc_rule_dao.dart:12:19 - undefined_class
+  error - The argument type 'int' can't be assigned to the parameter type 'bool'.  - lib\core\database\dao\txt_toc_rule_dao.dart:21:42 - argument_type_not_assignable
+  error - Undefined name 'TxtTocRuleRow' - lib\core\database\dao\txt_toc_rule_dao.dart:27:84 - undefined_identifier
+  error - The method 'insertList' isn't defined for the type 'SearchBookDao' - lib\core\engine\web_book\search_service.dart:55:38 - undefined_method
+  error - The method 'deleteByKey' isn't defined for the type 'CacheDao' - lib\core\services\cache_manager.dart:160:21 - undefined_method
+  error - The method 'clearDeadline' isn't defined for the type 'CacheDao' - lib\core\services\default_data.dart:67:31 - undefined_method
+  error - The method 'insertOrUpdateAll' isn't defined for the type 'TxtTocRuleDao' - lib\core\services\default_data.dart:85:36 - undefined_method
+  error - The method 'insertOrUpdateAll' isn't defined for the type 'TxtTocRuleDao' - lib\core\services\default_data.dart:94:38 - undefined_method
+  error - The method 'updateProgress' isn't defined for the type 'DownloadDao' - lib\core\services\download\download_executor.dart:13:23 - undefined_method
+  error - The method 'updateProgress' isn't defined for the type 'DownloadDao' - lib\core\services\download\download_executor.dart:68:23 - undefined_method
+  error - The method 'updateProgress' isn't defined for the type 'DownloadDao' - lib\core\services\download\download_executor.dart:79:27 - undefined_method
+  error - The method 'updateProgress' isn't defined for the type 'DownloadDao' - lib\core\services\download\download_executor.dart:85:27 - undefined_method
+  error - The method 'getUnfinishedTasks' isn't defined for the type 'DownloadDao' - lib\core\services\download_service.dart:25:42 - undefined_method
+  error - The method 'updateProgress' isn't defined for the type 'DownloadDao' - lib\core\services\download_service.dart:38:19 - undefined_method
+  error - The method 'updateProgress' isn't defined for the type 'DownloadDao' - lib\core\services\download_service.dart:54:21 - undefined_method
+   info - 'ConcatenatingAudioSource' is deprecated and shouldn't be used. Use AudioPlayer.setAudioSources instead - lib\core\services\http_tts_service.dart:16:14 - deprecated_member_use
+   info - 'ConcatenatingAudioSource' is deprecated and shouldn't be used. Use AudioPlayer.setAudioSources instead - lib\core\services\http_tts_service.dart:23:17 - deprecated_member_use
+  error - The method 'getEnabledHasCover' isn't defined for the type 'SearchBookDao' - lib\features\book_detail\change_cover_provider.dart:58:41 - undefined_method
+  error - The method 'getEnabledHasCover' isn't defined for the type 'SearchBookDao' - lib\features\book_detail\change_cover_provider.dart:84:41 - undefined_method
+  error - The method 'getAllInBookshelf' isn't defined for the type 'BookDao' - lib\features\bookshelf\bookshelf_provider.dart:19:31 - undefined_method
+  error - The method 'getBooksInGroup' isn't defined for the type 'BookDao' - lib\features\bookshelf\bookshelf_provider.dart:21:31 - undefined_method
+  error - The method 'getAllInBookshelf' isn't defined for the type 'BookDao' - lib\features\bookshelf\bookshelf_provider.dart:24:35 - undefined_method
+  error - The method 'getSearchBooks' isn't defined for the type 'SearchBookDao' - lib\features\reader\provider\change_source_provider.dart:55:40 - undefined_method
+  error - The method 'updateProgress' isn't defined for the type 'BookDao' - lib\features\reader\provider\reader_content_mixin.dart:125:25 - undefined_method
+  error - The method 'updateProgress' isn't defined for the type 'BookDao' - lib\features\reader\provider\reader_content_mixin.dart:279:25 - undefined_method
+  error - The method 'updateProgress' isn't defined for the type 'BookDao' - lib\features\reader\reader_provider.dart:378:23 - undefined_method
+   info - Don't use 'BuildContext's across async gaps - lib\features\settings\backup_settings_page.dart:43:37 - use_build_context_synchronously
+  error - The method 'getAllInBookshelf' isn't defined for the type 'BookDao' - lib\main.dart:27:35 - undefined_method
+warning - The method doesn't override an inherited method - test\test_helper.dart:16:16 - override_on_non_overriding_member
+

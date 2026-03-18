@@ -1,14 +1,168 @@
+import 'dart:convert';
 import 'package:drift/drift.dart';
+import '../../models/book.dart';
+import '../../models/chapter.dart';
+import '../../models/bookmark.dart';
+import '../../models/replace_rule.dart';
+import '../../models/book_source.dart';
+import '../../models/book_group.dart';
+import '../../models/cookie.dart';
+import '../../models/dict_rule.dart';
+import '../../models/http_tts.dart';
+import '../../models/read_record.dart';
+import '../../models/server.dart';
+import '../../models/txt_toc_rule.dart';
+import '../../models/cache.dart';
+import '../../models/keyboard_assist.dart';
+import '../../models/rule_sub.dart';
+import '../../models/source_subscription.dart';
+import '../../models/search_book.dart';
+import '../../models/download_task.dart';
+import '../../models/search_keyword.dart';
+
+// ─────────────────── TypeConverters ───────────────────
+
+/// null String? → non-null String (empty string fallback)
+class EmptyStringConverter extends TypeConverter<String, String?> {
+  const EmptyStringConverter();
+  @override
+  String fromSql(String? fromDb) => fromDb ?? '';
+  @override
+  String? toSql(String value) => value.isEmpty ? null : value;
+}
+
+/// ReadConfig? ↔ JSON String?
+class ReadConfigConverter extends TypeConverter<ReadConfig?, String?> {
+  const ReadConfigConverter();
+  @override
+  ReadConfig? fromSql(String? fromDb) {
+    if (fromDb == null) return null;
+    try {
+      return ReadConfig.fromJson(jsonDecode(fromDb) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+  @override
+  String? toSql(ReadConfig? value) {
+    if (value == null) return null;
+    return jsonEncode(value.toJson());
+  }
+}
+
+/// SearchRule? ↔ JSON String?
+class SearchRuleConverter extends TypeConverter<SearchRule?, String?> {
+  const SearchRuleConverter();
+  @override
+  SearchRule? fromSql(String? fromDb) {
+    if (fromDb == null) return null;
+    try {
+      return SearchRule.fromJson(jsonDecode(fromDb) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+  @override
+  String? toSql(SearchRule? value) =>
+      value == null ? null : jsonEncode(value.toJson());
+}
+
+/// ExploreRule? ↔ JSON String?
+class ExploreRuleConverter extends TypeConverter<ExploreRule?, String?> {
+  const ExploreRuleConverter();
+  @override
+  ExploreRule? fromSql(String? fromDb) {
+    if (fromDb == null) return null;
+    try {
+      return ExploreRule.fromJson(jsonDecode(fromDb) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+  @override
+  String? toSql(ExploreRule? value) =>
+      value == null ? null : jsonEncode(value.toJson());
+}
+
+/// BookInfoRule? ↔ JSON String?
+class BookInfoRuleConverter extends TypeConverter<BookInfoRule?, String?> {
+  const BookInfoRuleConverter();
+  @override
+  BookInfoRule? fromSql(String? fromDb) {
+    if (fromDb == null) return null;
+    try {
+      return BookInfoRule.fromJson(jsonDecode(fromDb) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+  @override
+  String? toSql(BookInfoRule? value) =>
+      value == null ? null : jsonEncode(value.toJson());
+}
+
+/// TocRule? ↔ JSON String?
+class TocRuleConverter extends TypeConverter<TocRule?, String?> {
+  const TocRuleConverter();
+  @override
+  TocRule? fromSql(String? fromDb) {
+    if (fromDb == null) return null;
+    try {
+      return TocRule.fromJson(jsonDecode(fromDb) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+  @override
+  String? toSql(TocRule? value) =>
+      value == null ? null : jsonEncode(value.toJson());
+}
+
+/// ContentRule? ↔ JSON String?
+class ContentRuleConverter extends TypeConverter<ContentRule?, String?> {
+  const ContentRuleConverter();
+  @override
+  ContentRule? fromSql(String? fromDb) {
+    if (fromDb == null) return null;
+    try {
+      return ContentRule.fromJson(jsonDecode(fromDb) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+  @override
+  String? toSql(ContentRule? value) =>
+      value == null ? null : jsonEncode(value.toJson());
+}
+
+/// ReviewRule? ↔ JSON String?
+class ReviewRuleConverter extends TypeConverter<ReviewRule?, String?> {
+  const ReviewRuleConverter();
+  @override
+  ReviewRule? fromSql(String? fromDb) {
+    if (fromDb == null) return null;
+    try {
+      return ReviewRule.fromJson(jsonDecode(fromDb) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+  @override
+  String? toSql(ReviewRule? value) =>
+      value == null ? null : jsonEncode(value.toJson());
+}
+
+// ─────────────────── Tables ───────────────────
 
 // ───────────── Books ─────────────
-@DataClassName('BookRow')
+@UseRowClass(Book, generateInsertable: true)
 class Books extends Table {
   TextColumn get bookUrl => text().named('bookUrl')();
-  TextColumn get tocUrl => text().named('tocUrl').nullable()();
-  TextColumn get origin => text().nullable()();
-  TextColumn get originName => text().named('originName').nullable()();
+  TextColumn get tocUrl => text().named('tocUrl').nullable().map(const EmptyStringConverter())();
+  TextColumn get origin => text().nullable().map(const EmptyStringConverter())();
+  TextColumn get originName => text().named('originName').nullable().map(const EmptyStringConverter())();
   TextColumn get name => text()();
-  TextColumn get author => text().nullable()();
+  TextColumn get author => text().nullable().map(const EmptyStringConverter())();
   TextColumn get kind => text().nullable()();
   TextColumn get customTag => text().named('customTag').nullable()();
   TextColumn get coverUrl => text().named('coverUrl').nullable()();
@@ -28,29 +182,29 @@ class Books extends Table {
   IntColumn get durChapterPos => integer().named('durChapterPos').withDefault(const Constant(0))();
   IntColumn get durChapterTime => integer().named('durChapterTime').withDefault(const Constant(0))();
   TextColumn get wordCount => text().named('wordCount').nullable()();
-  IntColumn get canUpdate => integer().named('canUpdate').withDefault(const Constant(1))();
+  BoolColumn get canUpdate => boolean().named('canUpdate').withDefault(const Constant(true))();
   IntColumn get order => integer().named('order').withDefault(const Constant(0))();
   IntColumn get originOrder => integer().named('originOrder').withDefault(const Constant(0))();
   TextColumn get variable => text().nullable()();
-  TextColumn get readConfig => text().named('readConfig').nullable()();
+  TextColumn get readConfig => text().named('readConfig').nullable().map(const ReadConfigConverter())();
   IntColumn get syncTime => integer().named('syncTime').withDefault(const Constant(0))();
-  IntColumn get isInBookshelf => integer().named('isInBookshelf').withDefault(const Constant(0))();
+  BoolColumn get isInBookshelf => boolean().named('isInBookshelf').withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {bookUrl};
 }
 
 // ───────────── Chapters ─────────────
-@DataClassName('ChapterRow')
+@UseRowClass(BookChapter, generateInsertable: true)
 class Chapters extends Table {
   TextColumn get url => text()();
   TextColumn get title => text()();
-  IntColumn get isVolume => integer().named('isVolume').withDefault(const Constant(0))();
-  TextColumn get baseUrl => text().named('baseUrl').nullable()();
+  BoolColumn get isVolume => boolean().named('isVolume').withDefault(const Constant(false))();
+  TextColumn get baseUrl => text().named('baseUrl').nullable().map(const EmptyStringConverter())();
   TextColumn get bookUrl => text().named('bookUrl')();
   IntColumn get index => integer().named('index')();
-  IntColumn get isVip => integer().named('isVip').withDefault(const Constant(0))();
-  IntColumn get isPay => integer().named('isPay').withDefault(const Constant(0))();
+  BoolColumn get isVip => boolean().named('isVip').withDefault(const Constant(false))();
+  BoolColumn get isPay => boolean().named('isPay').withDefault(const Constant(false))();
   TextColumn get resourceUrl => text().named('resourceUrl').nullable()();
   TextColumn get tag => text().nullable()();
   TextColumn get wordCount => text().named('wordCount').nullable()();
@@ -66,7 +220,7 @@ class Chapters extends Table {
 }
 
 // ───────────── BookSources ─────────────
-@DataClassName('BookSourceRow')
+@UseRowClass(BookSource, generateInsertable: true)
 class BookSources extends Table {
   TextColumn get bookSourceUrl => text().named('bookSourceUrl')();
   TextColumn get bookSourceName => text().named('bookSourceName')();
@@ -82,9 +236,9 @@ class BookSources extends Table {
   TextColumn get variableComment => text().named('variableComment').nullable()();
   IntColumn get customOrder => integer().named('customOrder').withDefault(const Constant(0))();
   IntColumn get weight => integer().withDefault(const Constant(0))();
-  IntColumn get enabled => integer().withDefault(const Constant(1))();
-  IntColumn get enabledExplore => integer().named('enabledExplore').withDefault(const Constant(1))();
-  IntColumn get enabledCookieJar => integer().named('enabledCookieJar').withDefault(const Constant(1))();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  BoolColumn get enabledExplore => boolean().named('enabledExplore').withDefault(const Constant(true))();
+  BoolColumn get enabledCookieJar => boolean().named('enabledCookieJar').withDefault(const Constant(true))();
   IntColumn get lastUpdateTime => integer().named('lastUpdateTime').withDefault(const Constant(0))();
   IntColumn get respondTime => integer().named('respondTime').withDefault(const Constant(180000))();
   TextColumn get jsLib => text().named('jsLib').nullable()();
@@ -92,26 +246,26 @@ class BookSources extends Table {
   TextColumn get exploreUrl => text().named('exploreUrl').nullable()();
   TextColumn get exploreScreen => text().named('exploreScreen').nullable()();
   TextColumn get searchUrl => text().named('searchUrl').nullable()();
-  TextColumn get ruleSearch => text().named('ruleSearch').nullable()();
-  TextColumn get ruleExplore => text().named('ruleExplore').nullable()();
-  TextColumn get ruleBookInfo => text().named('ruleBookInfo').nullable()();
-  TextColumn get ruleToc => text().named('ruleToc').nullable()();
-  TextColumn get ruleContent => text().named('ruleContent').nullable()();
-  TextColumn get ruleReview => text().named('ruleReview').nullable()();
+  TextColumn get ruleSearch => text().named('ruleSearch').nullable().map(const SearchRuleConverter())();
+  TextColumn get ruleExplore => text().named('ruleExplore').nullable().map(const ExploreRuleConverter())();
+  TextColumn get ruleBookInfo => text().named('ruleBookInfo').nullable().map(const BookInfoRuleConverter())();
+  TextColumn get ruleToc => text().named('ruleToc').nullable().map(const TocRuleConverter())();
+  TextColumn get ruleContent => text().named('ruleContent').nullable().map(const ContentRuleConverter())();
+  TextColumn get ruleReview => text().named('ruleReview').nullable().map(const ReviewRuleConverter())();
 
   @override
   Set<Column> get primaryKey => {bookSourceUrl};
 }
 
 // ───────────── BookGroups ─────────────
-@DataClassName('BookGroupRow')
+@UseRowClass(BookGroup, generateInsertable: true)
 class BookGroups extends Table {
   IntColumn get groupId => integer().named('groupId')();
   TextColumn get groupName => text().named('groupName')();
   IntColumn get order => integer().named('order').withDefault(const Constant(0))();
-  IntColumn get show => integer().withDefault(const Constant(1))();
+  BoolColumn get show => boolean().withDefault(const Constant(true))();
   TextColumn get coverPath => text().named('coverPath').nullable()();
-  IntColumn get enableRefresh => integer().named('enableRefresh').withDefault(const Constant(1))();
+  BoolColumn get enableRefresh => boolean().named('enableRefresh').withDefault(const Constant(true))();
   IntColumn get bookSort => integer().named('bookSort').withDefault(const Constant(0))();
 
   @override
@@ -120,47 +274,47 @@ class BookGroups extends Table {
 
 // ───────────── SearchHistory ─────────────
 @DataClassName('SearchHistoryRow')
-class SearchHistory extends Table {
+class SearchHistoryTable extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get keyword => text()();
   IntColumn get searchTime => integer().named('searchTime')();
 }
 
 // ───────────── ReplaceRules ─────────────
-@DataClassName('ReplaceRuleRow')
+@UseRowClass(ReplaceRule, generateInsertable: true)
 class ReplaceRules extends Table {
   IntColumn get id => integer().autoIncrement()();
-  TextColumn get name => text().nullable()();
+  TextColumn get name => text().nullable().map(const EmptyStringConverter())();
   TextColumn get pattern => text()();
-  TextColumn get replacement => text().nullable()();
+  TextColumn get replacement => text().nullable().map(const EmptyStringConverter())();
   TextColumn get scope => text().nullable()();
-  IntColumn get scopeTitle => integer().named('scopeTitle').withDefault(const Constant(0))();
-  IntColumn get scopeContent => integer().named('scopeContent').withDefault(const Constant(1))();
+  BoolColumn get scopeTitle => boolean().named('scopeTitle').withDefault(const Constant(false))();
+  BoolColumn get scopeContent => boolean().named('scopeContent').withDefault(const Constant(true))();
   TextColumn get excludeScope => text().named('excludeScope').nullable()();
-  IntColumn get isEnabled => integer().named('isEnabled').withDefault(const Constant(1))();
-  IntColumn get isRegex => integer().named('isRegex').withDefault(const Constant(1))();
+  BoolColumn get isEnabled => boolean().named('isEnabled').withDefault(const Constant(true))();
+  BoolColumn get isRegex => boolean().named('isRegex').withDefault(const Constant(true))();
   IntColumn get timeoutMillisecond => integer().named('timeoutMillisecond').withDefault(const Constant(3000))();
   TextColumn get group => text().named('group').nullable()();
   IntColumn get order => integer().named('order').withDefault(const Constant(0))();
 }
 
 // ───────────── Bookmarks ─────────────
-@DataClassName('BookmarkRow')
+@UseRowClass(Bookmark, generateInsertable: true)
 class Bookmarks extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get time => integer()();
   TextColumn get bookName => text().named('bookName')();
-  TextColumn get bookAuthor => text().named('bookAuthor').nullable()();
+  TextColumn get bookAuthor => text().named('bookAuthor').nullable().map(const EmptyStringConverter())();
   IntColumn get chapterIndex => integer().named('chapterIndex').withDefault(const Constant(0))();
   IntColumn get chapterPos => integer().named('chapterPos').withDefault(const Constant(0))();
-  TextColumn get chapterName => text().named('chapterName').nullable()();
+  TextColumn get chapterName => text().named('chapterName').nullable().map(const EmptyStringConverter())();
   TextColumn get bookUrl => text().named('bookUrl')();
-  TextColumn get bookText => text().named('bookText').nullable()();
-  TextColumn get content => text().nullable()();
+  TextColumn get bookText => text().named('bookText').nullable().map(const EmptyStringConverter())();
+  TextColumn get content => text().nullable().map(const EmptyStringConverter())();
 }
 
 // ───────────── Cookies ─────────────
-@DataClassName('CookieRow')
+@UseRowClass(Cookie, generateInsertable: true)
 class Cookies extends Table {
   TextColumn get url => text()();
   TextColumn get cookie => text()();
@@ -170,19 +324,19 @@ class Cookies extends Table {
 }
 
 // ───────────── DictRules ─────────────
-@DataClassName('DictRuleRow')
+@UseRowClass(DictRule, generateInsertable: true)
 class DictRules extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
-  TextColumn get urlRule => text().named('urlRule').nullable()();
-  TextColumn get showRule => text().named('showRule').nullable()();
-  IntColumn get enabled => integer().withDefault(const Constant(1))();
+  TextColumn get urlRule => text().named('urlRule').nullable().map(const EmptyStringConverter())();
+  TextColumn get showRule => text().named('showRule').nullable().map(const EmptyStringConverter())();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   IntColumn get sortNumber => integer().named('sortNumber').withDefault(const Constant(0))();
 }
 
 // ───────────── HttpTts ─────────────
-@DataClassName('HttpTtsRow')
-class HttpTts extends Table {
+@UseRowClass(HttpTTS, generateInsertable: true)
+class HttpTtsTable extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
   TextColumn get url => text()();
@@ -192,13 +346,13 @@ class HttpTts extends Table {
   TextColumn get loginUi => text().named('loginUi').nullable()();
   TextColumn get header => text().nullable()();
   TextColumn get jsLib => text().named('jsLib').nullable()();
-  IntColumn get enabledCookieJar => integer().named('enabledCookieJar').withDefault(const Constant(0))();
+  BoolColumn get enabledCookieJar => boolean().named('enabledCookieJar').withDefault(const Constant(false))();
   TextColumn get loginCheckJs => text().named('loginCheckJs').nullable()();
   IntColumn get lastUpdateTime => integer().named('lastUpdateTime').withDefault(const Constant(0))();
 }
 
 // ───────────── ReadRecords ─────────────
-@DataClassName('ReadRecordRow')
+@UseRowClass(ReadRecord, generateInsertable: true)
 class ReadRecords extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get bookName => text().named('bookName')();
@@ -208,7 +362,7 @@ class ReadRecords extends Table {
 }
 
 // ───────────── Servers ─────────────
-@DataClassName('ServerRow')
+@UseRowClass(Server, generateInsertable: true)
 class Servers extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
@@ -218,19 +372,19 @@ class Servers extends Table {
 }
 
 // ───────────── TxtTocRules ─────────────
-@DataClassName('TxtTocRuleRow')
+@UseRowClass(TxtTocRule, generateInsertable: true)
 class TxtTocRules extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
   TextColumn get rule => text()();
   TextColumn get example => text().nullable()();
   IntColumn get serialNumber => integer().named('serialNumber').withDefault(const Constant(-1))();
-  IntColumn get enable => integer().withDefault(const Constant(1))();
+  BoolColumn get enable => boolean().withDefault(const Constant(true))();
 }
 
 // ───────────── Cache ─────────────
-@DataClassName('CacheRow')
-class Cache extends Table {
+@UseRowClass(Cache, generateInsertable: true)
+class CacheTable extends Table {
   TextColumn get key => text().named('key')();
   TextColumn get value => text().named('value').nullable()();
   IntColumn get deadline => integer().withDefault(const Constant(0))();
@@ -240,11 +394,11 @@ class Cache extends Table {
 }
 
 // ───────────── KeyboardAssists ─────────────
-@DataClassName('KeyboardAssistRow')
+@UseRowClass(KeyboardAssist, generateInsertable: true)
 class KeyboardAssists extends Table {
   TextColumn get key => text().named('key')();
   IntColumn get type => integer().withDefault(const Constant(0))();
-  TextColumn get value => text().named('value').nullable()();
+  TextColumn get value => text().named('value').nullable().map(const EmptyStringConverter())();
   IntColumn get serialNo => integer().named('serialNo').withDefault(const Constant(0))();
 
   @override
@@ -252,23 +406,23 @@ class KeyboardAssists extends Table {
 }
 
 // ───────────── RuleSubs ─────────────
-@DataClassName('RuleSubRow')
+@UseRowClass(RuleSub, generateInsertable: true)
 class RuleSubs extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
   TextColumn get url => text()();
   IntColumn get type => integer().withDefault(const Constant(0))();
-  IntColumn get enabled => integer().withDefault(const Constant(1))();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   IntColumn get order => integer().named('order').withDefault(const Constant(0))();
 }
 
 // ───────────── SourceSubscriptions ─────────────
-@DataClassName('SourceSubscriptionRow')
+@UseRowClass(SourceSubscription, generateInsertable: true)
 class SourceSubscriptions extends Table {
   TextColumn get url => text()();
   TextColumn get name => text()();
   IntColumn get type => integer().withDefault(const Constant(0))();
-  IntColumn get enabled => integer().withDefault(const Constant(1))();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   IntColumn get order => integer().named('order').withDefault(const Constant(0))();
 
   @override
@@ -276,7 +430,7 @@ class SourceSubscriptions extends Table {
 }
 
 // ───────────── SearchBooks ─────────────
-@DataClassName('SearchBookRow')
+@UseRowClass(SearchBook, generateInsertable: true)
 class SearchBooks extends Table {
   TextColumn get bookUrl => text().named('bookUrl')();
   TextColumn get name => text()();
@@ -286,7 +440,7 @@ class SearchBooks extends Table {
   TextColumn get intro => text().nullable()();
   TextColumn get wordCount => text().named('wordCount').nullable()();
   TextColumn get latestChapterTitle => text().named('latestChapterTitle').nullable()();
-  TextColumn get origin => text().nullable()();
+  TextColumn get origin => text().nullable().map(const EmptyStringConverter())();
   TextColumn get originName => text().named('originName').nullable()();
   IntColumn get originOrder => integer().named('originOrder').withDefault(const Constant(0))();
   IntColumn get type => integer().withDefault(const Constant(0))();
@@ -299,23 +453,25 @@ class SearchBooks extends Table {
 }
 
 // ───────────── DownloadTasks ─────────────
-@DataClassName('DownloadTaskRow')
+@UseRowClass(DownloadTask, generateInsertable: true)
 class DownloadTasks extends Table {
   TextColumn get bookUrl => text().named('bookUrl')();
   TextColumn get bookName => text().named('bookName')();
+  IntColumn get startChapterIndex => integer().named('startChapterIndex').withDefault(const Constant(0))();
+  IntColumn get endChapterIndex => integer().named('endChapterIndex').withDefault(const Constant(0))();
   IntColumn get currentChapterIndex => integer().named('currentChapterIndex').withDefault(const Constant(0))();
-  IntColumn get totalChapterCount => integer().named('totalChapterCount').withDefault(const Constant(0))();
+  IntColumn get totalCount => integer().named('totalChapterCount').withDefault(const Constant(0))();
   IntColumn get status => integer().withDefault(const Constant(0))();
   IntColumn get successCount => integer().named('successCount').withDefault(const Constant(0))();
   IntColumn get errorCount => integer().named('errorCount').withDefault(const Constant(0))();
-  IntColumn get addTime => integer().named('addTime').withDefault(const Constant(0))();
+  IntColumn get lastUpdateTime => integer().named('addTime').withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {bookUrl};
 }
 
 // ───────────── SearchKeywords ─────────────
-@DataClassName('SearchKeywordRow')
+@UseRowClass(SearchKeyword, generateInsertable: true)
 class SearchKeywords extends Table {
   TextColumn get word => text()();
   IntColumn get usage => integer().withDefault(const Constant(0))();

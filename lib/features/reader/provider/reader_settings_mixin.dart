@@ -14,7 +14,7 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
   int themeIndex = 0;
   double brightness = 1.0;
   int chineseConvert = 0;
-  int pageTurnMode = 0;
+  int pageTurnMode = 1; // 預設平移（PageAnim.slide=1），避免首次安裝顯示已移除的 cover 模式
 
   Future<void> loadSettings() async {
     final p = await SharedPreferences.getInstance();
@@ -24,7 +24,7 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
     textIndent = p.getInt('reader_text_indent') ?? 2;
     themeIndex = p.getInt('reader_theme_index') ?? 0;
     brightness = p.getDouble('reader_brightness') ?? 0.5;
-    pageTurnMode = p.getInt('reader_page_turn_mode') ?? 0;
+    pageTurnMode = p.getInt('reader_page_turn_mode') ?? 1;
     AppConfig.readerPageAnim = pageTurnMode; // 同步至 AppConfig
     chineseConvert = p.getInt('reader_chinese_convert_v2') ?? 0;
     

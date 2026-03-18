@@ -10,6 +10,7 @@ import 'package:legado_reader/shared/theme/app_theme.dart';
 import 'package:legado_reader/core/models/bookmark.dart';
 import 'package:legado_reader/core/services/tts_service.dart';
 import 'package:legado_reader/features/reader/engine/text_page.dart';
+import 'package:legado_reader/core/constant/page_anim.dart';
 
 export 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
 export 'package:legado_reader/features/reader/provider/reader_settings_mixin.dart';
@@ -17,66 +18,64 @@ export 'package:legado_reader/features/reader/provider/reader_content_mixin.dart
 
 /// ReaderProvider - 閱讀器狀態管理 (效能優化版)
 class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, ReaderContentMixin {
+  /// 儲存從資料庫讀取的初始字元偏移量
+  int _initialCharOffset = 0;
+
   ReaderProvider({required Book book, int chapterIndex = 0, int chapterPos = 0}) : super(book) {
     currentChapterIndex = chapterIndex;
-    currentPageIndex = chapterPos;
+    _initialCharOffset = chapterPos;
+    // 初始頁碼設為 0，直到恢復邏輯計算出真正的頁碼
+    currentPageIndex = 0;
     _init();
   }
 
   Future<void> _init() async {
-    // 儲存初始位置，避免被 loadChapter 覆蓋為 0
-    final savedChapterIndex = currentChapterIndex;
-    final savedPageIndex = currentPageIndex;
-
     await loadSettings();
     await _loadChapters();
     await _loadSource();
 
     if (isDisposed) return;
 
-    await loadChapter(savedChapterIndex);
+    // 標記正在恢復進度
+    isRestoring = true;
+    _pendingRestorePos = _initialCharOffset;
+
+    await loadChapter(currentChapterIndex);
 
     if (isDisposed) return;
-
-    // durChapterPos 現在儲存字元偏移量（chapterPosition），非頁碼
-    // 依字元偏移精確恢復閱讀位置，不受字型/螢幕尺寸影響
-    if (savedPageIndex > 0 && pages.isNotEmpty) {
-      if (pageTurnMode == 2) {
-        // 捲動模式：計算像素高度並跳轉
-        final double targetPixels = _calcScrollOffsetForCharOffset(savedPageIndex);
-        if (targetPixels > 0) scrollOffsetController.add(targetPixels);
-      } else {
-        // 分頁模式：掃描各頁第一行的 chapterPosition，找到涵蓋 savedPageIndex 的頁
-        int targetPage = 0;
-        for (int i = 0; i < pages.length; i++) {
-          final charOff = _getCharOffsetForPage(i);
-          if (charOff <= savedPageIndex) { targetPage = i; }
-          else { break; }
-        }
-        if (targetPage > 0) {
-          currentPageIndex = targetPage;
-          jumpPageController.add(targetPage);
-          notifyListeners();
-        }
-      }
-    }
+    
+    // loadChapter 完成後會自動觸發 _applyPendingRestore
+    _applyPendingRestore();
 
     _listenAudioEvents();
     _startHeartbeat();
-    _initTtsListener(); // 初始化 TTS 進度監聽
+    _initTtsListener();
   }
 
   // --- 捲動模式：追蹤精確滾動位置（供 dispose 時精確儲存進度）---
   double _lastScrollY = 0.0;
+  Timer? _scrollSaveTimer;
+
+  /// 延遲恢復的閱讀位置（charOffset）：_init 時 viewSize 尚未就緒，需等 doPaginate 後再恢復
+  int? _pendingRestorePos;
 
   /// 由 ReaderViewBuilder 在每次捲動時呼叫，記錄最新 scroll offset
   void updateScrollOffset(double scrollY) {
+    if (_lastScrollY == scrollY) return;
     _lastScrollY = scrollY;
+    
+    // 滾動時自動儲存進度（Debounce 500ms），確保「記得讀到哪一個句子」
+    if (!isRestoring && !isLoading) {
+      _scrollSaveTimer?.cancel();
+      _scrollSaveTimer = Timer(const Duration(milliseconds: 500), () {
+        if (!isDisposed) _saveProgress(currentChapterIndex, currentPageIndex);
+      });
+    }
   }
 
-  /// showHead 時，ListView 頂部有 2px head + 24px separator = 26px 偏移
+  /// showHead 時，ListView 頂部有 2px head
   double get _scrollHeadOffset =>
-      (pages.isNotEmpty && pages.first.chapterIndex > 0) ? 26.0 : 0.0;
+      (pages.isNotEmpty && pages.first.chapterIndex > 0) ? 2.0 : 0.0;
 
   // --- TTS 朗讀優化版 (流式長文本 + 精準高亮) ---
   int _currentTtsBaseOffset = 0; // 當前朗讀塊在章節中的起始偏移量
@@ -278,8 +277,8 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     if (currentPageIndex < pages.length - 1) {
       final nextIdx = currentPageIndex + 1;
       onPageChanged(nextIdx);
-      // 通知 PageView 實際翻頁（分頁模式）
-      jumpPageController.add(nextIdx);
+      // 通知 PageView 實際翻頁（分頁模式才需要，捲動模式由 _scrollToTtsHighlight 處理）
+      if (pageTurnMode != PageAnim.scroll) jumpPageController.add(nextIdx);
       // 使用預取好的數據，消除銜接停頓；同時重置高亮快取
       _lastTtsHighlightStart = -1;
       _lastTtsHighlightEnd = -1;
@@ -345,12 +344,99 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
   }
 
   void setViewSize(Size size) {
+    if (viewSize == null) {
+      viewSize = size;
+      if (chapterContentCache.containsKey(currentChapterIndex)) {
+        doPaginate().then((_) => _applyPendingRestore());
+      } else if (pages.isEmpty && !isLoading && chapters.isNotEmpty) {
+        loadChapter(currentChapterIndex);
+      }
+      return;
+    }
+
+    // 關鍵修復：如果尺寸變化非常小（例如 < 20 像素），忽略它。
+    // 這通常是由於選單顯示/隱藏導致的微小佈局擠壓，不應觸發重新分頁。
+    final double dw = (viewSize!.width - size.width).abs();
+    final double dh = (viewSize!.height - size.height).abs();
+    if (dw < 10 && dh < 20) return;
+
     if (viewSize != size) {
       viewSize = size;
-      if (content.isNotEmpty) {
+      // 重新分頁，doPaginate 內部現在會自動嘗試恢復到先前的 charOffset
+      if (chapterContentCache.containsKey(currentChapterIndex)) {
         doPaginate();
       }
     }
+  }
+
+  /// 統一跳轉定位邏輯 (核心方法)
+  /// 無論是開書恢復、目錄跳轉、還是 TTS 追蹤，都經由此處
+  void _jumpToPosition({int? charOffset, int? pageIndex, bool isRestoringJump = false}) {
+    if (pages.isEmpty) return;
+    
+    if (isRestoringJump) isRestoring = true;
+
+    if (pageTurnMode == PageAnim.scroll) {
+      // 捲動模式：優先使用 charOffset 計算精確像素
+      double targetPixels = 0.0;
+      if (charOffset != null && charOffset > 0) {
+        targetPixels = _calcScrollOffsetForCharOffset(charOffset);
+      } else if (pageIndex != null) {
+        targetPixels = _calcScrollOffsetForPageIndex(pageIndex);
+      }
+      
+      scrollOffsetController.add(targetPixels);
+      // 捲動模式跳轉後，ListView 會觸發監聽，進而更新 currentPageIndex
+    } else {
+      // 分頁模式：將 charOffset 轉換為頁碼
+      int targetPage = 0;
+      if (charOffset != null && charOffset > 0) {
+        targetPage = _findPageIndexByCharOffset(charOffset);
+      } else if (pageIndex != null) {
+        targetPage = pageIndex.clamp(0, pages.length - 1);
+      }
+      
+      currentPageIndex = targetPage;
+      jumpPageController.add(targetPage);
+      // 分頁模式跳轉後，由 ReaderViewBuilder 負責將 isRestoring 設為 false
+    }
+    
+    if (pageTurnMode != PageAnim.scroll && !isRestoringJump) notifyListeners();
+  }
+
+  /// 根據頁碼計算捲動像素 (用於目錄跳轉等場景)
+  double _calcScrollOffsetForPageIndex(int pageIndex) {
+    if (pages.isEmpty || pageIndex <= 0) return 0.0;
+    final headOffset = _scrollHeadOffset;
+    double cumHeight = 0;
+    for (int i = 0; i < pageIndex.clamp(0, pages.length - 1); i++) {
+      final page = pages[i];
+      cumHeight += page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
+    }
+    return headOffset + cumHeight;
+  }
+
+  /// 根據字元偏移量尋找對應頁碼
+  int _findPageIndexByCharOffset(int charOffset) {
+    int targetPage = 0;
+    for (int i = 0; i < pages.length; i++) {
+      final firstLineOffset = _getCharOffsetForPage(i);
+      if (firstLineOffset <= charOffset) {
+        targetPage = i;
+      } else {
+        break;
+      }
+    }
+    return targetPage;
+  }
+
+  /// 延遲恢復閱讀位置：在 doPaginate() 完成後呼叫
+  void _applyPendingRestore() {
+    if (_pendingRestorePos == null || pages.isEmpty) return;
+    final pos = _pendingRestorePos!;
+    _pendingRestorePos = null;
+    
+    _jumpToPosition(charOffset: pos, isRestoringJump: true);
   }
 
   @override
@@ -358,8 +444,33 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     if (currentPageIndex != i) {
       currentPageIndex = i;
       notifyListeners();
-      _saveProgress(currentChapterIndex, i);
+
+      // 進度恢復期間不執行主動儲存，避免跳轉中的中間狀態覆蓋正確進度
+      if (!isRestoring) {
+        _saveProgress(currentChapterIndex, i);
+      }
+
+      // 積極預載入：剩餘 2 頁時即開始加載下一章，消除等待感
+      if (i >= pages.length - 2 && !isLoading) {
+        final lastPage = pages.lastOrNull;
+        if (lastPage != null && lastPage.chapterIndex < chapters.length - 1) {
+          // 靜默預載入下一章
+          unawaited(_preloadChapterSilently(lastPage.chapterIndex + 1));
+        }
+      }
     }
+  }
+
+  /// 靜默預載入章節，供 onPageChanged 調用
+  Future<void> _preloadChapterSilently(int chapterIndex) async {
+    // 這裡直接調用 Mixin 提供的邏輯（如果有的話，或是手動實現）
+    // 實際上 ReaderContentMixin 已經有 _preloadChapterSilently
+    // 這裡我們確保它被正確觸發
+    if (chapterIndex < 0 || chapterIndex >= chapters.length) return;
+    if (chapterCache.containsKey(chapterIndex) || silentLoadingChapters.contains(chapterIndex)) return;
+    
+    // 調用 mixin 中的方法
+    await (this as ReaderContentMixin).loadChapter(chapterIndex);
   }
 
   /// 統一進度儲存：同時更新 DB 與 in-memory book 物件
@@ -369,13 +480,13 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     final title = chapters.isNotEmpty && chapterIndex < chapters.length
         ? chapters[chapterIndex].title
         : null;
-    final charOffset = (pageTurnMode == 2)
+    final charOffset = (pageTurnMode == PageAnim.scroll)
         ? _getCharOffsetForScrollY(_lastScrollY)
         : _getCharOffsetForPage(pageIndex);
     book.durChapterIndex = chapterIndex;
     book.durChapterPos = charOffset;
     book.durChapterTitle = title;
-    unawaited(bookDao.updateProgress(book.bookUrl, chapterIndex, title, charOffset));
+    unawaited(bookDao.updateProgress(book.bookUrl, chapterIndex, title ?? '', charOffset));
   }
 
   /// 返回 [pageIndex] 頁第一個文字行的 chapterPosition（字元偏移量）
@@ -388,20 +499,19 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
   }
 
   /// 計算捲動模式下 charOffset 對應的像素 Y 位置（用於開書恢復捲動位置）
-  /// 包含 showHead 的 26px 偏移（2px head + 24px separator）
+  /// 包含 showHead 的 2px 偏移
   double _calcScrollOffsetForCharOffset(int charOffset) {
     final headOffset = _scrollHeadOffset;
     double cumHeight = 0;
     for (int i = 0; i < pages.length; i++) {
       final page = pages[i];
-      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom + 40.0;
+      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
       for (final line in page.lines) {
         if (line.image == null && line.chapterPosition >= charOffset) {
-          return (headOffset + cumHeight + 40.0 + line.lineTop).clamp(0.0, double.infinity);
+          return (headOffset + cumHeight + line.lineTop).clamp(0.0, double.infinity);
         }
       }
       cumHeight += pageHeight;
-      if (i < pages.length - 1) cumHeight += 24.0;
     }
     return headOffset + cumHeight;
   }
@@ -414,17 +524,16 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     double cumHeight = 0;
     for (int i = 0; i < pages.length; i++) {
       final page = pages[i];
-      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom + 40.0;
+      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
       for (final line in page.lines) {
         if (line.image != null) continue;
-        // 行的底部絕對 Y（包含 headOffset + paddingTop 40px）
-        final lineAbsBottom = headOffset + cumHeight + 40.0 + line.lineBottom;
+        // 行的底部絕對 Y（包含 headOffset）
+        final lineAbsBottom = headOffset + cumHeight + line.lineBottom;
         if (lineAbsBottom > scrollY) {
           return line.chapterPosition;
         }
       }
       cumHeight += pageHeight;
-      if (i < pages.length - 1) cumHeight += 24.0;
     }
     return _getCharOffsetForPage(0);
   }
@@ -433,6 +542,7 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
   void dispose() {
     // 退出閱讀器時確保當前進度已儲存（補足未翻頁就關閉的場景）
     _saveProgress(currentChapterIndex, currentPageIndex);
+    _scrollSaveTimer?.cancel();
     _heartbeatTimer?.cancel();
     _autoPageTimer?.cancel();
     _audioEventSub?.cancel();
@@ -453,7 +563,7 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
 
   /// 取得下一頁資料，用於分頁模式掃描線效果
   TextPage? get nextPageForAutoPage {
-    if (!isAutoPaging || pageTurnMode == 2) return null;
+    if (!isAutoPaging || pageTurnMode == PageAnim.scroll) return null;
     final nextIdx = currentPageIndex + 1;
     if (nextIdx < pages.length) return pages[nextIdx];
     return null;
@@ -669,7 +779,7 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     int lineIdx = startLineIndex >= 0 ? startLineIndex : 0;
 
     // 捲動模式且未指定特定行：從視口頂端可見行開始，而非頁首
-    if (pageTurnMode == 2 && startLineIndex < 0) {
+    if (pageTurnMode == PageAnim.scroll && startLineIndex < 0) {
       (pageIdx, lineIdx) = _getScrollModeTtsStart();
     }
 
@@ -757,8 +867,8 @@ class ReaderProvider extends ReaderProviderBase with ReaderSettingsMixin, Reader
     _autoPageTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) {
       if (_isAutoPagePaused || !isAutoPaging) return;
 
-      // 如果是分頁模式 (pageTurnMode != 2)，則按時間進度翻頁
-      if (pageTurnMode != 2) {
+      // 如果是分頁模式 (pageTurnMode != PageAnim.scroll)，則按時間進度翻頁
+      if (pageTurnMode != PageAnim.scroll) {
         final double delta = 0.016 / autoPageSpeed.clamp(1.0, 600.0);
         autoPageProgressNotifier.value += delta;
 

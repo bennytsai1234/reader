@@ -1,40 +1,38 @@
+/// SourceSubscription - 書源訂閱模型
 class SourceSubscription {
-  int? id;
-  
-  String name = '';
-  String url = '';
-  int type = 0; // 0: 書源, 1: RSS, 2: 替換規則
-  int customOrder = 0;
-  bool autoUpdate = false;
+  String url;
+  String name;
+  int type; // 0: 書源, 1: RSS, 2: 替換規則
+  bool enabled;
+  int order;
+
+  // Transient field (not persisted to DB)
   int lastUpdateTime = 0;
 
   SourceSubscription({
-    this.name = '',
     this.url = '',
+    this.name = '',
     this.type = 0,
-    this.customOrder = 0,
-    this.autoUpdate = false,
+    this.enabled = true,
+    this.order = 0,
     this.lastUpdateTime = 0,
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
     'url': url,
+    'name': name,
     'type': type,
-    'customOrder': customOrder,
-    'autoUpdate': autoUpdate,
-    'lastUpdateTime': lastUpdateTime,
+    'enabled': enabled ? 1 : 0,
+    'order': order,
   };
 
   factory SourceSubscription.fromJson(Map<String, dynamic> json) {
     return SourceSubscription(
-      name: json['name'] ?? '',
       url: json['url'] ?? '',
+      name: json['name'] ?? '',
       type: json['type'] ?? 0,
-      customOrder: json['customOrder'] ?? 0,
-      autoUpdate: json['autoUpdate'] ?? false,
-      lastUpdateTime: json['lastUpdateTime'] ?? 0,
+      enabled: json['enabled'] == 1 || json['enabled'] == true,
+      order: json['customOrder'] ?? json['order'] ?? 0,
     );
   }
 }

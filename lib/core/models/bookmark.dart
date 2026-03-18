@@ -1,7 +1,7 @@
 /// Bookmark - 書籤與筆記模型
 /// (原 Android data/entities/Bookmark.kt)
 class Bookmark {
-  int? id;
+  int id;
   final int time;
   final String bookName;
   final String bookAuthor;
@@ -13,7 +13,7 @@ class Bookmark {
   String content; // 使用者的評論內容
 
   Bookmark({
-    this.id,
+    this.id = 0,
     required this.time,
     this.bookName = '',
     this.bookAuthor = '',
@@ -27,7 +27,7 @@ class Bookmark {
 
   Map<String, dynamic> toJson() {
     return {
-      if (id != null) 'id': id,
+      'id': id,
       'time': time,
       'bookName': bookName,
       'bookAuthor': bookAuthor,

@@ -61,7 +61,9 @@ class InterfaceSettingSheet extends StatelessWidget {
           const Text('排版微調', style: TextStyle(fontSize: 14, color: Colors.grey)),
           SettingComponents.buildSliderRow(label: '字體大小', value: provider.fontSize, min: 14, max: 40, onChanged: provider.setFontSize),
           SettingComponents.buildSliderRow(label: '行高間距', value: provider.lineHeight, min: 1.0, max: 3.0, onChanged: provider.setLineHeight),
-          
+          SettingComponents.buildSliderRow(label: '字距', value: provider.letterSpacing, min: 0.0, max: 4.0, onChanged: provider.setLetterSpacing),
+          SettingComponents.buildSliderRow(label: '段落間距', value: provider.paragraphSpacing, min: 0.0, max: 3.0, onChanged: provider.setParagraphSpacing),
+
           Row(
             children: [
               const Text('兩端對齊', style: TextStyle(fontSize: 13)),
@@ -84,7 +86,6 @@ class InterfaceSettingSheet extends StatelessWidget {
             spacing: 8,
             children: [
               SettingComponents.buildChoiceChip(label: '平移', value: PageAnim.slide, groupValue: provider.pageTurnMode, onSelected: provider.setPageTurnMode),
-              SettingComponents.buildChoiceChip(label: '覆蓋', value: PageAnim.cover, groupValue: provider.pageTurnMode, onSelected: provider.setPageTurnMode),
               SettingComponents.buildChoiceChip(label: '滾動', value: PageAnim.scroll, groupValue: provider.pageTurnMode, onSelected: provider.setPageTurnMode),
             ],
           ),

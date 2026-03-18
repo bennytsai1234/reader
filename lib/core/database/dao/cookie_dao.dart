@@ -1,55 +1,22 @@
-import 'dart:async';
-import 'package:legado_reader/core/models/cookie.dart';
-import 'drift_compat_dao.dart';
+import 'package:drift/drift.dart';
+import '../../models/cookie.dart';
+import '../tables/app_tables.dart';
 import '../app_database.dart';
 
-/// CookieDao - SQLite 實作 (對標 Android CookieDao.kt)
-class CookieDao extends DriftCompatDao<Cookie> {
-  CookieDao(AppDatabase appDatabase) : super(appDatabase, 'cookies');
+part 'cookie_dao.g.dart';
 
-  /// 根據 URL 獲取 Cookie (對標 Android: getCookie)
-  Future<Cookie?> getByUrl(String url) async {
-    final client = await db;
-    final List<Map<String, dynamic>> maps = await client.query(
-      tableName,
-      where: 'url = ?',
-      whereArgs: [url],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return Cookie.fromJson(maps.first);
+@DriftAccessor(tables: [Cookies])
+class CookieDao extends DatabaseAccessor<AppDatabase> with _$CookieDaoMixin {
+  CookieDao(AppDatabase db) : super(db);
+
+  Future<Cookie?> getByUrl(String url) {
+    return (select(cookies)..where((t) => t.url.equals(url))).getSingleOrNull();
   }
 
-  /// 獲取所有包含 '|' 的 OkHttp Cookies
-  Future<List<Cookie>> getOkHttpCookies() async {
-    final client = await db;
-    final List<Map<String, dynamic>> maps = await client.query(
-      tableName,
-      where: "url LIKE '%|%'",
-    );
-    return maps.map((m) => Cookie.fromJson(m)).toList();
-  }
+  Future<void> upsert(Cookie cookie) => into(cookies).insertOnConflictUpdate(CookieToInsertable(cookie).toInsertable());
 
-  /// 插入或更新 Cookie (UPSERT)
-  Future<void> upsert(Cookie cookie) async {
-    await insertOrUpdate(cookie.toJson());
-  }
+  Future<void> deleteByUrl(String url) =>
+      (delete(cookies)..where((t) => t.url.equals(url))).go();
 
-  /// 插入或更新別名，兼容舊代碼
-  Future<void> insertOrUpdateCookie(Cookie cookie) => upsert(cookie);
-
-  /// 根據 URL 刪除 Cookie
-  Future<void> deleteByUrl(String url) async {
-    await deleteRows('url = ?', [url]);
-  }
-
-  /// 刪除所有包含 '|' 的 OkHttp Cookies
-  Future<void> deleteOkHttp() async {
-    await deleteRows("url LIKE '%|%'");
-  }
-
-  /// 清空所有 Cookie
-  Future<void> deleteAll() async {
-    await clearAll();
-  }
+  Future<void> clearAll() => delete(cookies).go();
 }

@@ -24,7 +24,7 @@ class HttpTTS implements BaseSource {
   String? jsLib;
 
   @override
-  bool? enabledCookieJar;
+  bool enabledCookieJar;
 
   String? loginCheckJs;
   int lastUpdateTime;
@@ -61,7 +61,7 @@ class HttpTTS implements BaseSource {
       'loginUi': loginUi,
       'header': header,
       'jsLib': jsLib,
-      'enabledCookieJar': (enabledCookieJar ?? false) ? 1 : 0,
+      'enabledCookieJar': enabledCookieJar ? 1 : 0,
       'loginCheckJs': loginCheckJs,
       'lastUpdateTime': lastUpdateTime,
     };

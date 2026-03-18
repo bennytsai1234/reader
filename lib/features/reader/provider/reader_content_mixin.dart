@@ -8,6 +8,7 @@ import 'package:legado_reader/core/engine/reader/content_processor.dart' as engi
 import 'package:legado_reader/shared/theme/app_theme.dart';
 import 'package:legado_reader/core/models/book/book_content.dart';
 import 'package:legado_reader/features/reader/engine/text_page.dart';
+import 'package:legado_reader/core/constant/page_anim.dart';
 
 
 
@@ -41,6 +42,9 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     notifyListeners();
 
     try {
+      // 關鍵修復：在重新分頁前，記住當前看到的字元位置
+      final int oldCharOffset = (this as dynamic)._getCharOffsetForScrollY((this as dynamic)._lastScrollY);
+
       final (ts, cs) = _buildTextStyles();
       pages = ChapterProvider.paginate(
         content: chapterContent,
@@ -54,9 +58,16 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
         textIndent: textIndent,
         textFullJustify: textFullJustify,
       );
-      
-      currentPageIndex = fromEnd ? (pages.length - 1).clamp(0, 999) : 0;
-      jumpPageController.add(currentPageIndex);
+      // 同步更新快取，讓後續 loadChapter 快取命中時能取到最新分頁結果
+      chapterCache[currentChapterIndex] = pages;
+
+      if (fromEnd) {
+        currentPageIndex = (pages.length - 1).clamp(0, 999);
+        (this as dynamic)._jumpToPosition(pageIndex: currentPageIndex);
+      } else {
+        // 重新分頁後，嘗試尋回剛才看到的那個字元，而不是直接跳回第 0 頁
+        (this as dynamic)._jumpToPosition(charOffset: oldCharOffset);
+      }
     } catch (e, stack) {
       debugPrint('Reader: Paginate fatal error: $e\n$stack');
     } finally {
@@ -70,9 +81,12 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     if (i < 0 || i >= chapters.length) return;
     if (loadingChapters.contains(i)) return;
 
-    final bool isScrollMode = (pageTurnMode == 2);
-    final bool isNeighbor = (i == currentChapterIndex + 1 || i == currentChapterIndex - 1);
-    final bool shouldMerge = isScrollMode && isNeighbor && pages.isNotEmpty;
+    // 捲動模式下「鄰近」是相對於已載入頁面的邊界章節，而非 currentChapterIndex
+    // （currentChapterIndex 是當前可見章節，可能在已載入多章節的中間）
+    final int firstLoadedIdx = pages.firstOrNull?.chapterIndex ?? currentChapterIndex;
+    final int lastLoadedIdx = pages.lastOrNull?.chapterIndex ?? currentChapterIndex;
+    final bool isNeighbor = (i == lastLoadedIdx + 1 || i == firstLoadedIdx - 1);
+    final bool shouldMerge = isNeighbor && pages.isNotEmpty;
 
     if (chapterCache.containsKey(i)) {
       _performChapterTransition(i, fromEnd, shouldMerge);
@@ -113,16 +127,24 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
 
       final newPages = await _paginateInternal(i);
       if (isDisposed) return;
+
+      if (newPages.isEmpty) {
+        // viewSize 尚未就緒：內容已快取在 chapterContentCache，
+        // setViewSize() 時 doPaginate() 會重新分頁，不要存空快取以免干擾後續 loadChapter
+        return;
+      }
       chapterCache[i] = newPages;
 
       _performChapterTransition(i, fromEnd, shouldMerge);
 
       // 更新 DB 與 in-memory book 物件，確保書架下次開書時使用最新章節位置
-      // durChapterPos 儲存字元偏移量（0 = 章節起始），由 _saveProgress 在翻頁時精確更新
-      book.durChapterIndex = currentChapterIndex;
-      book.durChapterPos = 0;
-      book.durChapterTitle = chapters[i].title;
-      unawaited(bookDao.updateProgress(book.bookUrl, currentChapterIndex, chapters[i].title, 0));
+      // 如果正在恢復進度，不要覆蓋原本的 durChapterPos 為 0
+      if (!isRestoring) {
+        book.durChapterIndex = currentChapterIndex;
+        book.durChapterPos = 0;
+        book.durChapterTitle = chapters[i].title;
+        unawaited(bookDao.updateProgress(book.bookUrl, currentChapterIndex, chapters[i].title, 0));
+      }
 
       _preloadNeighborChaptersSilently();
     } catch (e) {
@@ -171,6 +193,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   void _performChapterTransition(int targetIndex, bool fromEnd, bool shouldMerge) {
     if (!chapterCache.containsKey(targetIndex)) return;
     final newPages = chapterCache[targetIndex]!;
+    final bool isScrollMode = (pageTurnMode == PageAnim.scroll);
     
     if (shouldMerge) {
       final bool alreadyExists = pages.any((p) => p.chapterIndex == targetIndex);
@@ -178,14 +201,22 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
          if (targetIndex > currentChapterIndex) {
            pages = [...pages, ...newPages];
            final double topTrimHeight = _trimPagesWindow();
-           // 從頂部移除頁面後，需向上補償等量捲動以維持視覺位置
-           if (topTrimHeight > 0) scrollTrimAdjustController.add(topTrimHeight);
+           // 從頂部移除章節頁面後，需向上偏移等量像素才能維持視覺位置
+           if (isScrollMode && topTrimHeight > 0) scrollTrimAdjustController.add(topTrimHeight);
          } else {
            final double addedHeight = _calculatePagesHeight(newPages);
+           final int addedPageCount = newPages.length;
            pages = [...newPages, ...pages];
            final double topTrimHeight = _trimPagesWindow();
-           // 預付頂部增加高度，再扣掉因 trim 從頂部移除的高度
-           scrollOffsetController.add(-(addedHeight - topTrimHeight));
+           
+           if (isScrollMode) {
+             // 預付頂部增加高度，再扣掉因 trim 從頂部移除的高度
+             scrollOffsetController.add(-(addedHeight - topTrimHeight));
+           } else {
+             // 分頁模式：頂部插入了頁面，需要同步 jump 到新的索引位置以保持視覺連貫
+             currentPageIndex += addedPageCount;
+             jumpPageController.add(currentPageIndex);
+           }
          }
       }
       
@@ -198,20 +229,23 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     } else {
       pages = newPages;
       currentChapterIndex = targetIndex;
-      currentPageIndex = fromEnd ? (pages.length - 1).clamp(0, 9999) : 0;
-      scrollOffsetController.add(fromEnd ? 999999.0 : 0.0);
-      jumpPageController.add(currentPageIndex);
+      // 正在恢復進度時，交由 _applyPendingRestore 處理定位
+      if (!isRestoring) {
+        final targetPage = fromEnd ? (pages.length - 1).clamp(0, 9999) : 0;
+        // 調用 ReaderProvider 中統一的跳轉定位邏輯
+        (this as dynamic)._jumpToPosition(pageIndex: targetPage);
+      }
     }
-    // 移除內部的 notifyListeners()，由調用者統一處理 (問題 3)
   }
 
   double _calculatePagesHeight(List<TextPage> pageList) {
     double total = 0;
+    final bool isScrollMode = (pageTurnMode == PageAnim.scroll);
     for (int i = 0; i < pageList.length; i++) {
       final page = pageList[i];
-      final double h = page.lines.isEmpty ? 0 : page.lines.last.lineBottom + 40.0;
+      // 捲動模式下，頁面高度即為最後一行底部；分頁模式則維持原樣（含 padding）
+      final double h = page.lines.isEmpty ? 0 : (isScrollMode ? page.lines.last.lineBottom : page.lines.last.lineBottom + 40.0);
       total += h;
-      if (i < pageList.length - 1) total += 24.0; // 修正 separator 計算 (問題 7)
     }
     return total;
   }
@@ -220,6 +254,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   double _trimPagesWindow() {
     final chapterIndexes = pages.map((p) => p.chapterIndex).toSet().toList()..sort();
     double removedTopHeight = 0;
+    
     while (chapterIndexes.length > 5) {
       final first = chapterIndexes.first;
       final last = chapterIndexes.last;
@@ -227,11 +262,9 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       final toRemove = removeFirst ? first : last;
 
       if (removeFirst) {
-        // 計算即將移除的頂部頁面高度（含其後方的 separator）
+        // 計算即將移除的頂部頁面高度
         final removedPages = pages.where((p) => p.chapterIndex == toRemove).toList();
-        final h = _calculatePagesHeight(removedPages);
-        // 加上移除章節與下一章節之間的 24px separator
-        removedTopHeight += h + 24.0;
+        removedTopHeight += _calculatePagesHeight(removedPages);
       }
 
       pages.removeWhere((p) => p.chapterIndex == toRemove);
@@ -247,6 +280,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   }
 
   Future<List<TextPage>> _paginateInternal(int i) async {
+    if (viewSize == null || viewSize!.width <= 0 || viewSize!.height <= 0) return [];
     final (ts, cs) = _buildTextStyles();
     return ChapterProvider.paginate(
       content: chapterContentCache[i]!,

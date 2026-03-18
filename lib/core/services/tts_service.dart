@@ -150,6 +150,10 @@ class TTSService extends ChangeNotifier {
       final start = currentWordStart.clamp(0, currentSpokenText.length);
       final remaining = currentSpokenText.substring(start);
       if (remaining.trim().isNotEmpty) {
+        // 樂觀更新：立即反映播放狀態，避免按鈕在 TTS 非同步啟動前顯示錯誤圖示
+        _isPlaying = true;
+        _audioHandler?.setPlaying(true);
+        notifyListeners();
         await _flutterTts.speak(remaining);
       }
     }

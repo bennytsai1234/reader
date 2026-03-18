@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'reader_provider.dart';
 import 'widgets/reader_settings_sheets.dart';
+import 'package:legado_reader/core/constant/page_anim.dart';
 
 
 class AutoReadDialog extends StatelessWidget {
@@ -155,14 +156,12 @@ class AutoReadDialog extends StatelessWidget {
     );
   }
 
-  /// 翻頁模式選擇器（分頁 vs 捲動）
+  /// 翻頁模式選擇器（平移 vs 捲動）
   Widget _buildPageModeSelector(BuildContext context, ReaderProvider provider) {
     final theme = provider.currentTheme;
     const modes = [
-      (0, '平移'),
-      (1, '仿真'),
-      (2, '捲動'),
-      (3, '直接'),
+      (PageAnim.slide, '平移'),
+      (PageAnim.scroll, '捲動'),
     ];
 
     return Row(

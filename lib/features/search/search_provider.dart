@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:legado_reader/core/database/app_database.dart';
 import 'package:legado_reader/core/database/dao/book_source_dao.dart';
 import 'package:legado_reader/core/database/dao/search_history_dao.dart';
 import 'package:legado_reader/core/di/injection.dart';
@@ -14,7 +15,7 @@ class SearchProvider extends ChangeNotifier {
   final SearchHistoryDao _historyDao = getIt<SearchHistoryDao>();
   final BookSourceService _service = BookSourceService();
 
-  List<SearchHistory> _history = [];
+  List<SearchHistoryRow> _history = [];
   List<AggregatedSearchBook> _results = [];
   bool _isSearching = false;
   bool _isCancelled = false;

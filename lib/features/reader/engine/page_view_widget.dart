@@ -48,6 +48,7 @@ class PageViewWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ReaderProvider>();
+    final double currentPaddingTop = isScrollMode ? 0.0 : paddingTop;
 
     // 分頁模式自動翻頁：使用 ValueListenableBuilder 實現 60fps 掃描線動畫
     final bool needsScanLine = isAutoPaging && !isScrollMode && nextPage != null;
@@ -68,8 +69,8 @@ class PageViewWidget extends StatelessWidget {
               behavior: HitTestBehavior.translucent,
               onTapUp: (details) {
                 if (onLineTap == null) return;
-                // 扣除 paddingTop (40.0) 後，判斷點擊落在哪一行
-                final tapY = details.localPosition.dy - 40.0;
+                // 扣除 paddingTop 後，判斷點擊落在哪一行
+                final tapY = details.localPosition.dy - currentPaddingTop;
                 for (int i = 0; i < page.lines.length; i++) {
                   final line = page.lines[i];
                   if (tapY >= line.lineTop && tapY < line.lineBottom) {
@@ -88,6 +89,7 @@ class PageViewWidget extends StatelessWidget {
                           contentStyle: contentStyle,
                           titleStyle: titleStyle,
                           paddingLeft: paddingLeft,
+                          paddingTop: currentPaddingTop,
                           isAutoPaging: true,
                           autoPageProgress: progress,
                           scanLineColor: scanLineColor,
@@ -104,6 +106,7 @@ class PageViewWidget extends StatelessWidget {
                         contentStyle: contentStyle,
                         titleStyle: titleStyle,
                         paddingLeft: paddingLeft,
+                        paddingTop: currentPaddingTop,
                         isAutoPaging: false,
                         autoPageProgress: 0.0,
                         ttsStart: ttsStart,
@@ -118,7 +121,7 @@ class PageViewWidget extends StatelessWidget {
             final img = line.image!;
             return Positioned(
               left: provider.textPadding + img.left,
-              top: 40.0 + line.lineTop,
+              top: currentPaddingTop + line.lineTop,
               width: img.width,
               height: img.height,
               child: GestureDetector(
@@ -171,6 +174,7 @@ class _TextPagePainter extends CustomPainter {
   final TextStyle contentStyle;
   final TextStyle titleStyle;
   final double paddingLeft;
+  final double paddingTop;
   final bool isAutoPaging;
   final double autoPageProgress;
   final Color scanLineColor;
@@ -185,6 +189,7 @@ class _TextPagePainter extends CustomPainter {
     required this.contentStyle,
     required this.titleStyle,
     required this.paddingLeft,
+    this.paddingTop = 40.0,
     this.isAutoPaging = false,
     this.autoPageProgress = 0.0,
     this.scanLineColor = Colors.blue,
@@ -254,7 +259,7 @@ class _TextPagePainter extends CustomPainter {
         final highlightPaint = Paint()
           ..color = contentStyle.color?.withValues(alpha: 0.2) ?? Colors.yellow.withValues(alpha: 0.3);
         canvas.drawRect(
-          Rect.fromLTWH(paddingLeft, 40.0 + line.lineTop, width, line.height),
+          Rect.fromLTWH(paddingLeft, paddingTop + line.lineTop, width, line.height),
           highlightPaint,
         );
       }
@@ -267,7 +272,7 @@ class _TextPagePainter extends CustomPainter {
       // 關鍵：對位 Android 的兩端對齊繪製
       textPainter.textAlign = line.shouldJustify ? TextAlign.justify : TextAlign.left;
       textPainter.layout(minWidth: width, maxWidth: width);
-      textPainter.paint(canvas, Offset(paddingLeft, 40.0 + line.lineTop));
+      textPainter.paint(canvas, Offset(paddingLeft, paddingTop + line.lineTop));
     }
   }
 

@@ -71,35 +71,58 @@ class ReaderBottomMenu extends StatelessWidget {
 
   /// 章節導航條 (對標 Android 導航 Seeking)
   Widget _buildChapterSlider(BuildContext context) {
+    final chapterCount = provider.chapters.length;
+    final maxVal = (chapterCount <= 1 ? 0 : chapterCount - 1).toDouble();
+    final displayIndex = provider.isScrubbing ? provider.scrubIndex : provider.currentChapterIndex;
+    final displayTitle = (chapterCount > 0 && displayIndex < chapterCount)
+        ? provider.chapters[displayIndex].title
+        : '';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          TextButton(
-            onPressed: provider.currentChapterIndex > 0 ? provider.prevChapter : null,
-            child: const Text('上一章', style: TextStyle(color: Colors.white, fontSize: 14)),
-          ),
-          Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 2,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+          if (provider.isScrubbing && displayTitle.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                displayTitle,
+                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              child: Slider(
-                value: provider.currentChapterIndex.toDouble().clamp(0, (provider.chapters.isEmpty ? 0 : provider.chapters.length - 1).toDouble()),
-                min: 0,
-                max: (provider.chapters.length <= 1 ? 0 : provider.chapters.length - 1).toDouble(),
-                onChanged: provider.chapters.length <= 1 ? null : (v) => provider.jumpToChapter(v.toInt()),
-                activeColor: Colors.blue,
-                inactiveColor: Colors.white24,
-              ),
-
             ),
-          ),
-          TextButton(
-            onPressed: provider.currentChapterIndex < provider.chapters.length - 1 ? provider.nextChapter : null,
-            child: const Text('下一章', style: TextStyle(color: Colors.white, fontSize: 14)),
+          Row(
+            children: [
+              TextButton(
+                onPressed: provider.currentChapterIndex > 0 ? provider.prevChapter : null,
+                child: const Text('上一章', style: TextStyle(color: Colors.white, fontSize: 14)),
+              ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                  ),
+                  child: Slider(
+                    value: displayIndex.toDouble().clamp(0, maxVal),
+                    min: 0,
+                    max: maxVal,
+                    onChangeStart: chapterCount <= 1 ? null : (_) => provider.onScrubStart(),
+                    onChanged: chapterCount <= 1 ? null : (v) => provider.onScrubbing(v.toInt()),
+                    onChangeEnd: chapterCount <= 1 ? null : (v) => provider.onScrubEnd(v.toInt()),
+                    activeColor: Colors.blue,
+                    inactiveColor: Colors.white24,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: provider.currentChapterIndex < chapterCount - 1 ? provider.nextChapter : null,
+                child: const Text('下一章', style: TextStyle(color: Colors.white, fontSize: 14)),
+              ),
+            ],
           ),
         ],
       ),

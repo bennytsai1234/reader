@@ -1,59 +1,31 @@
-import 'package:legado_reader/core/models/txt_toc_rule.dart';
-import 'drift_compat_dao.dart';
+import 'package:drift/drift.dart';
+import '../../models/txt_toc_rule.dart';
+import '../tables/app_tables.dart';
 import '../app_database.dart';
 
-/// TxtTocRuleDao - SQLite 實作 (對標 Android TxtTocRuleDao.kt)
-class TxtTocRuleDao extends DriftCompatDao<TxtTocRule> {
-  TxtTocRuleDao(AppDatabase appDatabase) : super(appDatabase, 'txt_toc_rules');
+part 'txt_toc_rule_dao.g.dart';
 
-  /// 獲取所有目錄規則 (對標 Android: all)
-  Future<List<TxtTocRule>> getAll() async {
-    final client = await db;
-    final List<Map<String, dynamic>> maps = await client.query(
-      tableName,
-      orderBy: 'serialNumber ASC',
-    );
-    return maps.map((m) => TxtTocRule.fromJson(m)).toList();
+@DriftAccessor(tables: [TxtTocRules])
+class TxtTocRuleDao extends DatabaseAccessor<AppDatabase> with _$TxtTocRuleDaoMixin {
+  TxtTocRuleDao(AppDatabase db) : super(db);
+
+  Future<List<TxtTocRule>> getAll() {
+    return (select(txtTocRules)..orderBy([(t) => OrderingTerm(expression: t.serialNumber)])).get();
   }
 
-  /// 獲取所有啟用的目錄規則 (對標 Android: enabled)
-  Future<List<TxtTocRule>> getEnabled() async {
-    final client = await db;
-    final List<Map<String, dynamic>> maps = await client.query(
-      tableName,
-      where: 'enable = 1',
-      orderBy: 'serialNumber ASC',
-    );
-    return maps.map((m) => TxtTocRule.fromJson(m)).toList();
+  Stream<List<TxtTocRule>> watchEnabled() {
+    return (select(txtTocRules)
+          ..where((t) => t.enable.equals(true))
+          ..orderBy([(t) => OrderingTerm(expression: t.serialNumber)]))
+        .watch();
   }
 
-  /// 插入或更新單個規則 (UPSERT)
-  Future<void> upsert(TxtTocRule rule) async {
-    await insertOrUpdate(rule.toJson());
-  }
+  Future<void> upsert(TxtTocRule rule) => into(txtTocRules).insertOnConflictUpdate(TxtTocRuleToInsertable(rule).toInsertable());
 
-  /// 批量更新
+  Future<void> deleteById(int id) =>
+      (delete(txtTocRules)..where((t) => t.id.equals(id))).go();
+
   Future<void> insertOrUpdateAll(List<TxtTocRule> rules) async {
-    if (rules.isEmpty) return;
-    final client = await db;
-    await client.transaction((txn) async {
-      final batch = txn.batch();
-      for (var rule in rules) {
-        batch.insert(
-          tableName,
-          rule.toJson(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-      await batch.commit(noResult: true);
-    });
+    await batch((b) => b.insertAllOnConflictUpdate(txtTocRules, rules.map((e) => TxtTocRuleToInsertable(e).toInsertable()).toList()));
   }
-
-  /// 根據 ID 刪除
-  Future<void> deleteById(int id) async {
-    await deleteRows('id = ?', [id]);
-  }
-
-  /// 刪除規則別名，兼容舊代碼
-  Future<void> deleteRule(int id) => deleteById(id);
 }

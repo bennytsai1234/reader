@@ -10,6 +10,7 @@ import 'package:legado_reader/core/services/export_book_service.dart';
 import 'package:legado_reader/features/source_manager/source_editor_page.dart';
 import 'package:legado_reader/features/source_manager/source_debug_page.dart';
 import 'package:legado_reader/features/reader/reader_page.dart';
+import 'package:legado_reader/features/reader/reader_provider.dart';
 
 import 'widgets/book_info_header.dart';
 import 'widgets/book_info_intro.dart';
@@ -101,7 +102,13 @@ class BookDetailPage extends StatelessWidget {
     ]));
   }
 
-  void _navigateToReader(BuildContext context, Book b, int index) => Navigator.push(context, MaterialPageRoute(builder: (ctx) => ReaderPage(book: b, chapterIndex: index)));
+  void _navigateToReader(BuildContext context, Book b, int index) => Navigator.push(
+    context,
+    MaterialPageRoute(builder: (ctx) => ChangeNotifierProvider(
+      create: (_) => ReaderProvider(book: b, chapterIndex: index),
+      child: ReaderPage(book: b, chapterIndex: index),
+    )),
+  );
 
   void _showChangeSourceDialog(BuildContext context, BookDetailProvider p) => showModalBottomSheet(
         context: context, 

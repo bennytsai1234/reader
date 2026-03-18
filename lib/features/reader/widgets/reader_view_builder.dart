@@ -47,14 +47,39 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           if (offset >= 999999) {
+            // 程式性跳至章節末：暫時抑制 _handleScroll 的邊界觸發
+            _isUserScrolling = true;
             _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+            Future.microtask(() {
+               if (mounted) {
+                 _isUserScrolling = false;
+                 widget.provider.isRestoring = false;
+               }
+            });
           } else if (offset < 0) {
+            // 合併章節後的捲動補償（使用者觸發的邊界載入），不抑制
             final double targetScroll = _scrollController.offset + offset.abs();
             _scrollController.jumpTo(targetScroll);
           } else if (offset > 0) {
+            // 程式性恢復位置（_applyPendingRestore）：暫時抑制
+            _isUserScrolling = true;
             _scrollController.jumpTo(offset.clamp(0.0, _scrollController.position.maxScrollExtent));
+            Future.microtask(() {
+               if (mounted) {
+                 _isUserScrolling = false;
+                 widget.provider.isRestoring = false;
+               }
+            });
           } else {
+            // offset == 0：非合併章節跳轉至起始，暫時抑制（否則立刻觸發 prevChapter）
+            _isUserScrolling = true;
             _scrollController.jumpTo(0);
+            Future.microtask(() {
+               if (mounted) {
+                 _isUserScrolling = false;
+                 widget.provider.isRestoring = false;
+               }
+            });
           }
         }
       });
@@ -141,7 +166,7 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
         final double currentScroll = _scrollController.position.pixels;
         widget.provider.updateScrollOffset(currentScroll);
 
-        if (_isUserScrolling) return;
+        if (_isUserScrolling || widget.provider.isRestoring) return;
 
         final firstPage = widget.provider.pages.firstOrNull;
         final lastPage = widget.provider.pages.lastOrNull;
@@ -169,17 +194,16 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
     final provider = widget.provider;
     if (provider.pages.isEmpty) return;
     final firstPage = provider.pages.firstOrNull;
-    final double headOffset = (firstPage != null && firstPage.chapterIndex > 0) ? 26.0 : 0.0;
+    final double headOffset = (firstPage != null && firstPage.chapterIndex > 0) ? 2.0 : 0.0;
     double cumHeight = headOffset;
     for (int i = 0; i < provider.pages.length; i++) {
       final page = provider.pages[i];
-      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom + 40.0;
+      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
       cumHeight += pageHeight;
       if (currentScroll < cumHeight) {
         provider.updateScrollPageIndex(i);
         return;
       }
-      if (i < provider.pages.length - 1) cumHeight += 24.0;
     }
   }
 
@@ -188,6 +212,8 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
     final provider = widget.provider;
     if (provider.ttsStart < 0 || provider.pages.isEmpty) return;
 
+    final firstPage = provider.pages.firstOrNull;
+    final double headOffset = (firstPage != null && firstPage.chapterIndex > 0) ? 26.0 : 0.0;
     double cumHeight = 0;
     for (int i = 0; i < provider.pages.length; i++) {
       final page = provider.pages[i];
@@ -197,7 +223,7 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
         if (line.image != null) continue;
         final lEnd = line.chapterPosition + line.text.length;
         if (provider.ttsStart >= line.chapterPosition && provider.ttsStart < lEnd) {
-          final lineTop = cumHeight + 40.0 + line.lineTop;
+          final lineTop = headOffset + cumHeight + 40.0 + line.lineTop;
           final viewportH = _scrollController.position.viewportDimension;
           final currentOffset = _scrollController.offset;
           final comfortZoneBottom = currentOffset + viewportH * 0.65;
@@ -231,6 +257,17 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
           return Container(color: provider.currentTheme.backgroundColor, child: Center(child: Text('暫無內容', style: TextStyle(color: provider.currentTheme.textColor.withAlpha(128)))));
         }
 
+        // 關鍵：如果正在恢復進度且頁面已載入，確保跳轉到正確位置
+        if (provider.isRestoring && provider.pages.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (provider.pageTurnMode != PageAnim.scroll && widget.pageController.hasClients) {
+               if (widget.pageController.page?.round() != provider.currentPageIndex) {
+                 widget.pageController.jumpToPage(provider.currentPageIndex);
+               }
+            }
+          });
+        }
+
         return AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
           child: _buildModeReader(provider),
@@ -253,30 +290,38 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
 
   Widget _buildHorizontalReader() {
     final p = widget.provider;
-    final hasPrev = p.currentChapterIndex > 0;
-    final hasNext = p.currentChapterIndex < p.chapters.length - 1;
-    final itemCount = (hasPrev ? 1 : 0) + p.pages.length + (hasNext ? 1 : 0);
+    final itemCount = p.pages.length;
 
     return PageView.builder(
       controller: widget.pageController,
       physics: const BouncingScrollPhysics(),
       itemCount: itemCount,
       onPageChanged: (i) {
+        if (p.isRestoring) {
+          p.isRestoring = false;
+        }
         if (p.pages.isEmpty || p.isLoading) return;
-        if (hasPrev && i == 0) {
-          p.prevChapter();
-        } else if (hasNext && i == itemCount - 1) {
-          p.nextChapter();
-        } else {
-          p.onPageChanged(hasPrev ? i - 1 : i);
+        
+        p.onPageChanged(i);
+
+        // 邊界觸發：距離末尾剩 1 頁時預載/合併下一章
+        if (i >= itemCount - 1) {
+          final lastPage = p.pages.lastOrNull;
+          if (lastPage != null && lastPage.chapterIndex < p.chapters.length - 1) {
+            p.nextChapter();
+          }
+        }
+        // 邊界觸發：在第一頁時預載/合併上一章
+        if (i <= 0) {
+          final firstPage = p.pages.firstOrNull;
+          if (firstPage != null && firstPage.chapterIndex > 0) {
+            p.prevChapter();
+          }
         }
       },
       itemBuilder: (ctx, i) {
-        if (hasPrev && i == 0) return _buildLoadingView('載入上一章...');
-        if (hasNext && i == itemCount - 1) return _buildLoadingView('載入下一章...');
-        final idx = hasPrev ? i - 1 : i;
-        if (idx < 0 || idx >= p.pages.length) return const SizedBox.shrink();
-        return _buildPageViewWidget(idx);
+        if (i < 0 || i >= p.pages.length) return const SizedBox.shrink();
+        return _buildPageViewWidget(i);
       },
     );
   }
@@ -319,7 +364,7 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
       controller: _scrollController,
       padding: EdgeInsets.zero,
       itemCount: widget.provider.pages.length + (showHead ? 1 : 0) + (showTail ? 1 : 0),
-      separatorBuilder: (ctx, i) => const SizedBox(height: 24),
+      separatorBuilder: (ctx, i) => const SizedBox.shrink(),
       itemBuilder: (ctx, i) {
         if (showHead && i == 0) return _buildScrollLoadingHead();
         final actualIndex = showHead ? i - 1 : i;
@@ -328,12 +373,14 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
 
         final page = widget.provider.pages[actualIndex];
         return SizedBox(
-          height: page.lines.isEmpty ? 0 : page.lines.last.lineBottom + 40.0,
+          height: page.lines.isEmpty ? 0 : page.lines.last.lineBottom,
           child: PageViewWidget(
             page: page,
             contentStyle: _getContentStyle(),
             titleStyle: _getTitleStyle(),
             isScrollMode: true,
+            paddingTop: 0,
+            paddingBottom: 0,
             ttsStart: widget.provider.ttsStart,
             ttsEnd: widget.provider.ttsEnd,
             ttsChapterIndex: widget.provider.ttsChapterIndex,
@@ -346,22 +393,6 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
   TextStyle _getContentStyle() => TextStyle(fontSize: widget.provider.fontSize, height: widget.provider.lineHeight, color: widget.provider.currentTheme.textColor, letterSpacing: widget.provider.letterSpacing);
   TextStyle _getTitleStyle() => TextStyle(fontSize: widget.provider.fontSize + 4, fontWeight: FontWeight.bold, color: widget.provider.currentTheme.textColor, letterSpacing: widget.provider.letterSpacing);
 
-  Widget _buildLoadingView(String text) {
-    return Container(
-      color: widget.provider.currentTheme.backgroundColor,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(strokeWidth: 2),
-            const SizedBox(height: 20),
-            Text(text, style: TextStyle(color: widget.provider.currentTheme.textColor.withAlpha(102), fontSize: 13)),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildScrollLoadingTail() {
     final p = widget.provider;
     final hasNext = (p.pages.lastOrNull?.chapterIndex ?? 0) < p.chapters.length - 1;
@@ -373,10 +404,13 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> {
   }
 
   Widget _buildScrollLoadingHead() {
-    return Container(
-      color: widget.provider.currentTheme.backgroundColor,
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      child: Center(child: Text('正在載入上一章...', style: TextStyle(color: widget.provider.currentTheme.textColor.withAlpha(77), fontSize: 14))),
+    // 高度固定為 2px，配合 _scrollHeadOffset = 26（2px head + 24px separator）的位置計算
+    // 作為一條細線視覺指示器，不佔用大量空間以免干擾位置精度
+    return SizedBox(
+      height: 2,
+      child: Container(
+        color: widget.provider.currentTheme.textColor.withValues(alpha: 0.15),
+      ),
     );
   }
 }

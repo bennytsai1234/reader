@@ -5,18 +5,16 @@ class RuleSub {
   String name;
   String url;
   int type;
-  int customOrder;
-  bool autoUpdate;
-  int update;
+  bool enabled;
+  int order;
 
   RuleSub({
-    required this.id,
+    this.id = 0,
     this.name = '',
     this.url = '',
     this.type = 0,
-    this.customOrder = 0,
-    this.autoUpdate = false,
-    this.update = 0,
+    this.enabled = true,
+    this.order = 0,
   });
 
   factory RuleSub.fromJson(Map<String, dynamic> json) {
@@ -25,9 +23,8 @@ class RuleSub {
       name: json['name'] ?? '',
       url: json['url'] ?? '',
       type: json['type'] ?? 0,
-      customOrder: json['customOrder'] ?? 0,
-      autoUpdate: json['autoUpdate'] == 1 || json['autoUpdate'] == true,
-      update: json['update'] ?? 0,
+      enabled: json['enabled'] == 1 || json['enabled'] == true,
+      order: json['customOrder'] ?? json['order'] ?? 0,
     );
   }
 
@@ -37,10 +34,8 @@ class RuleSub {
       'name': name,
       'url': url,
       'type': type,
-      'customOrder': customOrder,
-      'autoUpdate': autoUpdate ? 1 : 0,
-      'update': update,
+      'enabled': enabled ? 1 : 0,
+      'order': order,
     };
   }
 }
-

@@ -1,72 +1,40 @@
-import 'drift_compat_dao.dart';
+import 'package:drift/drift.dart';
+import '../tables/app_tables.dart';
 import '../app_database.dart';
 
-/// SearchHistory - 搜尋歷史模型 (對標 Android SearchKeyword)
-class SearchHistory {
-  final int? id;
-  final String keyword;
-  final int searchTime;
+part 'search_history_dao.g.dart';
 
-  SearchHistory({this.id, required this.keyword, required this.searchTime});
+@DriftAccessor(tables: [SearchHistoryTable])
+class SearchHistoryDao extends DatabaseAccessor<AppDatabase> with _$SearchHistoryDaoMixin {
+  SearchHistoryDao(AppDatabase db) : super(db);
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'keyword': keyword,
-    'searchTime': searchTime,
-  };
+  Future<List<SearchHistoryRow>> getAll() {
+    return (select(searchHistoryTable)..orderBy([(t) => OrderingTerm(expression: t.searchTime, mode: OrderingMode.desc)])).get();
+  }
 
-  factory SearchHistory.fromJson(Map<String, dynamic> json) => SearchHistory(
-    id: json['id'],
-    keyword: json['keyword'],
-    searchTime: json['searchTime'],
-  );
-}
-
-/// SearchHistoryDao - SQLite 實作 (對標 Android SearchKeywordDao.kt)
-class SearchHistoryDao extends DriftCompatDao<SearchHistory> {
-  SearchHistoryDao(AppDatabase appDatabase) : super(appDatabase, 'search_history');
-
-  /// 獲取所有搜尋紀錄 (對標 Android: getRecent)
-  Future<List<SearchHistory>> getRecent() async {
-    final client = await db;
-    final List<Map<String, dynamic>> maps = await client.query(
-      tableName,
-      orderBy: 'searchTime DESC',
-      limit: 20, // 限制獲取最近的 20 條
+  Future<void> add(String keyword) {
+    return into(searchHistoryTable).insertOnConflictUpdate(
+      SearchHistoryTableCompanion.insert(
+        keyword: keyword,
+        searchTime: DateTime.now().millisecondsSinceEpoch,
+      ),
     );
-    return maps.map((m) => SearchHistory.fromJson(m)).toList();
   }
 
-  /// 獲取所有紀錄別名
-  Future<List<SearchHistory>> getAll() => getRecent();
+  Future<void> deleteById(int id) => (delete(searchHistoryTable)..where((t) => t.id.equals(id))).go();
 
-  /// 插入搜尋紀錄 (對標 Android: add)
-  Future<void> add(String keyword) async {
-    final history = SearchHistory(
-      keyword: keyword,
-      searchTime: DateTime.now().millisecondsSinceEpoch,
-    );
-    await insertOrUpdate(history.toJson());
+  Future<void> clearAll() => delete(searchHistoryTable).go();
+
+  /// 取得最近的搜尋記錄 (最多 50 筆)
+  Future<List<SearchHistoryRow>> getRecent() {
+    return (select(searchHistoryTable)
+      ..orderBy([(t) => OrderingTerm(expression: t.searchTime, mode: OrderingMode.desc)])
+      ..limit(50)).get();
   }
 
-  /// 插入別名，兼容舊代碼
-  Future<void> addKeyword(String keyword) => add(keyword);
-
-  /// 刪除指定紀錄
-  Future<void> deleteKeyword(String keyword) async {
-    await deleteRows('keyword = ?', [keyword]);
+  /// 清除 beforeTime 之前的舊搜尋紀錄
+  Future<void> clearOld(int beforeTime) {
+    return (delete(searchHistoryTable)
+      ..where((t) => t.searchTime.isSmallerThanValue(beforeTime))).go();
   }
-
-  /// 清空所有紀錄 (對標 Android: deleteAll)
-  Future<void> deleteAll() async {
-    await clearAll();
-  }
-
-  /// 刪除過期紀錄 (對標 Android: deleteOld)
-  Future<void> clearOld(int timeLimit) async {
-    await deleteRows('searchTime < ?', [timeLimit]);
-  }
-
-  /// 清空別名
-  Future<int> clearAll() => super.clearAll();
 }

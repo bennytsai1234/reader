@@ -43,6 +43,9 @@ abstract class ReaderProviderBase extends ChangeNotifier {
   bool showControls = false;
   int scrubbingChapterIndex = -1;
 
+  /// 新增：是否正在恢復閱讀進度（跳轉中）
+  bool isRestoring = false;
+
   /// 點擊區域動作映射 (對標 Android clickAction)
   /// 0: 菜單, 1: 下一頁, 2: 上一頁, 3: 下一章, 4: 上一章, 5: 朗讀, 7: 書籤
   List<int> clickActions = [2, 1, 1, 2, 0, 1, 2, 1, 1];

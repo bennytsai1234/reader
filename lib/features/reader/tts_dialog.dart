@@ -71,12 +71,21 @@ class TtsDialog extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  provider.currentChapterTitle.isNotEmpty
+                      ? provider.currentChapterTitle
+                      : '尚未開始朗讀',
+                  style: TextStyle(color: theme.textColor.withValues(alpha: 0.7), fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (tts.remainingMinutes > 0)
                   Padding(
-                    padding: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       '剩餘 ${tts.remainingMinutes} 分鐘',
-                      style: TextStyle(color: theme.textColor.withValues(alpha: 0.6), fontSize: 12),
+                      style: TextStyle(color: theme.textColor.withValues(alpha: 0.5), fontSize: 11),
                     ),
                   ),
               ],
@@ -129,27 +138,6 @@ class TtsDialog extends StatelessWidget {
             theme: theme,
           ),
           const SizedBox(height: 8),
-
-          // 朗讀引擎選擇
-          Row(
-            children: [
-              Text('引擎', style: TextStyle(color: theme.textColor, fontSize: 14)),
-              const SizedBox(width: 12),
-              ChoiceChip(
-                label: const Text('系統語音', style: TextStyle(fontSize: 12)),
-                selected: provider.ttsMode == 0,
-                onSelected: (_) => provider.setTtsMode(0),
-                selectedColor: Colors.blue.withValues(alpha: 0.2),
-              ),
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: const Text('網絡語音', style: TextStyle(fontSize: 12)),
-                selected: provider.ttsMode == 1,
-                onSelected: (_) => provider.setTtsMode(1),
-                selectedColor: Colors.blue.withValues(alpha: 0.2),
-              ),
-            ],
-          ),
 
           // 語言選擇
           if (tts.languages.isNotEmpty)
