@@ -15,6 +15,8 @@ class TTSService extends ChangeNotifier {
   static final TTSService _instance = TTSService._internal();
   factory TTSService() => _instance;
 
+  bool _isInitialized = false;
+
   /// nullable：init() 失敗時不崩潰，只是缺少系統通知欄控制
   ReaderAudioHandler? _audioHandler;
   final FlutterTts _flutterTts = FlutterTts();
@@ -45,6 +47,8 @@ class TTSService extends ChangeNotifier {
 
   /// 必須在 main.dart 的 runApp 之前呼叫
   Future<void> init() async {
+    if (_isInitialized) return;
+
     try {
       _audioHandler = await AudioService.init(
         builder: () => ReaderAudioHandler(),
@@ -54,6 +58,7 @@ class TTSService extends ChangeNotifier {
           androidNotificationOngoing: true,
         ),
       );
+      _isInitialized = true;
     } catch (e) {
       debugPrint('TTSService: AudioService.init failed (notification disabled): $e');
     }

@@ -34,12 +34,13 @@ Future<void> configureDependencies() async {
   getIt.registerSingleton<Logger>(
     Logger(
       printer: PrettyPrinter(
-        methodCount: 2,
-        errorMethodCount: 8,
-        lineLength: 120,
+        methodCount: 0, // 設為 0 以隱藏日誌產生的原始碼行號資訊 (#0, #1)
+        errorMethodCount: 5,
+        lineLength: 80,
         colors: true,
         printEmojis: true,
         dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
+        noBoxingByDefault: true, // 預設不畫框框，讓日誌更緊湊
       ),
     ),
   );
