@@ -227,6 +227,22 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
       final page = provider.pages[i];
       final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
 
+      // 1. 章節過濾 (Bug Fix: 避免多章節同偏移量混淆)
+      if (provider.ttsChapterIndex >= 0 && page.chapterIndex != provider.ttsChapterIndex) {
+        cumHeight += pageHeight;
+        continue;
+      }
+
+      // 2. 頁面邊界跳過 (O(N) 降維優化)
+      if (page.lines.isNotEmpty) {
+        final lastLine = page.lines.last;
+        final pageEndOffset = lastLine.chapterPosition + lastLine.text.length;
+        if (provider.ttsStart >= pageEndOffset) {
+          cumHeight += pageHeight;
+          continue;
+        }
+      }
+
       for (final line in page.lines) {
         if (line.image != null) continue;
         final lEnd = line.chapterPosition + line.text.length;
