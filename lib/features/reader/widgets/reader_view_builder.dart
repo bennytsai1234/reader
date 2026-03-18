@@ -177,26 +177,22 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
         final double virtualY = currentScroll + pastExtent;
         
         widget.provider.updateScrollOffset(virtualY);
+        _updateScrollPageIndex(virtualY);
 
-        if (_isUserScrolling || widget.provider.isRestoring) return;
+        if (widget.provider.isRestoring) return;
 
         final firstPage = widget.provider.pages.firstOrNull;
         final lastPage = widget.provider.pages.lastOrNull;
-        _updateScrollPageIndex(virtualY);
 
+        // 觸發載入上一章 (邊距 50)
         if (currentScroll <= minScroll + 50 && !widget.provider.isLoading && firstPage != null && firstPage.chapterIndex > 0) {
-           _isUserScrolling = true;
-           widget.provider.prevChapter().then((_) {
-             if (mounted) _isUserScrolling = false;
-           });
+           widget.provider.prevChapter();
            return;
         }
 
-        if (currentScroll >= maxScroll - 100 && !widget.provider.isLoading && lastPage != null && lastPage.chapterIndex < widget.provider.chapters.length - 1) {
-          _isUserScrolling = true;
-          widget.provider.nextChapter().then((_) {
-            if (mounted) _isUserScrolling = false;
-          });
+        // 觸發載入下一章 (邊距 250，增加預留空間)
+        if (currentScroll >= maxScroll - 250 && !widget.provider.isLoading && lastPage != null && lastPage.chapterIndex < widget.provider.chapters.length - 1) {
+           widget.provider.nextChapter();
         }
       }
     }
@@ -315,25 +311,13 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
       physics: const BouncingScrollPhysics(),
       itemCount: itemCount,
       onPageChanged: (i) {
+        if (p.pages.isEmpty || p.isLoading) return;
         if (p.isRestoring) {
           p.isRestoring = false;
+          return;
         }
-        if (p.pages.isEmpty || p.isLoading) return;
         
         p.onPageChanged(i);
-
-        if (i >= itemCount - 1) {
-          final lastPage = p.pages.lastOrNull;
-          if (lastPage != null && lastPage.chapterIndex < p.chapters.length - 1) {
-            p.nextChapter();
-          }
-        }
-        if (i <= 0) {
-          final firstPage = p.pages.firstOrNull;
-          if (firstPage != null && firstPage.chapterIndex > 0) {
-            p.prevChapter();
-          }
-        }
       },
       itemBuilder: (ctx, i) {
         if (i < 0 || i >= p.pages.length) return const SizedBox.shrink();
