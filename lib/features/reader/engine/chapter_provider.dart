@@ -74,6 +74,10 @@ class ChapterProvider {
     // 2. 處理段落
     final paragraphs = content.split('\n');
     final indentStr = '　' * textIndent;
+    final indentLen = indentStr.length;
+
+    // 優化：在迴圈外宣告單一實例，大幅降低物件建立的 GC 與記憶體開銷
+    final tp = TextPainter(textDirection: TextDirection.ltr);
 
     for (var pIdx = 0; pIdx < paragraphs.length; pIdx++) {
       final p = paragraphs[pIdx].trim();
@@ -84,19 +88,20 @@ class ChapterProvider {
       
       final text = indentStr + p;
       var start = 0;
+      var contentStart = indentLen; 
       var isFirstLineOfParagraph = true;
 
       while (start < text.length) {
-        final tp = TextPainter(
-          text: TextSpan(text: text.substring(start), style: contentStyle),
-          textDirection: TextDirection.ltr,
-        );
+        // 重用 tp 實例
+        tp.text = TextSpan(text: text.substring(start), style: contentStyle);
         tp.layout(maxWidth: width);
         
-        var end = tp.getPositionForOffset(Offset(width, 0)).offset;
+        // 改用 getLineBoundary 取得受 Flutter 引擎 Word-wrap 保護的真實行尾（解決原本 getPositionForOffset 切斷英文字的 Bug）
+        final boundary = tp.getLineBoundary(const TextPosition(offset: 0));
+        var end = boundary.end;
         if (end <= 0) break;
 
-        // 避頭尾處理
+        // 避頭尾處理（加固：end 至少為 1，防止零寬行無限迴圈）
         if (start + end < text.length) {
           final nextChar = text.substring(start + end, start + end + 1);
           if (_lineStartForbidden.contains(nextChar) && end > 1) {
@@ -109,6 +114,8 @@ class ChapterProvider {
             end--;
           }
         }
+        // 最終保護：end 至少為 1
+        if (end <= 0) end = 1;
 
         final lineText = text.substring(start, start + end);
         final isLastLine = (start + end == text.length);
@@ -130,7 +137,13 @@ class ChapterProvider {
         ));
 
         start += end;
-        chapterPos += end;
+        // chapterPos 只計算原始內容字元，不含縮排
+        // 這一行實際消耗的原始字元數 = end 減去落在縮排區間的部分
+        final int charsInIndent = (contentStart > 0)
+            ? (end > contentStart ? contentStart : end)
+            : 0;
+        chapterPos += (end - charsInIndent);
+        contentStart = (contentStart - end).clamp(0, indentLen);
         currentHeight += lineHeight;
         isFirstLineOfParagraph = false;
       }
