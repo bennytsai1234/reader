@@ -229,8 +229,11 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     
     if (shouldMerge) {
       final bool alreadyExists = pages.any((p) => p.chapterIndex == targetIndex);
+      final bool isMovingDown = targetIndex > currentChapterIndex;
+      
       if (!alreadyExists) {
-         if (targetIndex > currentChapterIndex) {
+         currentChapterIndex = targetIndex; // 提前更新，讓 _trimPagesWindow 能計算出正確距離
+         if (isMovingDown) {
            pages = [...pages, ...newPages];
            _trimPagesWindow();
          } else {
@@ -244,14 +247,15 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
              jumpPageController.add(currentPageIndex);
            }
          }
+      } else {
+         currentChapterIndex = targetIndex;
       }
       
-      if (targetIndex > currentChapterIndex) {
-         currentPageIndex = pages.indexWhere((p) => p.chapterIndex == targetIndex);
-      } else {
+      if (fromEnd || !isMovingDown && alreadyExists) {
          currentPageIndex = pages.lastIndexWhere((p) => p.chapterIndex == targetIndex);
+      } else {
+         currentPageIndex = pages.indexWhere((p) => p.chapterIndex == targetIndex);
       }
-      currentChapterIndex = targetIndex;
     } else {
       pages = newPages;
       currentChapterIndex = targetIndex;
@@ -272,8 +276,14 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     while (chapterIndexes.length > 5) {
       final first = chapterIndexes.first;
       final last = chapterIndexes.last;
-      final removeFirst = (currentChapterIndex - first).abs() >= (last - currentChapterIndex).abs();
-      final toRemove = removeFirst ? first : last;
+      bool removeFirst = (currentChapterIndex - first).abs() >= (last - currentChapterIndex).abs();
+      int toRemove = removeFirst ? first : last;
+
+      // 核心 Bug 修復：絕對不能移除 pivotChapterIndex，否則 CustomScrollView 的負向空間會瞬間崩塌跳躍
+      if (toRemove == pivotChapterIndex) {
+        removeFirst = !removeFirst;
+        toRemove = removeFirst ? first : last;
+      }
 
       // 移除前方頁面時補償 currentPageIndex，防止索引漂移
       final int removedCount = removeFirst

@@ -361,6 +361,20 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
         }
         
         p.onPageChanged(i);
+
+        // 極限優化：平移模式（ Slide Mode ）接近邊界時，自動無縫拼接上下章
+        if (i >= p.pages.length - 2) {
+            final lastChapter = p.pages.lastOrNull?.chapterIndex ?? 0;
+            if (lastChapter < p.chapters.length - 1 && !p.isLoading) {
+                p.nextChapter();
+            }
+        }
+        if (i <= 1) {
+            final firstChapter = p.pages.firstOrNull?.chapterIndex ?? 0;
+            if (firstChapter > 0 && !p.isLoading) {
+                p.prevChapter();
+            }
+        }
       },
       itemBuilder: (ctx, i) {
         if (i < 0 || i >= p.pages.length) return const SizedBox.shrink();
