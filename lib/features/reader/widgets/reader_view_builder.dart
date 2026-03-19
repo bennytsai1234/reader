@@ -191,9 +191,8 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
         final double pastExtent = _getPastExtent();
         final double virtualY = currentScroll + pastExtent;
 
-        // 關鍵修復：先更新 currentChapterIndex/currentPageIndex，
-        // 再呼叫 updateScrollOffset，避免進度儲存時使用過期的章節索引
-        _updateScrollPageIndex(virtualY);
+        // 關鍵重構：使用相對座標偵測頁面，避免 trimming 引起的 virtualY 抖動
+        _updateScrollPageIndex(currentScroll);
         widget.provider.updateScrollOffset(virtualY);
 
         if (widget.provider.isRestoring) return;
@@ -205,18 +204,29 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
         _lastScrollTime = now;
 
         // Fix 11: 自動 Re-pivot 邏輯 — 防止離軸心章節過遠導致的漂移與跳轉。
-        // 當使用者離開 pivot 超過 1 章時（即距離 2 單位），將當前章節設為新的 pivot。
-        // 這確保了 _trimPagesWindow 時，最遠端的章節能被正確驅逐（不會因 Pivot 保護誤留）。
+        // 當使用者離開 pivot 超過 1 章時，將當前章節設為新的 pivot。
         if (!widget.provider.isRestoring &&
             (widget.provider.currentChapterIndex - widget.provider.pivotChapterIndex).abs() > 1) {
-          widget.provider.pivotChapterIndex = widget.provider.currentChapterIndex;
-          // 通知 Provider 但不需重刷 UI（因為 pivot 只是改變 Slivers 劃分，視覺上應該無感），
-          // 但需要調整 ScrollController 的 pixels 以維持 virtualY 不變。
-          // 邏輯：newPixels = virtualY - newPastExtent
-          final double newPastExtent = _getPastExtent();
-          final double newPixels = virtualY - newPastExtent;
-          _scrollController.jumpTo(newPixels); // 瞬時校準
-          return; // 此幀已做跳轉，結束處理以免與後續邊界檢測衝突
+          
+          final int oldPivot = widget.provider.pivotChapterIndex;
+          final int newPivot = widget.provider.currentChapterIndex;
+          
+          // 計算新舊 Pivot 之間的精確位移 (Delta)
+          // 邏輯：newPixels = oldPixels - distance(oldPivot, newPivot)
+          double delta = 0;
+          final int start = oldPivot < newPivot ? oldPivot : newPivot;
+          final int end = oldPivot < newPivot ? newPivot : oldPivot;
+          
+          for (final p in widget.provider.pages) {
+            if (p.chapterIndex >= start && p.chapterIndex < end) {
+              delta += p.lines.isEmpty ? 0 : p.lines.last.lineBottom;
+            }
+          }
+          if (oldPivot < newPivot) delta = -delta; 
+
+          widget.provider.pivotChapterIndex = newPivot;
+          _scrollController.jumpTo(currentScroll + delta); // 使用相對位移進行校準
+          return;
         }
 
         // 修改 2：Layout 穩定期間抑制邊界檢測
@@ -232,30 +242,45 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
   }
 
 
-  void _updateScrollPageIndex(double virtualY) {
+  /// 基於 ScrollController.pixels 的相對偵測邏輯（相對於 pivotChapterIndex）
+  void _updateScrollPageIndex(double pixels) {
     final provider = widget.provider;
     if (provider.pages.isEmpty) return;
-    final firstPage = provider.pages.firstOrNull;
-    final double headOffset = (firstPage != null && firstPage.chapterIndex > 0) ? 2.0 : 0.0;
-    double cumHeight = headOffset;
-    for (int i = 0; i < provider.pages.length; i++) {
-      final page = provider.pages[i];
-      final double pageHeight = page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
-      cumHeight += pageHeight;
-      if (virtualY < cumHeight) {
-        if (provider.currentPageIndex != i) {
-           provider.updateScrollPageIndex(i);
-           // 章節切換時，觸發視窗更新
-           provider.updateChapterWindow(provider.currentChapterIndex);
+    
+    final int splitIdx = provider.pivotChapterIndex < 0 ? 0 : provider.pages.indexWhere((page) => page.chapterIndex >= provider.pivotChapterIndex);
+    final int safeSplitIdx = (splitIdx < 0) ? 0 : splitIdx;
+    
+    int foundIdx = -1;
+    if (pixels >= 0) {
+      // 在 pivot 及其後方的章節中搜尋 (FuturePages)
+      double h = 0;
+      for (int i = safeSplitIdx; i < provider.pages.length; i++) {
+        final page = provider.pages[i];
+        final ph = page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
+        if (pixels < h + ph) {
+          foundIdx = i; break;
         }
-        return;
+        h += ph;
       }
+      if (foundIdx == -1) foundIdx = provider.pages.length - 1;
+    } else {
+      // 在 pivot 前方的章節中搜尋 (PastPages)
+      double h = 0; // 相對於 pivot 開始處的偏移（負值）
+      for (int i = safeSplitIdx - 1; i >= 0; i--) {
+        final page = provider.pages[i];
+        final ph = page.lines.isEmpty ? 0 : page.lines.last.lineBottom;
+        h -= ph;
+        if (pixels >= h) {
+          foundIdx = i; break;
+        }
+      }
+      if (foundIdx == -1) foundIdx = 0;
     }
-    // Fix 9: 超限處理。若 virtualY 大於所有頁面總高（快速滑到底部載入中），
-    // 應將 currentPageIndex 設為最後一頁，
-    // 防止 currentChapterIndex 停留在舊值而導致後續 saveProgress 儲存到錯誤章節。
-    if (provider.pages.isNotEmpty && virtualY >= cumHeight) {
-      provider.updateScrollPageIndex(provider.pages.length - 1);
+
+    if (foundIdx != -1 && provider.currentPageIndex != foundIdx) {
+      provider.updateScrollPageIndex(foundIdx);
+      // 章節切換時，觸發視窗更新
+      provider.updateChapterWindow(provider.currentChapterIndex);
     }
   }
 
