@@ -67,6 +67,11 @@ class ReaderProvider extends ReaderProviderBase
 
     if (isDisposed) return;
 
+    // 初始化 5 章視窗
+    updateChapterWindow(currentChapterIndex);
+
+    if (isDisposed) return;
+
     // loadChapter 完成後會自動觸發 applyPendingRestore
     applyPendingRestore();
 
@@ -324,6 +329,8 @@ class ReaderProvider extends ReaderProviderBase
   Future<void> jumpToChapter(int index) async {
     if (index >= 0 && index < chapters.length) {
       await loadChapter(index);
+      // 跳轉後立即以新章節為中心重新佈局 5 章視窗
+      updateChapterWindow(index);
     }
   }
 
