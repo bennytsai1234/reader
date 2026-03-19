@@ -33,6 +33,21 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
   bool _isFetchingNext = false;
   bool _isFetchingPrev = false;
 
+  /// 級聯載入防護：Layout 穩定抑制（修改 2）
+  bool _suppressScrollCheck = false;
+
+  /// 級聯載入防護：冷卻期 + 滾動距離門檻（修改 3）
+  double _scrollPosAtLastPrevLoad = double.negativeInfinity;
+  double _scrollPosAtLastNextLoad = double.infinity;
+  DateTime _prevLoadCompletedAt = DateTime(2000);
+  DateTime _nextLoadCompletedAt = DateTime(2000);
+  static const Duration _loadCooldown = Duration(milliseconds: 600);
+  static const double _scrollGateDistance = 300.0;
+
+  /// 級聯載入防護：速度抑制（修改 4）
+  double _lastScrollPixels = 0.0;
+  DateTime _lastScrollTime = DateTime.now();
+
   @override
   void initState() {
     super.initState();
@@ -105,12 +120,9 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
       _stopScrollAutoPage();
     }
 
-    if (p.pageTurnMode == PageAnim.scroll) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // In case layout changed extent, we want to immediately check bounds
-        if (mounted) _handleScroll();
-      });
-    }
+    // 移除：不再在 provider 狀態變更時主動觸發 _handleScroll()。
+    // ScrollController.addListener 已在每次滾動事件中自動呼叫 _handleScroll()，
+    // 此處主動呼叫會在章節載入後立刻重新觸發邊界檢測，導致級聯載入循環。
 
     if (p.pageTurnMode == PageAnim.scroll && p.ttsStart >= 0 && p.ttsStart != _lastTtsScrolledStart && !_isUserScrolling) {
       _lastTtsScrolledStart = p.ttsStart;
@@ -175,27 +187,63 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
         final double maxScroll = _scrollController.position.maxScrollExtent;
         final double minScroll = _scrollController.position.minScrollExtent;
         final double currentScroll = _scrollController.position.pixels;
-        
+
         final double pastExtent = _getPastExtent();
         final double virtualY = currentScroll + pastExtent;
-        
-        widget.provider.updateScrollOffset(virtualY);
+
+        // 關鍵修復：先更新 currentChapterIndex/currentPageIndex，
+        // 再呼叫 updateScrollOffset，避免進度儲存時使用過期的章節索引
         _updateScrollPageIndex(virtualY);
+        widget.provider.updateScrollOffset(virtualY);
 
         if (widget.provider.isRestoring) return;
+
+        final now = DateTime.now();
+        final dtMs = now.difference(_lastScrollTime).inMilliseconds;
+        final velocity = dtMs > 0 ? (currentScroll - _lastScrollPixels).abs() / dtMs : 0.0;
+        _lastScrollPixels = currentScroll;
+        _lastScrollTime = now;
+
+        // Fix 11: 自動 Re-pivot 邏輯 — 防止離軸心章節過遠導致的漂移與跳轉。
+        // 當使用者離開 pivot 超過 3 章時，將當前章節設為新的 pivot。
+        if (!widget.provider.isRestoring &&
+            (widget.provider.currentChapterIndex - widget.provider.pivotChapterIndex).abs() > 3) {
+          widget.provider.pivotChapterIndex = widget.provider.currentChapterIndex;
+          // 通知 Provider 但不需重刷 UI（因為 pivot 只是改變 Slivers 劃分，視覺上應該無感），
+          // 但需要調整 ScrollController 的 pixels 以維持 virtualY 不變。
+          // 邏輯：newPixels = virtualY - newPastExtent
+          final double newPastExtent = _getPastExtent();
+          final double newPixels = virtualY - newPastExtent;
+          _scrollController.jumpTo(newPixels); // 瞬時校準
+          return; // 此幀已做跳轉，結束處理以免與後續邊界檢測衝突
+        }
+
+        // 修改 2：Layout 穩定期間抑制邊界檢測
+        if (_suppressScrollCheck) return;
+
+        // 速度抑制 — 快速 fling 時不觸發載入
+        if (velocity > 3.0) return;
 
         final firstPage = widget.provider.pages.firstOrNull;
         final lastPage = widget.provider.pages.lastOrNull;
 
         // 觸發載入上一章 (邊距 500)
         if (currentScroll <= minScroll + 500 && !widget.provider.isLoading && firstPage != null && firstPage.chapterIndex > 0) {
-           if (!_isFetchingPrev) {
+           if (!_isFetchingPrev && _canTriggerPrevLoad(currentScroll)) {
              _isFetchingPrev = true;
+             _suppressScrollCheck = true;
              widget.provider.prevChapter().whenComplete(() {
                if (mounted) {
-                 // 確保 Flutter 完成 SlliverTree 的重繪與 Extent 更新後，再解除鎖定
                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                   if (mounted) _isFetchingPrev = false;
+                   if (mounted) {
+                     _isFetchingPrev = false;
+                     _prevLoadCompletedAt = DateTime.now();
+                     _scrollPosAtLastPrevLoad = _scrollController.hasClients ? _scrollController.position.pixels : 0.0;
+                     // 延遲兩幀解除抑制，讓 Layout 完全穩定
+                     WidgetsBinding.instance.addPostFrameCallback((_) {
+                       if (mounted) _suppressScrollCheck = false;
+                     });
+                   }
                  });
                }
              });
@@ -203,14 +251,22 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
            return;
         }
 
-        // 觸發載入下一章 (邊距 1500，激進預載，消除等待時間)
+        // 觸發載入下一章 (邊距 1500，激進預載)
         if (currentScroll >= maxScroll - 1500 && !widget.provider.isLoading && lastPage != null && lastPage.chapterIndex < widget.provider.chapters.length - 1) {
-           if (!_isFetchingNext) {
+           if (!_isFetchingNext && _canTriggerNextLoad(currentScroll)) {
              _isFetchingNext = true;
+             _suppressScrollCheck = true;
              widget.provider.nextChapter().whenComplete(() {
                if (mounted) {
                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                   if (mounted) _isFetchingNext = false;
+                   if (mounted) {
+                     _isFetchingNext = false;
+                     _nextLoadCompletedAt = DateTime.now();
+                     _scrollPosAtLastNextLoad = _scrollController.hasClients ? _scrollController.position.pixels : 0.0;
+                     WidgetsBinding.instance.addPostFrameCallback((_) {
+                       if (mounted) _suppressScrollCheck = false;
+                     });
+                   }
                  });
                }
              });
@@ -218,6 +274,29 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
         }
       }
     }
+  }
+
+  /// 修改 3：冷卻期 + 滾動距離門檻 — 防止級聯載入
+  bool _canTriggerPrevLoad(double currentScroll) {
+    final now = DateTime.now();
+    // 冷卻期：上次載入完成後 600ms 內不再觸發
+    if (now.difference(_prevLoadCompletedAt) < _loadCooldown) return false;
+    // 滾動距離門檻：使用者必須曾離開邊界超過 300px 再回來
+    if (_scrollPosAtLastPrevLoad != double.negativeInfinity &&
+        (currentScroll - _scrollPosAtLastPrevLoad).abs() < _scrollGateDistance) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _canTriggerNextLoad(double currentScroll) {
+    final now = DateTime.now();
+    if (now.difference(_nextLoadCompletedAt) < _loadCooldown) return false;
+    if (_scrollPosAtLastNextLoad != double.infinity &&
+        (_scrollPosAtLastNextLoad - currentScroll).abs() < _scrollGateDistance) {
+      return false;
+    }
+    return true;
   }
 
   void _updateScrollPageIndex(double virtualY) {
@@ -234,6 +313,12 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
         provider.updateScrollPageIndex(i);
         return;
       }
+    }
+    // Fix 9: 超限處理。若 virtualY 大於所有頁面總高（快速滑到底部載入中），
+    // 應將 currentPageIndex 設為最後一頁，
+    // 防止 currentChapterIndex 停留在舊值而導致後續 saveProgress 儲存到錯誤章節。
+    if (provider.pages.isNotEmpty && virtualY >= cumHeight) {
+      provider.updateScrollPageIndex(provider.pages.length - 1);
     }
   }
 
@@ -363,18 +448,33 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
         p.onPageChanged(i);
 
         // 極限優化：平移模式（ Slide Mode ）接近邊界時，自動無縫拼接上下章
+        // 加入 _isFetchingNext/_isFetchingPrev 保護，防止重複觸發導致級聯載入
         if (i >= p.pages.length - 2) {
             final lastChapter = p.pages.lastOrNull?.chapterIndex ?? 0;
-            if (lastChapter < p.chapters.length - 1 && !p.isLoading) {
-                p.nextChapter();
+            if (lastChapter < p.chapters.length - 1 && !p.isLoading && !_isFetchingNext) {
+                _isFetchingNext = true;
+                p.nextChapter().whenComplete(() {
+                  if (mounted) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) _isFetchingNext = false;
+                    });
+                  }
+                });
             }
         }
         if (i <= 1) {
             final firstChapter = p.pages.firstOrNull?.chapterIndex ?? 0;
-            if (firstChapter > 0 && !p.isLoading) {
+            if (firstChapter > 0 && !p.isLoading && !_isFetchingPrev) {
+                _isFetchingPrev = true;
                 // i==0：使用者真的翻到頭，跳到上一章末頁（fromEnd: true）
                 // i==1：提前預載，保持視覺位置不動（fromEnd: false），讓後續滑動自然銜接
-                p.prevChapter(fromEnd: i == 0);
+                p.prevChapter(fromEnd: i == 0).whenComplete(() {
+                  if (mounted) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) _isFetchingPrev = false;
+                    });
+                  }
+                });
             }
         }
       },

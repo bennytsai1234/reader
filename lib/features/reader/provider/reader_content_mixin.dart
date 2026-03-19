@@ -364,13 +364,15 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       bool removeFirst = (pivot - first).abs() >= (last - pivot).abs();
       int toRemove = removeFirst ? first : last;
 
-      // 只在「確實存在負向 pastPages 空間」時才保護 pivotChapterIndex。
-      // 若使用者只是往前閱讀（所有頁面的 chapterIndex 都 >= pivot），
-      // minScrollExtent 本來就是 0，強制保護 pivot 只會反過來刪除剛載入的章節，造成無限循環。
-      final bool hasPastContent = pages.any((p) => p.chapterIndex < pivotChapterIndex);
-      if (hasPastContent && toRemove == pivotChapterIndex) {
+      // Fix8: 強制保護 pivotChapterIndex 不被驅逐。
+      // 在 CustomScrollView(center) 模式下，若 pivot 被移除，
+      // _centerKey 消失會發生視覺跳轉與座標系混亂（導致 Chapter 1 誤判）。
+      // 只要 pivot 還在 pages 內，即使它是距離最遠的，也要跳過它改刪除另一端。
+      if (toRemove == pivotChapterIndex) {
         removeFirst = !removeFirst;
         toRemove = removeFirst ? first : last;
+        // 如果連另一端也是 pivot（不可能），或兩端都不能刪（已達極限 5 章），則跳出。
+        if (toRemove == pivotChapterIndex) break;
       }
 
       // 移除前方頁面時補償 currentPageIndex，防止索引漂移

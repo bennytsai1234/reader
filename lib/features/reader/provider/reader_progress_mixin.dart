@@ -209,7 +209,13 @@ mixin ReaderProgressMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderCont
       }
       cumHeight += pageHeight;
     }
-    return getCharOffsetForPage(0);
+    // Fix 10: 邊界補救。若 scrollY 超過所有已載入內容，回傳最後一頁首行；
+    // 若 scrollY 小於 headOffset，則回傳第一頁首行。
+    if (pages.isNotEmpty) {
+      if (scrollY <= headOffset) return getCharOffsetForPage(0);
+      return getCharOffsetForPage(pages.length - 1);
+    }
+    return 0;
   }
 
   /// 捲動模式：由 ReaderViewBuilder 在捲動時輕量更新當前可見頁（不寫 DB、不 notify）
