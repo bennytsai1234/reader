@@ -23,6 +23,9 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   final List<int> _preloadQueue = [];
   bool _isPreloadingQueueActive = false;
 
+  /// 當前目標視窗的章節索引集合
+  Set<int> _targetWindowIndices = {};
+
   /// 章節加載 Completer：協調主加載與靜默預載入，避免同一章節並發重複請求
   final Map<int, Completer<void>> _loadCompleters = {};
 
@@ -168,9 +171,51 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     }
   }
 
+  /// 更新章節視窗（固定 5 章）
+  /// [centerIndex]：目標中心章節
+  void updateChapterWindow(int centerIndex) {
+    if (chapters.isEmpty) return;
+
+    // 1. 計算目標視窗範圍 [L, R]
+    final int windowSize = 5;
+    int left = (centerIndex - 2).clamp(0, (chapters.length - windowSize).clamp(0, chapters.length - 1));
+    int right = (left + windowSize - 1).clamp(0, chapters.length - 1);
+    
+    // 重新校準 left（處理末尾章節不足 5 章的情況）
+    if (right == chapters.length - 1) {
+       left = (right - windowSize + 1).clamp(0, chapters.length - 1);
+    }
+
+    final Set<int> newWindow = {};
+    for (int i = left; i <= right; i++) {
+      newWindow.add(i);
+    }
+
+    if (_targetWindowIndices.length == newWindow.length && _targetWindowIndices.containsAll(newWindow)) {
+      return; // 視窗未變動
+    }
+
+    _targetWindowIndices = newWindow;
+    debugPrint('Reader: Target window updated to $_targetWindowIndices (center: $centerIndex)');
+
+    // 2. 執行剪裁：移除視窗外的章節
+    _trimPagesWindowStrict();
+
+    // 3. 觸發預載：填充視窗內的缺失章節
+    _preloadNeighborChaptersSilently();
+  }
+
   void _preloadNeighborChaptersSilently() {
-    final firstIdx = pages.firstOrNull?.chapterIndex;
-    final lastIdx = pages.lastOrNull?.chapterIndex;
+    if (chapters.isEmpty) return;
+
+    // 如果未設定視窗（例如初始化時），則使用預設邏輯（當前章節前後 2 章）
+    if (_targetWindowIndices.isEmpty) {
+      final int start = (currentChapterIndex - 2).clamp(0, chapters.length - 1);
+      final int end = (currentChapterIndex + 2).clamp(0, chapters.length - 1);
+      for (int i = start; i <= end; i++) {
+        _targetWindowIndices.add(i);
+      }
+    }
 
     // Fix3: 佇列活躍時不清空整個佇列（避免 worker 的下一個 target 被腰斬），
     // 只替換 pending 部分（index 1 之後），保留正在執行的第一項。
@@ -181,17 +226,11 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     }
 
     final List<int> candidates = [];
-    if (lastIdx != null && lastIdx < chapters.length - 1) {
-      if (!chapterCache.containsKey(lastIdx + 1)) candidates.add(lastIdx + 1);
-      if (lastIdx + 1 < chapters.length - 1 && !chapterCache.containsKey(lastIdx + 2)) {
-        candidates.add(lastIdx + 2);
+    // 找出視窗內遺漏的章節
+    for (final idx in _targetWindowIndices) {
+      if (!chapterCache.containsKey(idx) && !loadingChapters.contains(idx) && !silentLoadingChapters.contains(idx)) {
+        candidates.add(idx);
       }
-    }
-    if (firstIdx != null && firstIdx > 0 && !chapterCache.containsKey(firstIdx - 1)) {
-      candidates.add(firstIdx - 1);
-    }
-    if (firstIdx != null && firstIdx > 1 && !chapterCache.containsKey(firstIdx - 2)) {
-      candidates.add(firstIdx - 2);
     }
 
     // 依照距離 currentChapterIndex 從近到遠排序，自動體現閱讀方向優先權
@@ -261,17 +300,15 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   bool _shouldSilentMerge(int i) {
     if (pageTurnMode != PageAnim.scroll) return false;
     if (pages.isEmpty) return false;
-    // Fix1: 移除 isLoading 條件。
-    // isLoading 代表「有章節待主加載」，與靜默合併的安全性無關，
-    // 保留此條件會導致：N+1 主加載中時，N+2 預載完後靜默合併被誤攔截，
-    // 使 chapterCache 有資料但未合併到 pages，第三次邊界滑動時觸發異常 trim。
-    if (isRestoring) return false;
-    // 不要在已載入章節數達上限時合併（避免 trim 頻繁觸發）
-    final chapterIndexes = pages.map((p) => p.chapterIndex).toSet();
-    if (chapterIndexes.length >= 5) return false;
+    if (isRestoring || isPaginating) return false;
+    
+    // 只合併在目標視窗內的章節
+    if (!_targetWindowIndices.contains(i)) return false;
+
     // 已存在則不需合併
     if (pages.any((p) => p.chapterIndex == i)) return false;
 
+    // 必須是當前已加載範圍的直接鄰居才執行合併（確保 ScrollView 連續性）
     final firstIdx = pages.first.chapterIndex;
     final lastIdx = pages.last.chapterIndex;
     return (i == firstIdx - 1) || (i == lastIdx + 1);
@@ -354,45 +391,47 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   /// [pivotHint]：驅逐距離的計算基準章節（預設為 currentChapterIndex）。
   /// 在 _performChapterTransition 中 currentChapterIndex 已被暫設為 targetIndex，
   /// 應傳入 originalChapterIndex（用戶實際可見章節）以確保驅逐方向正確。
-  void _trimPagesWindow({int? pivotHint}) {
-    final int pivot = pivotHint ?? currentChapterIndex;
-    final chapterIndexes = pages.map((p) => p.chapterIndex).toSet().toList()..sort();
+  /// 嚴格視窗剪裁：移除不在 _targetWindowIndices 內的章節
+  void _trimPagesWindowStrict() {
+    if (_targetWindowIndices.isEmpty) return;
 
-    while (chapterIndexes.length > 5) {
-      final first = chapterIndexes.first;
-      final last = chapterIndexes.last;
-      bool removeFirst = (pivot - first).abs() >= (last - pivot).abs();
-      int toRemove = removeFirst ? first : last;
+    final List<int> loadedChapterIndexes = pages.map((p) => p.chapterIndex).toSet().toList()..sort();
+    final List<int> toRemove = [];
 
-      // Fix8: 強制保護 pivotChapterIndex 不被驅逐。
-      // 在 CustomScrollView(center) 模式下，若 pivot 被移除，
-      // _centerKey 消失會發生視覺跳轉與座標系混亂（導致 Chapter 1 誤判）。
-      // 只要 pivot 還在 pages 內，即使它是距離最遠的，也要跳過它改刪除另一端。
-      if (toRemove == pivotChapterIndex) {
-        removeFirst = !removeFirst;
-        toRemove = removeFirst ? first : last;
-        // 如果連另一端也是 pivot（不可能），或兩端都不能刪（已達極限 5 章），則跳出。
-        if (toRemove == pivotChapterIndex) break;
-      }
-
-      // 移除前方頁面時補償 currentPageIndex，防止索引漂移
-      final int removedCount = removeFirst
-          ? pages.where((p) => p.chapterIndex == toRemove).length
-          : 0;
-
-      pages.removeWhere((p) => p.chapterIndex == toRemove);
-      chapterCache.remove(toRemove);
-
-      if (removeFirst && removedCount > 0) {
-        currentPageIndex = (currentPageIndex - removedCount).clamp(0, pages.isEmpty ? 0 : pages.length - 1);
-      }
-
-      if (removeFirst) {
-        chapterIndexes.removeAt(0);
-      } else {
-        chapterIndexes.removeLast();
+    for (final idx in loadedChapterIndexes) {
+      if (!_targetWindowIndices.contains(idx)) {
+        // 保護 pivotChapterIndex 不被驅逐，除非目標視窗真的不包含它（通常是跳轉時）
+        if (idx == pivotChapterIndex && _targetWindowIndices.contains(pivotChapterIndex)) {
+          continue;
+        }
+        toRemove.add(idx);
       }
     }
+
+    if (toRemove.isEmpty) return;
+
+    debugPrint('Reader: Trimming indices $toRemove from scroll window');
+
+    for (final idx in toRemove) {
+      final bool isBelow = idx < (pages.firstOrNull?.chapterIndex ?? 0);
+      final int removedCount = pages.where((p) => p.chapterIndex == idx).length;
+
+      pages.removeWhere((p) => p.chapterIndex == idx);
+      chapterCache.remove(idx);
+
+      // 如果移除的是當前顯示範圍上方的章節，需要補償 currentPageIndex 防止索引漂移
+      // （僅適用於非滾動模式，滾動模式交由 viewport 自然處理，但保留邏輯以防萬一）
+      if (isBelow && removedCount > 0) {
+        currentPageIndex = (currentPageIndex - removedCount).clamp(0, pages.isEmpty ? 0 : pages.length - 1);
+      }
+    }
+    
+    if (!isDisposed) notifyListeners();
+  }
+
+  /// 舊有的距離驅逐法保留介面，但內容改為呼叫新剪裁邏輯
+  void _trimPagesWindow({int? pivotHint}) {
+    _trimPagesWindowStrict();
   }
 
   /// 距離驅逐法的最高容量：防堵歷史記憶體洩漏
