@@ -388,7 +388,7 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
           _userScrollResetTimer?.cancel();
         } else if (notification is ScrollEndNotification) {
           _userScrollResetTimer?.cancel();
-          _userScrollResetTimer = Timer(const Duration(seconds: 2), () {
+          _userScrollResetTimer = Timer(const Duration(milliseconds: 800), () {
             if (mounted) _isUserScrolling = false;
           });
         }

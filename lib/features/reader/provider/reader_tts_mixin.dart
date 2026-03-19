@@ -15,6 +15,8 @@ mixin ReaderTtsMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderContentMi
   bool stopAfterChapter = false;
   /// 取消旗標：stopTts() 後設為 true，防止 pending 的 nextChapter().then() 繼續執行
   bool _ttsCancelled = false;
+  /// 防止 iOS flutter_tts 重複 didFinish 導致 _onTtsComplete 重入
+  bool _ttsCompleteProcessing = false;
   List<({int ttsOffset, int chapterOffset})> _ttsTextOffsetMap = [];
 
   // 預取下一頁內容，消除銜接停頓
@@ -91,6 +93,7 @@ mixin ReaderTtsMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderContentMi
     if (!TTSService().isPlaying || _ttsTextOffsetMap.isEmpty) return;
 
     final rawStart = TTSService().currentWordStart;
+    if (rawStart < 0) return; // speak() 剛呼叫，進度尚未初始化，跳過避免用舊值計算
 
     // 查表：將 TTS 字串位置映射到章節字元位置
     int chapterBase = _currentTtsBaseOffset;
@@ -246,76 +249,95 @@ mixin ReaderTtsMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderContentMi
 
   void _onTtsComplete() {
     if (_ttsCancelled) return;
+    // 防止 iOS flutter_tts 重複 didFinish 導致雙重跳頁
+    if (_ttsCompleteProcessing) return;
+    _ttsCompleteProcessing = true;
 
-    // 根據 TTS 絕對錨點找下一頁，完全不依賴 currentPageIndex（Bug 1、2、3 根治）
-    final nextIdx = _findNextTtsPageIdx();
+    try {
+      // 根據 TTS 絕對錨點找下一頁，完全不依賴 currentPageIndex（Bug 1、2、3 根治）
+      final nextIdx = _findNextTtsPageIdx();
 
-    if (nextIdx >= 0) {
-      // 有下一頁：推進並開始朗讀
-      _lastTtsHighlightStart = -1;
-      _lastTtsHighlightEnd = -1;
+      if (nextIdx >= 0) {
+        // 有下一頁：推進並開始朗讀
+        _lastTtsHighlightStart = -1;
+        _lastTtsHighlightEnd = -1;
+        // 立即清除高亮，防止 speak() 的 startHandler 觸發 notifyListeners 時
+        // 用舊的 _ttsStart 驅動 _scrollToTtsHighlight 捲到錯誤位置
+        _ttsStart = -1;
+        _ttsEnd = -1;
 
-      // 分頁模式：更新 UI 頁碼並跳轉；滾動模式不動（UI 由捲動事件驅動）
-      if (pageTurnMode != PageAnim.scroll) {
-        currentPageIndex = nextIdx;
-        jumpPageController.add(nextIdx);
-      }
-
-      if (_prefetchedTtsText != null && _prefetchedOffsetMap != null &&
-          _prefetchedAnchorChapterIdx >= 0) {
-        // 快速路徑：使用預取好的數據，消除銜接停頓
-        final textToSpeak = _prefetchedTtsText!;
-        _currentTtsBaseOffset = _prefetchedBaseOffset;
-        _ttsTextOffsetMap = _prefetchedOffsetMap!;
-        _ttsChapterIndex = _prefetchedAnchorChapterIdx;
-        // 推進主錨點至剛消費的預取頁
-        _ttsAnchorChapterIdx = _prefetchedAnchorChapterIdx;
-        _ttsAnchorEndCharPos = _prefetchedAnchorEndCharPos;
-        // 清除已消費的預取
-        _prefetchedTtsText = null;
-        _prefetchedOffsetMap = null;
-        _prefetchedAnchorChapterIdx = -1;
-        _prefetchedAnchorEndCharPos = 0;
-        TTSService().speak(textToSpeak);
-        _prefetchNextPage(); // 以更新後的錨點預取下下頁
-      } else {
-        _startTts();
-      }
-    } else {
-      // 錨點章節已無下一頁：優先使用章節邊界預取文本，減少停頓
-      final chapterPrefetchText = _prefetchedChapterTtsText;
-      final chapterPrefetchMap = _prefetchedChapterOffsetMap;
-      final chapterPrefetchBase = _prefetchedChapterBaseOffset;
-      final chapterPrefetchAnchorChapterIdx = _prefetchedChapterAnchorChapterIdx;
-      final chapterPrefetchAnchorEndCharPos = _prefetchedChapterAnchorEndCharPos;
-      _prefetchedChapterTtsText = null;
-      _prefetchedChapterOffsetMap = null;
-      _prefetchedChapterAnchorChapterIdx = -1;
-      _prefetchedChapterAnchorEndCharPos = 0;
-
-      nextChapter().then((_) {
-        if (_ttsCancelled) return;
-        if (stopAfterChapter) {
-          stopAfterChapter = false;
-          TTSService().stop();
-        } else {
-          _lastTtsHighlightStart = -1;
-          _lastTtsHighlightEnd = -1;
-          if (chapterPrefetchText != null && chapterPrefetchMap != null &&
-              chapterPrefetchAnchorChapterIdx >= 0) {
-            _currentTtsBaseOffset = chapterPrefetchBase;
-            _ttsTextOffsetMap = chapterPrefetchMap;
-            _ttsChapterIndex = chapterPrefetchAnchorChapterIdx;
-            // 推進主錨點到新章節第一頁
-            _ttsAnchorChapterIdx = chapterPrefetchAnchorChapterIdx;
-            _ttsAnchorEndCharPos = chapterPrefetchAnchorEndCharPos;
-            TTSService().speak(chapterPrefetchText);
-            _prefetchNextPage();
-          } else {
-            _startTts();
-          }
+        // 分頁模式：更新 UI 頁碼並跳轉；滾動模式不動（UI 由捲動事件驅動）
+        if (pageTurnMode != PageAnim.scroll) {
+          currentPageIndex = nextIdx;
+          jumpPageController.add(nextIdx);
         }
-      });
+
+        if (_prefetchedTtsText != null && _prefetchedOffsetMap != null &&
+            _prefetchedAnchorChapterIdx >= 0) {
+          // 快速路徑：使用預取好的數據，消除銜接停頓
+          final textToSpeak = _prefetchedTtsText!;
+          _currentTtsBaseOffset = _prefetchedBaseOffset;
+          _ttsTextOffsetMap = _prefetchedOffsetMap!;
+          _ttsChapterIndex = _prefetchedAnchorChapterIdx;
+          // 推進主錨點至剛消費的預取頁
+          _ttsAnchorChapterIdx = _prefetchedAnchorChapterIdx;
+          _ttsAnchorEndCharPos = _prefetchedAnchorEndCharPos;
+          // 清除已消費的預取
+          _prefetchedTtsText = null;
+          _prefetchedOffsetMap = null;
+          _prefetchedAnchorChapterIdx = -1;
+          _prefetchedAnchorEndCharPos = 0;
+          TTSService().speak(textToSpeak);
+          _prefetchNextPage(); // 以更新後的錨點預取下下頁
+          notifyListeners(); // 確保 Cover 模式等 UI 元件立即重建
+        } else {
+          _startTts();
+        }
+      } else {
+        // 錨點章節已無下一頁：優先使用章節邊界預取文本，減少停頓
+        final chapterPrefetchText = _prefetchedChapterTtsText;
+        final chapterPrefetchMap = _prefetchedChapterOffsetMap;
+        final chapterPrefetchBase = _prefetchedChapterBaseOffset;
+        final chapterPrefetchAnchorChapterIdx = _prefetchedChapterAnchorChapterIdx;
+        final chapterPrefetchAnchorEndCharPos = _prefetchedChapterAnchorEndCharPos;
+        _prefetchedChapterTtsText = null;
+        _prefetchedChapterOffsetMap = null;
+        _prefetchedChapterAnchorChapterIdx = -1;
+        _prefetchedChapterAnchorEndCharPos = 0;
+
+        nextChapter().then((_) {
+          if (_ttsCancelled) return;
+          if (stopAfterChapter) {
+            stopAfterChapter = false;
+            TTSService().stop();
+          } else {
+            _lastTtsHighlightStart = -1;
+            _lastTtsHighlightEnd = -1;
+            // 分頁模式（平移/覆蓋）：nextChapter 載入新章節後，
+            // _performChapterTransition 已更新 currentPageIndex，
+            // 但 PageView 需要收到 jumpPageController 事件才會跳轉
+            if (pageTurnMode != PageAnim.scroll) {
+              jumpPageController.add(currentPageIndex);
+            }
+            if (chapterPrefetchText != null && chapterPrefetchMap != null &&
+                chapterPrefetchAnchorChapterIdx >= 0) {
+              _currentTtsBaseOffset = chapterPrefetchBase;
+              _ttsTextOffsetMap = chapterPrefetchMap;
+              _ttsChapterIndex = chapterPrefetchAnchorChapterIdx;
+              // 推進主錨點到新章節第一頁
+              _ttsAnchorChapterIdx = chapterPrefetchAnchorChapterIdx;
+              _ttsAnchorEndCharPos = chapterPrefetchAnchorEndCharPos;
+              TTSService().speak(chapterPrefetchText);
+              _prefetchNextPage();
+            } else {
+              _startTts();
+            }
+            notifyListeners();
+          }
+        });
+      }
+    } finally {
+      _ttsCompleteProcessing = false;
     }
   }
 
@@ -387,6 +409,7 @@ mixin ReaderTtsMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderContentMi
 
   void stopTts() {
     _ttsCancelled = true; // 取消所有 pending 的 nextChapter().then() 回調
+    _ttsCompleteProcessing = false; // 重置重入鎖，避免 stop 後卡死
     TTSService().stop();
     _ttsStart = -1;
     _ttsEnd = -1;
@@ -409,6 +432,7 @@ mixin ReaderTtsMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderContentMi
 
   void startTtsFromLine(int lineIndex) {
     _ttsCancelled = false; // 重置取消旗標
+    _ttsCompleteProcessing = false; // 重置重入鎖
     TTSService().stop(); // 切換行時需徹底重新建構塊
     _ttsStart = -1;
     _ttsEnd = -1;

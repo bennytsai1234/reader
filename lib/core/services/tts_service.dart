@@ -134,6 +134,9 @@ class TTSService extends ChangeNotifier {
   Future<void> speak(String text) async {
     if (text.trim().isEmpty) return;
     _resumeOffset = 0;
+    // 重置進度位置，防止 startHandler 的 notifyListeners 用舊值觸發錯誤高亮
+    currentWordStart = -1;
+    currentWordEnd = -1;
     await _flutterTts.speak(text);
   }
 

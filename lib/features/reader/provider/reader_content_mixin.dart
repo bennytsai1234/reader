@@ -275,8 +275,18 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       final removeFirst = (currentChapterIndex - first).abs() >= (last - currentChapterIndex).abs();
       final toRemove = removeFirst ? first : last;
 
+      // 移除前方頁面時補償 currentPageIndex，防止索引漂移
+      final int removedCount = removeFirst
+          ? pages.where((p) => p.chapterIndex == toRemove).length
+          : 0;
+
       pages.removeWhere((p) => p.chapterIndex == toRemove);
       chapterCache.remove(toRemove);
+
+      if (removeFirst && removedCount > 0) {
+        currentPageIndex = (currentPageIndex - removedCount).clamp(0, pages.isEmpty ? 0 : pages.length - 1);
+      }
+
       if (removeFirst) {
         chapterIndexes.removeAt(0);
       } else {
