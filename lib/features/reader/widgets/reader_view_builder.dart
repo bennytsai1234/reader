@@ -372,7 +372,9 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
         if (i <= 1) {
             final firstChapter = p.pages.firstOrNull?.chapterIndex ?? 0;
             if (firstChapter > 0 && !p.isLoading) {
-                p.prevChapter();
+                // i==0：使用者真的翻到頭，跳到上一章末頁（fromEnd: true）
+                // i==1：提前預載，保持視覺位置不動（fromEnd: false），讓後續滑動自然銜接
+                p.prevChapter(fromEnd: i == 0);
             }
         }
       },

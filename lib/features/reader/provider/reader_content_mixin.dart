@@ -240,18 +240,25 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
            final int addedPageCount = newPages.length;
            pages = [...newPages, ...pages];
            _trimPagesWindow();
-           
+
            if (!isScrollMode) {
-             // 分頁模式：頂部插入了頁面，需要同步 jump 到新的索引位置以保持視覺連貫
-             currentPageIndex += addedPageCount;
+             if (fromEnd) {
+               // 往前翻：使用者期望看到新章節的最後一頁（e.g. 滑動到上一章末尾）
+               currentPageIndex = pages.lastIndexWhere((p) => p.chapterIndex == targetIndex);
+             } else {
+               // 正常合併：補償前方插入，保持使用者視覺位置不動
+               currentPageIndex += addedPageCount;
+             }
              jumpPageController.add(currentPageIndex);
            }
          }
       } else {
          currentChapterIndex = targetIndex;
       }
-      
-      if (fromEnd || !isMovingDown && alreadyExists) {
+
+      if (!isScrollMode && !alreadyExists) {
+        // slide 模式 + 新章節：currentPageIndex 已在 !alreadyExists 區塊設定並觸發 jump，不再覆蓋
+      } else if (fromEnd || (!isMovingDown && alreadyExists)) {
          currentPageIndex = pages.lastIndexWhere((p) => p.chapterIndex == targetIndex);
       } else {
          currentPageIndex = pages.indexWhere((p) => p.chapterIndex == targetIndex);
@@ -279,8 +286,11 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       bool removeFirst = (currentChapterIndex - first).abs() >= (last - currentChapterIndex).abs();
       int toRemove = removeFirst ? first : last;
 
-      // 核心 Bug 修復：絕對不能移除 pivotChapterIndex，否則 CustomScrollView 的負向空間會瞬間崩塌跳躍
-      if (toRemove == pivotChapterIndex) {
+      // 只在「確實存在負向 pastPages 空間」時才保護 pivotChapterIndex。
+      // 若使用者只是往前閱讀（所有頁面的 chapterIndex 都 >= pivot），
+      // minScrollExtent 本來就是 0，強制保護 pivot 只會反過來刪除剛載入的章節，造成無限循環。
+      final bool hasPastContent = pages.any((p) => p.chapterIndex < pivotChapterIndex);
+      if (hasPastContent && toRemove == pivotChapterIndex) {
         removeFirst = !removeFirst;
         toRemove = removeFirst ? first : last;
       }
@@ -416,9 +426,9 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     if (target < chapters.length) await loadChapter(target); 
   }
   
-  Future<void> prevChapter() async { 
+  Future<void> prevChapter({bool fromEnd = true}) async {
     final firstPage = pages.firstOrNull;
     final int target = (firstPage?.chapterIndex ?? currentChapterIndex) - 1;
-    if (target >= 0) await loadChapter(target, fromEnd: true); 
+    if (target >= 0) await loadChapter(target, fromEnd: fromEnd);
   }
 }
