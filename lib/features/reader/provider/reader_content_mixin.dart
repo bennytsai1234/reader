@@ -175,34 +175,41 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   /// [centerIndex]：目標中心章節
   void updateChapterWindow(int centerIndex) {
     if (chapters.isEmpty) return;
+    const int windowSize = 5;
 
-    // 1. 計算目標視窗範圍 [L, R]
-    final int windowSize = 5;
+    // 遲滯邏輯 (Hysteresis)：如果當前章節已在視窗「舒適區」(中間 3 章) 內，則不觸發更新。
+    // 只有當 centerIndex 觸及當前視窗的極致邊緣時，才進行視窗平移。
+    if (_targetWindowIndices.isNotEmpty && _targetWindowIndices.contains(centerIndex)) {
+      final sorted = _targetWindowIndices.toList()..sort();
+      final int currentLeft = sorted.first;
+      final int currentRight = sorted.last;
+      // 如果在 [L+1, L+3] 之間，保持現狀，避免 36-37 邊界抖動。
+      if (centerIndex > currentLeft && centerIndex < currentRight) return;
+    }
+
     int left = (centerIndex - 2).clamp(0, (chapters.length - windowSize).clamp(0, chapters.length - 1));
-    int right = (left + windowSize - 1).clamp(0, chapters.length - 1);
-    
-    // 重新校準 left（處理末尾章節不足 5 章的情況）
-    if (right == chapters.length - 1) {
-       left = (right - windowSize + 1).clamp(0, chapters.length - 1);
+    final Set<int> newIndices = {};
+    for (int i = 0; i < windowSize; i++) {
+      if (left + i < chapters.length) {
+        newIndices.add(left + i);
+      }
     }
 
-    final Set<int> newWindow = {};
-    for (int i = left; i <= right; i++) {
-      newWindow.add(i);
+    if (newIndices.length == _targetWindowIndices.length &&
+        newIndices.every((i) => _targetWindowIndices.contains(i))) {
+      return;
     }
 
-    if (_targetWindowIndices.length == newWindow.length && _targetWindowIndices.containsAll(newWindow)) {
-      return; // 視窗未變動
-    }
-
-    _targetWindowIndices = newWindow;
+    _targetWindowIndices = newIndices;
     debugPrint('Reader: Target window updated to $_targetWindowIndices (center: $centerIndex)');
-
-    // 2. 執行剪裁：移除視窗外的章節
-    _trimPagesWindowStrict();
-
-    // 3. 觸發預載：填充視窗內的缺失章節
-    _preloadNeighborChaptersSilently();
+    
+    // 關鍵優化：將視窗變動引發的重繪延後，避開 Layout 階段
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!isDisposed) {
+        _trimPagesWindowStrict();
+        _preloadNeighborChaptersSilently();
+      }
+    });
   }
 
   void _preloadNeighborChaptersSilently() {
