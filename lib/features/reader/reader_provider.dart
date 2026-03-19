@@ -186,14 +186,8 @@ class ReaderProvider extends ReaderProviderBase
     _heartbeatTimer?.cancel();
     autoPageTimer?.cancel();
     audioEventSub?.cancel();
-    TTSService().removeListener(_onTtsProgressUpdateProxy);
+    disposeTtsListener();
     super.dispose();
-  }
-
-  // TTS progress update 的代理（用於 removeListener）
-  void _onTtsProgressUpdateProxy() {
-    // 這個方法由 initTtsListener 中的 TTSService().addListener 使用
-    // 但 mhere 已在 ReaderTtsMixin 中處理
   }
 
   void toggleControls() {

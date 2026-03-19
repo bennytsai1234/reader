@@ -8,6 +8,7 @@ import 'reader_provider.dart';
 import 'package:legado_reader/core/models/book.dart';
 import 'package:legado_reader/features/settings/settings_page.dart';
 import 'package:legado_reader/features/replace_rule/replace_rule_page.dart';
+import 'package:legado_reader/features/search/search_page.dart';
 import 'widgets/reader/reader_top_menu.dart';
 import 'widgets/reader/reader_bottom_menu.dart';
 import 'widgets/reader_brightness_bar.dart';
@@ -29,6 +30,7 @@ class _ReaderPageState extends State<ReaderPage> {
   late PageController _pageCtrl;
   final GlobalKey<ScaffoldState> _key = GlobalKey<ScaffoldState>();
   StreamSubscription? _jumpSub;
+  bool _lastShowControls = false; // 追蹤上一次狀態，避免重複呼叫 SystemChrome
 
   @override
   void initState() {
@@ -51,7 +53,11 @@ class _ReaderPageState extends State<ReaderPage> {
 
   @override void dispose() { _jumpSub?.cancel(); _pageCtrl.dispose(); super.dispose(); }
 
-  void _updateUI(bool show) => SystemChrome.setEnabledSystemUIMode(show ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky);
+  void _updateUI(bool show) {
+    if (show == _lastShowControls) return; // 狀態未變，跳過平台通道呼叫
+    _lastShowControls = show;
+    SystemChrome.setEnabledSystemUIMode(show ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky);
+  }
 
   void _handleTap(Offset pos, Size size, ReaderProvider p) {
     final x = pos.dx, y = pos.dy, w = size.width, h = size.height;
@@ -120,6 +126,14 @@ class _ReaderPageState extends State<ReaderPage> {
                 if (p.isAutoPaging) p.resumeAutoPage();
               },
               onToggleDayNight: () => p.setTheme(p.themeIndex == 1 ? 0 : 1),
+              onSearch: () {
+                p.toggleControls();
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchPage()));
+              },
+              onReplaceRule: () {
+                p.toggleControls();
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ReplaceRulePage()));
+              },
             ),
           ]),
         );
@@ -147,7 +161,7 @@ class _ReaderPageState extends State<ReaderPage> {
         context: context,
         builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(leading: const Icon(Icons.rule), title: const Text('替換規則'), onTap: () { Navigator.pop(ctx); Navigator.push(context, MaterialPageRoute(builder: (_) => const ReplaceRulePage())); }),
-          ListTile(leading: const Icon(Icons.settings), title: const Text('閱讀設定'), onTap: () { Navigator.pop(ctx); Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())); }),
+          ListTile(leading: const Icon(Icons.settings), title: const Text('全域設定'), onTap: () { Navigator.pop(ctx); Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage())); }),
         ])),
       );
 }

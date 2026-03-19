@@ -9,11 +9,14 @@ class ReaderBottomMenu extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback onAutoPage;
   final VoidCallback onToggleDayNight;
+  final VoidCallback? onSearch;
+  final VoidCallback? onReplaceRule;
 
   const ReaderBottomMenu({
-    super.key, required this.provider, required this.onOpenDrawer, 
-    required this.onTts, required this.onInterface, required this.onSettings, 
-    required this.onAutoPage, required this.onToggleDayNight
+    super.key, required this.provider, required this.onOpenDrawer,
+    required this.onTts, required this.onInterface, required this.onSettings,
+    required this.onAutoPage, required this.onToggleDayNight,
+    this.onSearch, this.onReplaceRule,
   });
 
   @override
@@ -50,9 +53,9 @@ class ReaderBottomMenu extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _floatingFab(Icons.search, '搜尋', () {}),
+          _floatingFab(Icons.search, '搜尋', onSearch ?? () {}),
           _floatingFab(Icons.auto_stories_outlined, '自動翻頁', onAutoPage, active: provider.isAutoPaging),
-          _floatingFab(Icons.find_replace, '替換規則', () {}),
+          _floatingFab(Icons.find_replace, '替換規則', onReplaceRule ?? () {}),
           _floatingFab(provider.themeIndex == 1 ? Icons.wb_sunny : Icons.nightlight_round, '日夜切換', onToggleDayNight),
         ],
       ),
