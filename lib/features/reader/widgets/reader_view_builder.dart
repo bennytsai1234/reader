@@ -192,7 +192,12 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
            if (!_isFetchingPrev) {
              _isFetchingPrev = true;
              widget.provider.prevChapter().whenComplete(() {
-               if (mounted) _isFetchingPrev = false;
+               if (mounted) {
+                 // 確保 Flutter 完成 SlliverTree 的重繪與 Extent 更新後，再解除鎖定
+                 WidgetsBinding.instance.addPostFrameCallback((_) {
+                   if (mounted) _isFetchingPrev = false;
+                 });
+               }
              });
            }
            return;
@@ -203,7 +208,11 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
            if (!_isFetchingNext) {
              _isFetchingNext = true;
              widget.provider.nextChapter().whenComplete(() {
-               if (mounted) _isFetchingNext = false;
+               if (mounted) {
+                 WidgetsBinding.instance.addPostFrameCallback((_) {
+                   if (mounted) _isFetchingNext = false;
+                 });
+               }
              });
            }
         }
@@ -345,7 +354,7 @@ class _ReaderViewBuilderState extends State<ReaderViewBuilder> with SingleTicker
       physics: const BouncingScrollPhysics(),
       itemCount: itemCount,
       onPageChanged: (i) {
-        if (p.pages.isEmpty || p.isLoading) return;
+        if (p.pages.isEmpty) return; // 修復：移除 p.isLoading 條件，否則排版讓出執行緒時會卡死使用者的平移切換
         if (p.isRestoring) {
           p.isRestoring = false;
           return;
