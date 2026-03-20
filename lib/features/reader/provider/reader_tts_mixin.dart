@@ -274,10 +274,14 @@ mixin ReaderTtsMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderContentMi
       _prefetchedChapterAnchorEndCharPos = 0;
 
       nextChapter().then((_) {
-        if (_ttsCancelled) return;
+        if (_ttsCancelled) {
+          _ttsCompleteProcessing = false;
+          return;
+        }
         if (stopAfterChapter) {
           stopAfterChapter = false;
           TTSService().stop();
+          _ttsCompleteProcessing = false;
         } else {
           _lastTtsHighlightStart = -1;
           _lastTtsHighlightEnd = -1;
@@ -296,11 +300,18 @@ mixin ReaderTtsMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderContentMi
           } else {
             _startTts();
           }
+          _ttsCompleteProcessing = false;
           notifyListeners();
         }
+      }).catchError((e) {
+        // 異常時也需重置旗標，否則 TTS 永遠無法繼續
+        _ttsCompleteProcessing = false;
+        debugPrint('TTS: nextChapter failed in _onTtsComplete: $e');
       });
     } finally {
-      _ttsCompleteProcessing = false;
+      // 不在此處重置 _ttsCompleteProcessing：
+      // nextChapter() 是異步的，finally 會在 .then() 之前執行，
+      // 導致防重入旗標過早失效。已移至 .then()/.catchError() 內部。
     }
   }
 
