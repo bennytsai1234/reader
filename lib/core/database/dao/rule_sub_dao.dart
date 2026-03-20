@@ -7,7 +7,7 @@ part 'rule_sub_dao.g.dart';
 
 @DriftAccessor(tables: [RuleSubs])
 class RuleSubDao extends DatabaseAccessor<AppDatabase> with _$RuleSubDaoMixin {
-  RuleSubDao(AppDatabase db) : super(db);
+  RuleSubDao(super.db);
 
   Future<List<RuleSub>> getAll() => select(ruleSubs).get();
 

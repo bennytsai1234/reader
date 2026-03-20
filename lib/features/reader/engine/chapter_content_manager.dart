@@ -1,0 +1,747 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:crypto/crypto.dart';
+import 'package:legado_reader/core/services/cache_manager.dart';
+import 'text_page.dart';
+import 'chapter_provider.dart';
+import 'reader_perf_trace.dart';
+import 'package:legado_reader/core/models/chapter.dart';
+
+/// 分頁設定值物件，傳遞給 ChapterProvider.paginate()
+class PaginationConfig {
+  final Size viewSize;
+  final TextStyle titleStyle;
+  final TextStyle contentStyle;
+  final double paragraphSpacing;
+  final int textIndent;
+  final bool textFullJustify;
+  final double padding;
+
+  const PaginationConfig({
+    required this.viewSize,
+    required this.titleStyle,
+    required this.contentStyle,
+    this.paragraphSpacing = 1.0,
+    this.textIndent = 2,
+    this.textFullJustify = true,
+    this.padding = 16.0,
+  });
+}
+
+/// 章節內容取得結果
+class FetchResult {
+  final String content;
+  FetchResult({required this.content});
+}
+
+/// 章節內容取得函數的型別定義
+typedef ChapterFetchFn = Future<FetchResult> Function(int chapterIndex);
+
+/// ChapterContentManager — 章節內容管線
+///
+/// 獨立於 Provider 系統，負責：
+/// - 章節內容取得（透過注入的 fetch 函數）
+/// - 分頁計算與快取
+/// - 預載佇列管理
+/// - 視窗內容驅逐策略
+///
+/// 外部透過同步的 getCachedPages() 或 await getChapterPages() 取得結果，
+/// 不再有「計算 shouldMerge → await → shouldMerge 過期」的問題。
+class ChapterContentManager {
+  /// 注入的章節內容取得函數
+  final ChapterFetchFn _fetchFn;
+
+  /// 章節列表（由外部提供）
+  List<BookChapter> _chapters;
+
+  /// 原始內容快取（限制大小防止 OOM）
+  final Map<int, String> _contentCache = {};
+  static const int _maxContentCacheSize = 30;
+
+  /// 分頁結果快取
+  final Map<int, List<TextPage>> _paginatedCache = {};
+
+  /// 目標預載視窗
+  Set<int> _targetWindow = {};
+
+  /// 預載佇列
+  final List<int> _preloadQueue = [];
+  bool _isPreloadingQueueActive = false;
+  final Set<int> _priorityChapters = {};
+  bool _userInteractionActive = false;
+
+  /// 章節載入 Completer：協調主載入與靜默預載入，避免重複請求
+  final Map<int, Completer<void>> _loadCompleters = {};
+
+  /// 正在載入中的章節（靜默）
+  final Set<int> _silentLoadingChapters = {};
+
+  /// 正在載入中的章節（主動，外部可查詢顯示 loading UI）
+  final Set<int> _activeLoadingChapters = {};
+
+  /// 預載完成通知
+  final StreamController<int> _onChapterReadyController =
+      StreamController<int>.broadcast();
+
+  /// 當前分頁設定
+  PaginationConfig? _config;
+
+  /// 是否已 dispose
+  bool _disposed = false;
+
+  /// 是否啟用整本書背景預載模式
+  bool _wholeBookPreloadEnabled = false;
+  bool _progressivePaginationEnabled = false;
+
+  ChapterContentManager({
+    required ChapterFetchFn fetchFn,
+    required List<BookChapter> chapters,
+  })  : _fetchFn = fetchFn,
+        _chapters = chapters;
+
+  // --- 公開 API ---
+
+  /// 預載完成通知 Stream
+  Stream<int> get onChapterReady => _onChapterReadyController.stream;
+
+  /// 是否有任何章節正在主動載入（用於顯示 loading UI）
+  bool get isLoading => _activeLoadingChapters.isNotEmpty;
+
+  /// 正在主動載入的章節集合
+  Set<int> get activeLoadingChapters => Set.unmodifiable(_activeLoadingChapters);
+
+  /// 正在靜默預載的章節集合
+  Set<int> get silentLoadingChapters => Set.unmodifiable(_silentLoadingChapters);
+
+  /// 是否啟用整本書預載
+  bool get wholeBookPreloadEnabled => _wholeBookPreloadEnabled;
+
+  /// 是否正在使用者互動中（例如 scroll drag）
+  bool get userInteractionActive => _userInteractionActive;
+
+  /// 取得分頁結果（快取優先，無快取時主動載入）
+  /// 這是「顯性」載入路徑——會加入 _activeLoadingChapters
+  Future<List<TextPage>> getChapterPages(int index) async {
+    if (index < 0 || index >= _chapters.length) return [];
+    if (_disposed) return [];
+
+    // 快取命中
+    final cached = _paginatedCache[index];
+    if (cached != null && cached.isNotEmpty) return cached;
+
+    // 任一載入流程已經保留了此章節：等待完成，避免主動/靜默雙重抓取
+    final existingLoad = _loadCompleters[index];
+    if (existingLoad != null) {
+      _activeLoadingChapters.add(index);
+      await existingLoad.future;
+      _activeLoadingChapters.remove(index);
+      if (_disposed) return [];
+      final loaded = _paginatedCache[index];
+      return (loaded != null && loaded.isNotEmpty) ? loaded : [];
+    }
+
+    // 正在靜默預載中：等待其完成
+    if (_silentLoadingChapters.contains(index)) {
+      final completer = _loadCompleters[index];
+      if (completer != null) {
+        _activeLoadingChapters.add(index);
+        await completer.future;
+        _activeLoadingChapters.remove(index);
+        if (_disposed) return [];
+        final result = _paginatedCache[index];
+        if (result != null && result.isNotEmpty) return result;
+      }
+    }
+
+    // 已在主動載入中：避免重複
+    if (_activeLoadingChapters.contains(index)) return [];
+
+    // 新鮮載入
+    _activeLoadingChapters.add(index);
+    try {
+      await _fetchAndPaginate(index);
+      if (_disposed) return [];
+      return _paginatedCache[index] ?? [];
+    } catch (e) {
+      debugPrint('ChapterContentManager: Load chapter $index failed: $e');
+      return [];
+    } finally {
+      _activeLoadingChapters.remove(index);
+    }
+  }
+
+  /// 非阻塞快取查詢
+  List<TextPage>? getCachedPages(int index) => _paginatedCache[index];
+
+  void seedPages(int index, List<TextPage> pages) {
+    if (_disposed || index < 0 || index >= _chapters.length || pages.isEmpty) {
+      return;
+    }
+    _paginatedCache[index] = pages;
+  }
+
+  /// 取得原始內容快取
+  String? getCachedContent(int index) => _contentCache[index];
+
+  /// 更新分頁設定並清除分頁快取（保留內容快取）
+  void updateConfig(PaginationConfig config) {
+    _config = config;
+    _paginatedCache.clear();
+  }
+
+  /// 更新章節列表
+  void updateChapters(List<BookChapter> chapters) {
+    _chapters = chapters;
+  }
+
+  void setUserInteractionActive(bool active) {
+    _userInteractionActive = active;
+    if (!active) {
+      _processPreloadQueue();
+    }
+  }
+
+  void setProgressivePaginationEnabled(bool enabled) {
+    _progressivePaginationEnabled = enabled;
+  }
+
+  /// 啟用整本書背景預載
+  ///
+  /// 目前設計為：
+  /// - display 仍然由外部決定如何組裝
+  /// - preload 則直接以全書為範圍，不再依賴局部 window 遞進
+  void enableWholeBookPreload({int? startIndex}) {
+    if (_chapters.isEmpty) return;
+    _wholeBookPreloadEnabled = true;
+    _targetWindow = {
+      for (int i = 0; i < _chapters.length; i++) i,
+    };
+    final center = (startIndex ?? 0).clamp(0, _chapters.length - 1).toInt();
+    debugPrint(
+      'ChapterContentManager: Whole-book preload enabled '
+      '(start: $center, chapters: ${_chapters.length})',
+    );
+    _startPreloading(center, preloadRadius: _chapters.length);
+  }
+
+  /// 更新預載視窗中心，觸發背景預載
+  void updateWindow(
+    int centerChapterIndex, {
+    int preloadRadius = 2,
+    bool preload = true,
+  }) {
+    if (_chapters.isEmpty) return;
+    if (_wholeBookPreloadEnabled) {
+      if (_targetWindow.length != _chapters.length) {
+        _targetWindow = {
+          for (int i = 0; i < _chapters.length; i++) i,
+        };
+      }
+      if (preload) {
+        _startPreloading(centerChapterIndex, preloadRadius: _chapters.length);
+      }
+      return;
+    }
+    final windowRadius = preloadRadius.clamp(0, _chapters.length).toInt();
+
+    // 遲滯邏輯：只有當前中心仍落在窗口中間時才不更新。
+    if (_targetWindow.isNotEmpty && _targetWindow.contains(centerChapterIndex)) {
+      final sorted = _targetWindow.toList()..sort();
+      final currentLeft = sorted.first;
+      final currentRight = sorted.last;
+      if (windowRadius > 1 &&
+          centerChapterIndex > currentLeft &&
+          centerChapterIndex < currentRight) {
+        return;
+      }
+    }
+
+    final newIndices = _buildWindow(centerChapterIndex, radius: windowRadius);
+
+    if (newIndices.length == _targetWindow.length &&
+        newIndices.every((i) => _targetWindow.contains(i))) {
+      return;
+    }
+
+    _targetWindow = newIndices;
+    evictOutsideWindow();
+    debugPrint('ChapterContentManager: Window updated to $_targetWindow (center: $centerChapterIndex)');
+
+    if (preload) {
+      _startPreloading(centerChapterIndex, preloadRadius: preloadRadius);
+    }
+  }
+
+  /// 取得目標視窗
+  Set<int> get targetWindow => Set.unmodifiable(_targetWindow);
+
+  /// 對目前視窗做額外暖機預載，不改變 targetWindow 本身
+  void warmupWindow(int centerChapterIndex, {int preloadRadius = 2}) {
+    if (_targetWindow.isEmpty) return;
+    if (_wholeBookPreloadEnabled) {
+      _startPreloading(centerChapterIndex, preloadRadius: _chapters.length);
+      return;
+    }
+    if (!_userInteractionActive) {
+      _priorityChapters.clear();
+    }
+    _startPreloading(centerChapterIndex, preloadRadius: preloadRadius);
+  }
+
+  void prioritizeChapter(int index, {int preloadRadius = 1}) {
+    if (_disposed || index < 0 || index >= _chapters.length) return;
+    if (!_wholeBookPreloadEnabled) {
+      _targetWindow = _buildWindow(index, radius: preloadRadius.clamp(0, _chapters.length).toInt());
+      evictOutsideWindow();
+    }
+    _priorityChapters
+      ..clear()
+      ..addAll(_buildWindow(index, radius: preloadRadius));
+
+    if (!_isPreloadingQueueActive) {
+      _preloadQueue.clear();
+    } else if (_preloadQueue.length > 1) {
+      _preloadQueue.removeRange(1, _preloadQueue.length);
+    }
+
+    final prioritized = _priorityChapters.toList()
+      ..sort((a, b) => (a - index).abs().compareTo((b - index).abs()));
+    for (final chapterIndex in prioritized.reversed) {
+      _preloadQueue.remove(chapterIndex);
+      _preloadQueue.insert(0, chapterIndex);
+    }
+
+    _startPreloading(index, preloadRadius: preloadRadius);
+  }
+
+  /// 驅逐視窗外的分頁快取，回傳被驅逐的章節索引
+  Set<int> evictOutsideWindow() {
+    if (_targetWindow.isEmpty || _wholeBookPreloadEnabled) return {};
+
+    final toEvict = <int>{};
+    for (final idx in _paginatedCache.keys.toList()) {
+      if (!_targetWindow.contains(idx)) {
+        toEvict.add(idx);
+      }
+    }
+
+    for (final idx in toEvict) {
+      _paginatedCache.remove(idx);
+    }
+
+    return toEvict;
+  }
+
+  /// 使用目前設定重新分頁指定章節（如果有內容快取）
+  Future<List<TextPage>> repaginate(int index) async {
+    final content = _contentCache[index];
+    if (content == null || _config == null || _disposed) return [];
+    if (index < 0 || index >= _chapters.length) return [];
+
+    final pages = await _doPaginate(index, content);
+    if (_disposed) return [];
+    _paginatedCache[index] = pages;
+    return pages;
+  }
+
+  /// 重新分頁所有有內容快取的章節
+  Future<void> repaginateAll() async {
+    if (_config == null || _disposed) return;
+
+    final indices = _contentCache.keys.toList();
+    for (final idx in indices) {
+      if (_disposed) return;
+      if (idx >= 0 && idx < _chapters.length) {
+        final pages = await _doPaginate(idx, _contentCache[idx]!);
+        if (_disposed) return;
+        _paginatedCache[idx] = pages;
+      }
+    }
+  }
+
+  /// 外部手動注入內容快取（用於 replaceChapterSource 等場景）
+  void putContent(int index, String content) {
+    _saveContentCache(index, content);
+    _paginatedCache.remove(index); // 內容變更，分頁作廢
+  }
+
+  void dispose() {
+    _disposed = true;
+    _onChapterReadyController.close();
+    _preloadQueue.clear();
+    _loadCompleters.clear();
+  }
+
+  // --- 內部邏輯 ---
+
+  Future<void> _fetchAndPaginate(int index) async {
+    final completer = Completer<void>();
+    _loadCompleters[index] = completer;
+
+    try {
+      final result = await _fetchFn(index);
+      if (_disposed) return;
+
+      _saveContentCache(index, result.content);
+      if (_progressivePaginationEnabled) {
+        await _doPaginateProgressive(index, result.content);
+      } else {
+        final pages = await _doPaginate(index, result.content);
+        if (_disposed) return;
+
+        if (pages.isNotEmpty) {
+          _paginatedCache[index] = pages;
+        } else {
+          _paginatedCache.remove(index);
+        }
+      }
+    } finally {
+      _loadCompleters.remove(index);
+      if (!completer.isCompleted) completer.complete();
+    }
+  }
+
+  Future<List<TextPage>> _doPaginate(int index, String content) async {
+    final config = _config;
+    if (config == null || config.viewSize.width <= 0 || config.viewSize.height <= 0) {
+      return [];
+    }
+    if (index < 0 || index >= _chapters.length) return [];
+
+    final cacheKey = _buildPaginatedCacheKey(
+      index: index,
+      content: content,
+      config: config,
+    );
+    final cacheManager = _tryGetCacheManager();
+    if (cacheManager != null) {
+      final persisted = await cacheManager.get(cacheKey);
+      if (persisted?.isNotEmpty ?? false) {
+        try {
+          final decoded = jsonDecode(persisted!) as List<dynamic>;
+          return decoded
+              .map((page) => TextPage.fromJson(Map<String, dynamic>.from(page as Map)))
+              .toList();
+        } catch (e) {
+          debugPrint('ChapterContentManager: Restore paginated cache failed for $index: $e');
+        }
+      }
+    }
+
+    final pages = await ReaderPerfTrace.measureAsync(
+      'paginate chapter $index',
+      () => ChapterProvider.paginate(
+        content: content,
+        chapter: _chapters[index],
+        chapterIndex: index,
+        chapterSize: _chapters.length,
+        viewSize: config.viewSize,
+        titleStyle: config.titleStyle,
+        contentStyle: config.contentStyle,
+        paragraphSpacing: config.paragraphSpacing,
+        textIndent: config.textIndent,
+        textFullJustify: config.textFullJustify,
+      ),
+    );
+
+    if (pages.isNotEmpty && cacheManager != null) {
+      final payload = jsonEncode(pages.map((page) => page.toJson()).toList());
+      unawaited(
+        cacheManager.put(
+          cacheKey,
+          payload,
+          saveTimeSeconds: 60 * 60 * 24 * 30,
+        ),
+      );
+    }
+
+    return pages;
+  }
+
+  Future<void> repaginateWindow(Iterable<int> chapterIndexes) async {
+    if (_config == null || _disposed) return;
+
+    final ordered = chapterIndexes
+        .where((idx) => idx >= 0 && idx < _chapters.length)
+        .toSet()
+        .toList()
+      ..sort();
+    for (final idx in ordered) {
+      if (_disposed) return;
+      final content = _contentCache[idx];
+      if (content == null) continue;
+      final pages = await _doPaginate(idx, content);
+      if (_disposed) return;
+      if (pages.isNotEmpty) {
+        _paginatedCache[idx] = pages;
+      } else {
+        _paginatedCache.remove(idx);
+      }
+    }
+  }
+
+  String _buildPaginatedCacheKey({
+    required int index,
+    required String content,
+    required PaginationConfig config,
+  }) {
+    final chapter = _chapters[index];
+    final contentHash = sha1.convert(utf8.encode(content)).toString();
+    final configHash = sha1.convert(utf8.encode(jsonEncode({
+      'viewWidth': config.viewSize.width,
+      'viewHeight': config.viewSize.height,
+      'titleFontSize': config.titleStyle.fontSize,
+      'titleHeight': config.titleStyle.height,
+      'titleLetterSpacing': config.titleStyle.letterSpacing,
+      'contentFontSize': config.contentStyle.fontSize,
+      'contentHeight': config.contentStyle.height,
+      'contentLetterSpacing': config.contentStyle.letterSpacing,
+      'paragraphSpacing': config.paragraphSpacing,
+      'textIndent': config.textIndent,
+      'textFullJustify': config.textFullJustify,
+      'padding': config.padding,
+      'chapterSize': _chapters.length,
+      'chapterTitle': chapter.title,
+    }))).toString();
+    final digest = sha1.convert(utf8.encode([
+      chapter.bookUrl,
+      chapter.url,
+      index.toString(),
+      configHash,
+      contentHash,
+    ].join('|'))).toString();
+    return 'reader_paginated_v2_$digest';
+  }
+
+  CacheManager? _tryGetCacheManager() {
+    try {
+      return CacheManager();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _saveContentCache(int index, String content) {
+    _contentCache[index] = content;
+    if (_wholeBookPreloadEnabled) {
+      return;
+    }
+    if (_contentCache.length > _maxContentCacheSize) {
+      // 找距離目標視窗中心最遠的章節驅逐（排除正在存入的）
+      final center = _targetWindow.isEmpty
+          ? index
+          : (_targetWindow.reduce((a, b) => a + b) ~/ _targetWindow.length);
+      final candidates = _contentCache.keys.where((k) => k != index);
+      if (candidates.isNotEmpty) {
+        final farthest = candidates.reduce((a, b) =>
+            (a - center).abs() > (b - center).abs() ? a : b);
+        _contentCache.remove(farthest);
+      }
+    }
+  }
+
+  void _startPreloading(int centerChapterIndex, {int preloadRadius = 2}) {
+    // 一般模式保留目前執行中的第一項，替換 pending 部分；
+    // 整本書模式則保留整條 queue，直到全書吃完。
+    if (!_isPreloadingQueueActive) {
+      _preloadQueue.clear();
+    } else if (!_wholeBookPreloadEnabled && _preloadQueue.length > 1) {
+      _preloadQueue.removeRange(1, _preloadQueue.length);
+    }
+
+    final List<int> candidates = [];
+    final Iterable<int> preloadScope = _wholeBookPreloadEnabled
+        ? Iterable<int>.generate(_chapters.length)
+        : _targetWindow;
+    for (final idx in preloadScope) {
+      if (!_paginatedCache.containsKey(idx) &&
+          !_activeLoadingChapters.contains(idx) &&
+          !_silentLoadingChapters.contains(idx)) {
+        candidates.add(idx);
+      }
+    }
+
+    // 依距離中心從近到遠排序
+    candidates.sort((a, b) =>
+        (a - centerChapterIndex).abs().compareTo((b - centerChapterIndex).abs()));
+
+    for (final c in candidates) {
+      if ((_wholeBookPreloadEnabled ||
+              (c - centerChapterIndex).abs() <= preloadRadius) &&
+          !_preloadQueue.contains(c)) {
+        _preloadQueue.add(c);
+      }
+    }
+
+    if (_priorityChapters.isNotEmpty) {
+      final prioritized = _priorityChapters.toList()
+        ..sort((a, b) => (a - centerChapterIndex).abs().compareTo((b - centerChapterIndex).abs()));
+      for (final chapterIndex in prioritized.reversed) {
+        final existingIndex = _preloadQueue.indexOf(chapterIndex);
+        if (existingIndex > 0) {
+          _preloadQueue.removeAt(existingIndex);
+          _preloadQueue.insert(0, chapterIndex);
+        }
+      }
+    }
+
+    _processPreloadQueue();
+  }
+
+  Future<void> _processPreloadQueue() async {
+    if (_isPreloadingQueueActive || _preloadQueue.isEmpty) return;
+    _isPreloadingQueueActive = true;
+
+    while (_preloadQueue.isNotEmpty) {
+      if (_disposed) break;
+      if (_userInteractionActive &&
+          _priorityChapters.isNotEmpty &&
+          !_priorityChapters.contains(_preloadQueue.first)) {
+        break;
+      }
+      final target = _preloadQueue.removeAt(0);
+
+      if (_paginatedCache.containsKey(target) ||
+          _activeLoadingChapters.contains(target)) {
+        continue;
+      }
+
+      if (_silentLoadingChapters.contains(target) ||
+          _loadCompleters.containsKey(target)) {
+        continue;
+      }
+
+      _silentLoadingChapters.add(target);
+      final completer = Completer<void>();
+      _loadCompleters[target] = completer;
+      await _preloadChapterSilently(target, completer);
+    }
+
+    _isPreloadingQueueActive = false;
+    if (!_disposed && !_userInteractionActive && _preloadQueue.isNotEmpty) {
+      _processPreloadQueue();
+    }
+  }
+
+  Future<void> _preloadChapterSilently(int index, Completer<void> completer) async {
+    if (index < 0 || index >= _chapters.length) return;
+    if (_activeLoadingChapters.contains(index) ||
+        _paginatedCache.containsKey(index)) {
+      return;
+    }
+
+    try {
+      final result = await _fetchFn(index);
+      if (_disposed) return;
+
+      _saveContentCache(index, result.content);
+      if (_progressivePaginationEnabled) {
+        await _doPaginateProgressive(index, result.content);
+      } else {
+        final pages = await _doPaginate(index, result.content);
+        if (_disposed) return;
+
+        if (pages.isNotEmpty) {
+          _paginatedCache[index] = pages;
+        } else {
+          _paginatedCache.remove(index);
+        }
+
+        // 通知外部：新章節已就緒
+        if (!_disposed && pages.isNotEmpty) {
+          _onChapterReadyController.add(index);
+        }
+      }
+    } catch (e) {
+      debugPrint('ChapterContentManager: Preload chapter $index failed: $e');
+    } finally {
+      _silentLoadingChapters.remove(index);
+      _loadCompleters.remove(index);
+      if (!completer.isCompleted) completer.complete();
+    }
+  }
+
+  Future<void> _doPaginateProgressive(int index, String content) async {
+    final config = _config;
+    if (config == null || config.viewSize.width <= 0 || config.viewSize.height <= 0) {
+      return;
+    }
+    if (index < 0 || index >= _chapters.length) return;
+
+    final cacheKey = _buildPaginatedCacheKey(
+      index: index,
+      content: content,
+      config: config,
+    );
+    final cacheManager = _tryGetCacheManager();
+    if (cacheManager != null) {
+      final persisted = await cacheManager.get(cacheKey);
+      if (persisted?.isNotEmpty ?? false) {
+        try {
+          final decoded = jsonDecode(persisted!) as List<dynamic>;
+          final restored = decoded
+              .map((page) => TextPage.fromJson(Map<String, dynamic>.from(page as Map)))
+              .toList();
+          if (restored.isNotEmpty) {
+            _paginatedCache[index] = restored;
+            _onChapterReadyController.add(index);
+            return;
+          }
+        } catch (e) {
+          debugPrint('ChapterContentManager: Restore paginated cache failed for $index: $e');
+        }
+      }
+    }
+
+    final chapter = _chapters[index];
+    List<TextPage> latestPages = const <TextPage>[];
+    await for (final pages in ChapterProvider.paginateProgressive(
+      content: content,
+      chapter: chapter,
+      chapterIndex: index,
+      chapterSize: _chapters.length,
+      viewSize: config.viewSize,
+      titleStyle: config.titleStyle,
+      contentStyle: config.contentStyle,
+      paragraphSpacing: config.paragraphSpacing,
+      textIndent: config.textIndent,
+      textFullJustify: config.textFullJustify,
+    )) {
+      if (_disposed) return;
+      latestPages = pages;
+      if (pages.isNotEmpty) {
+        _paginatedCache[index] = pages;
+        _onChapterReadyController.add(index);
+      }
+      await Future.delayed(Duration.zero);
+    }
+
+    if (latestPages.isEmpty) {
+      _paginatedCache.remove(index);
+      return;
+    }
+
+    if (cacheManager != null) {
+      final payload =
+          jsonEncode(latestPages.map((page) => page.toJson()).toList());
+      unawaited(
+        cacheManager.put(
+          cacheKey,
+          payload,
+          saveTimeSeconds: 60 * 60 * 24 * 30,
+        ),
+      );
+    }
+  }
+
+  Set<int> _buildWindow(int centerChapterIndex, {int radius = 2}) {
+    if (_chapters.isEmpty) return {};
+    final safeCenter = centerChapterIndex.clamp(0, _chapters.length - 1).toInt();
+    final start = (safeCenter - radius).clamp(0, _chapters.length - 1).toInt();
+    final end = (safeCenter + radius).clamp(0, _chapters.length - 1).toInt();
+    return {
+      for (int i = start; i <= end; i++) i,
+    };
+  }
+}

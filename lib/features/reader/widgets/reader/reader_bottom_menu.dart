@@ -78,7 +78,7 @@ class ReaderBottomMenu extends StatelessWidget {
     final maxVal = (chapterCount <= 1 ? 0 : chapterCount - 1).toDouble();
     final displayIndex = provider.isScrubbing ? provider.scrubIndex : provider.currentChapterIndex;
     final displayTitle = (chapterCount > 0 && displayIndex < chapterCount)
-        ? provider.chapters[displayIndex].title
+        ? provider.displayChapterTitleAt(displayIndex)
         : '';
 
     return Padding(

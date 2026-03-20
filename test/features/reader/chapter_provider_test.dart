@@ -15,11 +15,11 @@ void main() {
   const testStyle = TextStyle(fontSize: 16, height: 1.5);
 
   group('ChapterProvider.paginate() - chapterPosition 計算', () {
-    test('縮排段落的 chapterPosition 與無縮排相同（縮排字元不計入偏移）', () {
+    test('縮排段落的 chapterPosition 與無縮排相同（縮排字元不計入偏移）', () async {
       final chapter = makeChapter(title: 'T'); // 1 char
       const content = 'ABC\nDEF';
 
-      final pagesNoIndent = ChapterProvider.paginate(
+      final pagesNoIndent = await ChapterProvider.paginate(
         content: content,
         chapter: chapter,
         chapterIndex: 0,
@@ -30,7 +30,7 @@ void main() {
         textIndent: 0,
       );
 
-      final pagesWithIndent = ChapterProvider.paginate(
+      final pagesWithIndent = await ChapterProvider.paginate(
         content: content,
         chapter: chapter,
         chapterIndex: 0,
@@ -64,11 +64,11 @@ void main() {
       }
     });
 
-    test('第一段落第一行 chapterPosition = 標題長度', () {
+    test('第一段落第一行 chapterPosition = 標題長度', () async {
       const title = 'AB'; // 2 chars
       final chapter = makeChapter(title: title);
 
-      final pages = ChapterProvider.paginate(
+      final pages = await ChapterProvider.paginate(
         content: 'Hello',
         chapter: chapter,
         chapterIndex: 0,
@@ -87,7 +87,7 @@ void main() {
       expect(firstContentLine.chapterPosition, title.length);
     });
 
-    test('空段落使 chapterPos 增加 1', () {
+    test('空段落使 chapterPos 增加 1', () async {
       // content = "A\n\nB" → paragraphs: ["A", "", "B"]
       // 空標題（0 chars）
       // 段落 "A"：chapterPosition=0，結束後 chapterPos = 1（A）+ 1（newline）= 2
@@ -95,7 +95,7 @@ void main() {
       // 段落 "B"：chapterPosition = 3
       final chapter = makeChapter(title: '');
 
-      final pages = ChapterProvider.paginate(
+      final pages = await ChapterProvider.paginate(
         content: 'A\n\nB',
         chapter: chapter,
         chapterIndex: 0,
@@ -117,11 +117,11 @@ void main() {
       expect(contentLines[1].chapterPosition, 3, reason: '"B" 起始於位置 3（跨越空段落）');
     });
 
-    test('多段落 chapterPosition 嚴格遞增', () {
+    test('多段落 chapterPosition 嚴格遞增', () async {
       final chapter = makeChapter(title: '標題'); // 2 chars
       const content = '第一段文字\n第二段文字\n第三段文字';
 
-      final pages = ChapterProvider.paginate(
+      final pages = await ChapterProvider.paginate(
         content: content,
         chapter: chapter,
         chapterIndex: 0,
@@ -144,14 +144,14 @@ void main() {
       }
     });
 
-    test('無縮排：各段落首行 chapterPosition 正確對應原始偏移', () {
+    test('無縮排：各段落首行 chapterPosition 正確對應原始偏移', () async {
       // title="" (0), content="ABC\nDE\nF"
       // 段落 "ABC"：chapterPosition=0，長度=3，newline=1 → 下一段起始=4
       // 段落 "DE" ：chapterPosition=4，長度=2，newline=1 → 下一段起始=7
       // 段落 "F"  ：chapterPosition=7
       final chapter = makeChapter(title: '');
 
-      final pages = ChapterProvider.paginate(
+      final pages = await ChapterProvider.paginate(
         content: 'ABC\nDE\nF',
         chapter: chapter,
         chapterIndex: 0,
@@ -194,11 +194,11 @@ void main() {
       );
     });
 
-    test('縮排段落分行後每行文字長度不為 0', () {
+    test('縮排段落分行後每行文字長度不為 0', () async {
       final chapter = makeChapter(title: '');
       final content = '這是一段較長的文字，用來測試分行是否正常工作，不會因為避頭尾邏輯而產生空行。' * 5;
 
-      final pages = ChapterProvider.paginate(
+      final pages = await ChapterProvider.paginate(
         content: content,
         chapter: chapter,
         chapterIndex: 0,
@@ -245,10 +245,10 @@ void main() {
   });
 
   group('ChapterProvider.paginate() - 基本健全性', () {
-    test('空內容應回傳至少一頁（標題頁）', () {
+    test('空內容應回傳至少一頁（標題頁）', () async {
       final chapter = makeChapter(title: '第一章');
 
-      final pages = ChapterProvider.paginate(
+      final pages = await ChapterProvider.paginate(
         content: '',
         chapter: chapter,
         chapterIndex: 0,
@@ -261,12 +261,12 @@ void main() {
       expect(pages, isNotEmpty, reason: '即使內容為空，標題仍應產生至少一頁');
     });
 
-    test('pageSize 正確設定為總頁數', () {
+    test('pageSize 正確設定為總頁數', () async {
       final chapter = makeChapter(title: '');
       // Long content to ensure multiple pages
       final content = 'A' * 500;
 
-      final pages = ChapterProvider.paginate(
+      final pages = await ChapterProvider.paginate(
         content: content,
         chapter: chapter,
         chapterIndex: 0,
@@ -281,6 +281,55 @@ void main() {
         expect(page.pageSize, pages.length,
             reason: '每頁的 pageSize 應等於總頁數');
       }
+    });
+
+    test('多頁結果的 index 會從 0 連續遞增', () async {
+      final chapter = makeChapter(title: '第一章');
+      final content = '這是一段用來測試多頁 index 是否連續遞增的內容。' * 80;
+
+      final pages = await ChapterProvider.paginate(
+        content: content,
+        chapter: chapter,
+        chapterIndex: 2,
+        chapterSize: 9,
+        viewSize: const Size(120, 180),
+        titleStyle: testStyle,
+        contentStyle: testStyle,
+      );
+
+      expect(pages.length, greaterThan(1));
+      for (int i = 0; i < pages.length; i++) {
+        expect(pages[i].index, i);
+        expect(pages[i].chapterIndex, 2);
+        expect(pages[i].chapterSize, 9);
+      }
+    });
+
+    test('極小可用高度時仍能保留標題與內容順序', () async {
+      final chapter = makeChapter(title: '章節標題');
+
+      final pages = await ChapterProvider.paginate(
+        content: '第一段內容\n第二段內容',
+        chapter: chapter,
+        chapterIndex: 0,
+        chapterSize: 1,
+        viewSize: const Size(260, 140),
+        titleStyle: testStyle,
+        contentStyle: testStyle,
+      );
+
+      final allLines = pages.expand((p) => p.lines).toList();
+      expect(allLines, isNotEmpty);
+      expect(allLines.first.isTitle, isTrue);
+      expect(allLines.where((l) => !l.isTitle), isNotEmpty);
+
+      final firstContentIndex = allLines.indexWhere((l) => !l.isTitle);
+      expect(firstContentIndex, greaterThan(0));
+      expect(
+        allLines.take(firstContentIndex).every((l) => l.isTitle),
+        isTrue,
+        reason: '內容行之前應只出現標題行',
+      );
     });
   });
 }

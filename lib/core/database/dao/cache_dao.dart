@@ -7,7 +7,7 @@ part 'cache_dao.g.dart';
 
 @DriftAccessor(tables: [CacheTable])
 class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
-  CacheDao(AppDatabase db) : super(db);
+  CacheDao(super.db);
 
   Future<Cache?> get(String key) {
     return (select(cacheTable)..where((t) => t.key.equals(key))).getSingleOrNull();

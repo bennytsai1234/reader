@@ -7,7 +7,7 @@ part 'txt_toc_rule_dao.g.dart';
 
 @DriftAccessor(tables: [TxtTocRules])
 class TxtTocRuleDao extends DatabaseAccessor<AppDatabase> with _$TxtTocRuleDaoMixin {
-  TxtTocRuleDao(AppDatabase db) : super(db);
+  TxtTocRuleDao(super.db);
 
   Future<List<TxtTocRule>> getAll() {
     return (select(txtTocRules)..orderBy([(t) => OrderingTerm(expression: t.serialNumber)])).get();

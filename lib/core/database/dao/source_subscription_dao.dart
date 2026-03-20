@@ -7,7 +7,7 @@ part 'source_subscription_dao.g.dart';
 
 @DriftAccessor(tables: [SourceSubscriptions])
 class SourceSubscriptionDao extends DatabaseAccessor<AppDatabase> with _$SourceSubscriptionDaoMixin {
-  SourceSubscriptionDao(AppDatabase db) : super(db);
+  SourceSubscriptionDao(super.db);
 
   Future<List<SourceSubscription>> getAll() {
     return (select(sourceSubscriptions)..orderBy([(t) => OrderingTerm(expression: t.order)])).get();

@@ -7,7 +7,7 @@ part 'http_tts_dao.g.dart';
 
 @DriftAccessor(tables: [HttpTtsTable])
 class HttpTtsDao extends DatabaseAccessor<AppDatabase> with _$HttpTtsDaoMixin {
-  HttpTtsDao(AppDatabase db) : super(db);
+  HttpTtsDao(super.db);
 
   Future<List<HttpTTS>> getAll() => select(httpTtsTable).get();
 

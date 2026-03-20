@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'settings_provider.dart';
-import 'http_tts_manager_page.dart';
 
 class AloudSettingsPage extends StatelessWidget {
   const AloudSettingsPage({super.key});
@@ -88,19 +87,6 @@ class AloudSettingsPage extends StatelessWidget {
                 subtitle: const Text('部分引擎合成語音可能較慢，可切換此項測試'),
                 value: settings.streamReadAloudAudio,
                 onChanged: (v) => settings.setStreamReadAloudAudio(v),
-              ),
-              
-              _buildSectionTitle('引擎管理'),
-              ListTile(
-                title: const Text('發音引擎'),
-                subtitle: const Text('自定義 HTTP TTS 或 系統 TTS'),
-                leading: const Icon(Icons.record_voice_over),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const HttpTtsManagerPage()),
-                  );
-                },
               ),
               ListTile(
                 title: const Text('系統 TTS 設定'),

@@ -7,7 +7,7 @@ part 'dict_rule_dao.g.dart';
 
 @DriftAccessor(tables: [DictRules])
 class DictRuleDao extends DatabaseAccessor<AppDatabase> with _$DictRuleDaoMixin {
-  DictRuleDao(AppDatabase db) : super(db);
+  DictRuleDao(super.db);
 
   Future<List<DictRule>> getAll() {
     return (select(dictRules)..orderBy([(t) => OrderingTerm(expression: t.sortNumber)])).get();

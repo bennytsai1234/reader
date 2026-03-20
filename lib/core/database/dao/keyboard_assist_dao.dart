@@ -7,7 +7,7 @@ part 'keyboard_assist_dao.g.dart';
 
 @DriftAccessor(tables: [KeyboardAssists])
 class KeyboardAssistDao extends DatabaseAccessor<AppDatabase> with _$KeyboardAssistDaoMixin {
-  KeyboardAssistDao(AppDatabase db) : super(db);
+  KeyboardAssistDao(super.db);
 
   Future<List<KeyboardAssist>> getAll() {
     return (select(keyboardAssists)..orderBy([(t) => OrderingTerm(expression: t.serialNo)])).get();

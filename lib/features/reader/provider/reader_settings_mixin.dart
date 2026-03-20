@@ -1,3 +1,4 @@
+import 'dart:ui' show VoidCallback;
 import 'package:legado_reader/core/config/app_config.dart';
 import 'package:legado_reader/core/services/tts_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,7 +15,11 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
   int themeIndex = 0;
   double brightness = 1.0;
   int chineseConvert = 0;
-  int pageTurnMode = 1; // 預設平移（PageAnim.slide=1），避免首次安裝顯示已移除的 cover 模式
+  int pageTurnMode = 1; // 預設平移（PageAnim.slide=1）
+
+  /// 設定變更時的回調，由 ReaderProvider 注入
+  /// 觸發分頁快取清除 + 重新分頁
+  VoidCallback? onSettingsChangedRepaginate;
 
   Future<void> loadSettings() async {
     final p = await SharedPreferences.getInstance();
@@ -25,14 +30,13 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
     themeIndex = p.getInt('reader_theme_index') ?? 0;
     brightness = p.getDouble('reader_brightness') ?? 0.5;
     pageTurnMode = p.getInt('reader_page_turn_mode') ?? 1;
-    AppConfig.readerPageAnim = pageTurnMode; // 同步至 AppConfig
+    AppConfig.readerPageAnim = pageTurnMode;
     chineseConvert = p.getInt('reader_chinese_convert_v2') ?? 0;
-    
-    // 加載 TTS 偏好
+
     final ttsRate = p.getDouble('reader_tts_rate') ?? 0.5;
     final ttsPitch = p.getDouble('reader_tts_pitch') ?? 1.0;
     final ttsLang = p.getString('reader_tts_language');
-    
+
     TTSService().setRate(ttsRate);
     TTSService().setPitch(ttsPitch);
     if (ttsLang != null) TTSService().setLanguage(ttsLang);
@@ -56,17 +60,13 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
     }
   }
 
-  void setFontSize(double s) { fontSize = s; saveSetting('font_size', s); chapterCache.clear(); (this as dynamic).doPaginate(); }
-  void setLineHeight(double v) { lineHeight = v; saveSetting('line_height', v); chapterCache.clear(); (this as dynamic).doPaginate(); }
-  void setParagraphSpacing(double v) { paragraphSpacing = v; saveSetting('paragraph_spacing', v); chapterCache.clear(); (this as dynamic).doPaginate(); }
-  void setLetterSpacing(double v) { letterSpacing = v; saveSetting('letter_spacing', v); chapterCache.clear(); (this as dynamic).doPaginate(); }
-  void setTextFullJustify(bool v) { textFullJustify = v; saveSetting('text_full_justify', v); chapterCache.clear(); (this as dynamic).doPaginate(); }
-  void setTextIndent(int v) { textIndent = v; saveSetting('text_indent', v); chapterCache.clear(); (this as dynamic).doPaginate(); }
+  void setFontSize(double s) { fontSize = s; saveSetting('font_size', s); onSettingsChangedRepaginate?.call(); }
+  void setLineHeight(double v) { lineHeight = v; saveSetting('line_height', v); onSettingsChangedRepaginate?.call(); }
+  void setParagraphSpacing(double v) { paragraphSpacing = v; saveSetting('paragraph_spacing', v); onSettingsChangedRepaginate?.call(); }
+  void setLetterSpacing(double v) { letterSpacing = v; saveSetting('letter_spacing', v); onSettingsChangedRepaginate?.call(); }
+  void setTextFullJustify(bool v) { textFullJustify = v; saveSetting('text_full_justify', v); onSettingsChangedRepaginate?.call(); }
+  void setTextIndent(int v) { textIndent = v; saveSetting('text_indent', v); onSettingsChangedRepaginate?.call(); }
   void setPageTurnMode(int v) { pageTurnMode = v; AppConfig.readerPageAnim = v; saveSetting('page_turn_mode', v); notifyListeners(); }
-  void setTheme(int i) { themeIndex = i; saveSetting('theme_index', i); chapterCache.clear(); (this as dynamic).doPaginate(); }
+  void setTheme(int i) { themeIndex = i; saveSetting('theme_index', i); onSettingsChangedRepaginate?.call(); }
   void setBrightness(double v) { brightness = v; saveSetting('brightness', v); notifyListeners(); }
-
-  /// 完整快取清除（用於需要重新獲取內容的場景，如繁簡轉換變更）
-  void clearReaderCache() { chapterCache.clear(); chapterContentCache.clear(); }
 }
-

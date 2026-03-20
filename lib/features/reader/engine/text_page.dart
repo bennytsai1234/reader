@@ -13,6 +13,26 @@ class TextImage {
     this.left = 0,
     this.top = 0,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'url': url,
+      'width': width,
+      'height': height,
+      'left': left,
+      'top': top,
+    };
+  }
+
+  factory TextImage.fromJson(Map<String, dynamic> json) {
+    return TextImage(
+      url: json['url'] ?? '',
+      width: (json['width'] ?? 0).toDouble(),
+      height: (json['height'] ?? 0).toDouble(),
+      left: (json['left'] ?? 0).toDouble(),
+      top: (json['top'] ?? 0).toDouble(),
+    );
+  }
 }
 
 /// TextLine - 單行文字資訊
@@ -45,6 +65,42 @@ class TextLine {
     this.paragraphNum = 0,
     this.image,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'text': text,
+      'width': width,
+      'height': height,
+      'isTitle': isTitle,
+      'isParagraphStart': isParagraphStart,
+      'isParagraphEnd': isParagraphEnd,
+      'shouldJustify': shouldJustify,
+      'chapterPosition': chapterPosition,
+      'lineTop': lineTop,
+      'lineBottom': lineBottom,
+      'paragraphNum': paragraphNum,
+      'image': image?.toJson(),
+    };
+  }
+
+  factory TextLine.fromJson(Map<String, dynamic> json) {
+    return TextLine(
+      text: json['text'] ?? '',
+      width: (json['width'] ?? 0).toDouble(),
+      height: (json['height'] ?? 0).toDouble(),
+      isTitle: json['isTitle'] ?? false,
+      isParagraphStart: json['isParagraphStart'] ?? false,
+      isParagraphEnd: json['isParagraphEnd'] ?? false,
+      shouldJustify: json['shouldJustify'] ?? false,
+      chapterPosition: json['chapterPosition'] ?? 0,
+      lineTop: (json['lineTop'] ?? 0).toDouble(),
+      lineBottom: (json['lineBottom'] ?? 0).toDouble(),
+      paragraphNum: json['paragraphNum'] ?? 0,
+      image: json['image'] is Map<String, dynamic>
+          ? TextImage.fromJson(json['image'])
+          : (json['image'] is Map ? TextImage.fromJson(Map<String, dynamic>.from(json['image'])) : null),
+    );
+  }
 }
 
 /// TextPage - 單頁文字資訊
@@ -100,6 +156,31 @@ class TextPage {
       chapterIndex: chapterIndex ?? this.chapterIndex,
       chapterSize: chapterSize ?? this.chapterSize,
       pageSize: pageSize ?? this.pageSize,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'index': index,
+      'title': title,
+      'chapterIndex': chapterIndex,
+      'chapterSize': chapterSize,
+      'pageSize': pageSize,
+      'lines': lines.map((line) => line.toJson()).toList(),
+    };
+  }
+
+  factory TextPage.fromJson(Map<String, dynamic> json) {
+    final rawLines = json['lines'] as List? ?? const [];
+    return TextPage(
+      index: json['index'] ?? 0,
+      title: json['title'] ?? '',
+      chapterIndex: json['chapterIndex'] ?? 0,
+      chapterSize: json['chapterSize'] ?? 0,
+      pageSize: json['pageSize'] ?? 0,
+      lines: rawLines
+          .map((line) => TextLine.fromJson(Map<String, dynamic>.from(line as Map)))
+          .toList(),
     );
   }
 }

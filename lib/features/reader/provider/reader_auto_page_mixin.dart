@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:legado_reader/core/constant/page_anim.dart';
 import 'package:legado_reader/core/services/tts_service.dart';
 import 'reader_provider_base.dart';
@@ -15,6 +16,9 @@ mixin ReaderAutoPageMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderCont
   bool _isAutoPagePaused = false;
 
   bool get isAutoPagePaused => _isAutoPagePaused;
+  double scrollDeltaPerFrame(Size viewSize, double dtSeconds) {
+    return (viewSize.height / autoPageSpeed.clamp(1.0, 600.0)) * dtSeconds;
+  }
 
   void toggleAutoPage() {
     isAutoPaging = !isAutoPaging;
@@ -65,10 +69,12 @@ mixin ReaderAutoPageMixin on ReaderProviderBase, ReaderSettingsMixin, ReaderCont
           nextPage();
         }
       } else {
-        // 捲動模式由 ReaderViewBuilder 根據 isAutoPaging 狀態自行處理像素累加
-        // 這裡僅更新進度條（假設一頁高度為基準）
-        final double delta = 0.016 / autoPageSpeed.clamp(1.0, 600.0);
-        autoPageProgressNotifier.value = (autoPageProgressNotifier.value + delta) % 1.0;
+        final viewSize = this.viewSize;
+        if (viewSize == null) return;
+        final deltaPixels = scrollDeltaPerFrame(viewSize, 0.016);
+        final pageBasis = viewSize.height <= 0 ? 1.0 : viewSize.height;
+        autoPageProgressNotifier.value =
+            ((autoPageProgressNotifier.value * pageBasis) + deltaPixels) % pageBasis / pageBasis;
       }
     });
   }

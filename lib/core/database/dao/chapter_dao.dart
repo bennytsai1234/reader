@@ -7,7 +7,7 @@ part 'chapter_dao.g.dart';
 
 @DriftAccessor(tables: [Chapters])
 class ChapterDao extends DatabaseAccessor<AppDatabase> with _$ChapterDaoMixin {
-  ChapterDao(AppDatabase db) : super(db);
+  ChapterDao(super.db);
 
   Future<List<BookChapter>> getByBook(String bookUrl) {
     return (select(chapters)

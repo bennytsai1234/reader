@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -14,9 +13,10 @@ import 'widgets/reader/reader_bottom_menu.dart';
 import 'widgets/reader_brightness_bar.dart';
 import 'widgets/reader_chapters_drawer.dart';
 import 'widgets/reader_settings_sheets.dart';
-import 'widgets/reader_view_builder.dart';
+import 'view/read_view_runtime.dart';
 import 'tts_dialog.dart';
 import 'auto_read_dialog.dart';
+import 'package:legado_reader/core/constant/page_anim.dart';
 
 class ReaderPage extends StatefulWidget {
   final Book book;
@@ -29,35 +29,15 @@ class ReaderPage extends StatefulWidget {
 class _ReaderPageState extends State<ReaderPage> {
   late PageController _pageCtrl;
   final GlobalKey<ScaffoldState> _key = GlobalKey<ScaffoldState>();
-  StreamSubscription? _jumpSub;
-  bool _lastShowControls = false; // 追蹤上一次狀態，避免重複呼叫 SystemChrome
 
   @override
   void initState() {
     super.initState();
-    // chapterPos 現在儲存字元偏移量，不再代表頁碼
-    // 實際頁面跳轉由 _jumpSub 監聽 jumpPageStream 處理（_init 完成後觸發）
     _pageCtrl = PageController(initialPage: 0);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<ReaderProvider>();
-      _jumpSub = provider.jumpPageStream.listen((p) {
-        if (!mounted) return;
-        final target = p;
-        if (_pageCtrl.hasClients && _pageCtrl.page?.round() != target) {
-          _pageCtrl.jumpToPage(target);
-        }
-      });
-    });
   }
 
-  @override void dispose() { _jumpSub?.cancel(); _pageCtrl.dispose(); super.dispose(); }
-
-  void _updateUI(bool show) {
-    if (show == _lastShowControls) return; // 狀態未變，跳過平台通道呼叫
-    _lastShowControls = show;
-    SystemChrome.setEnabledSystemUIMode(show ? SystemUiMode.edgeToEdge : SystemUiMode.immersiveSticky);
-  }
+  @override void dispose() { _pageCtrl.dispose(); super.dispose(); }
 
   void _handleTap(Offset pos, Size size, ReaderProvider p) {
     final x = pos.dx, y = pos.dy, w = size.width, h = size.height;
@@ -84,7 +64,15 @@ class _ReaderPageState extends State<ReaderPage> {
     return Scaffold(
       key: _key,
       body: Consumer<ReaderProvider>(builder: (context, p, _) {
-        _updateUI(p.showControls);
+        final pendingJump = p.consumePendingJump();
+        if (pendingJump != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !_pageCtrl.hasClients) return;
+            if (_pageCtrl.page?.round() != pendingJump) {
+              _pageCtrl.jumpToPage(pendingJump);
+            }
+          });
+        }
         return Container(
           color: p.currentTheme.backgroundColor,
           child: Stack(children: [
@@ -106,8 +94,11 @@ class _ReaderPageState extends State<ReaderPage> {
                 ),
               ),
 
-            ReaderViewBuilder(provider: p, pageController: _pageCtrl),
-            if (p.pages.isNotEmpty && !p.isLoading) _buildPermanentInfo(p),
+            ReadViewRuntime(provider: p, pageController: _pageCtrl),
+            if (((p.pageTurnMode == PageAnim.scroll && p.chapterPagesCache.isNotEmpty) ||
+                    (p.pageTurnMode != PageAnim.scroll && p.slidePages.isNotEmpty)) &&
+                !p.isLoading)
+              _buildPermanentInfo(p),
             Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.translucent, onTapUp: (d) => p.showControls ? p.toggleControls() : _handleTap(d.localPosition, MediaQuery.of(context).size, p))),
             IgnorePointer(child: Container(color: Colors.black.withValues(alpha: (1.0 - p.brightness).clamp(0.0, 0.8)))),
             ReaderTopMenu(provider: p, onMore: () => _showMore(context)),
@@ -120,10 +111,7 @@ class _ReaderPageState extends State<ReaderPage> {
               onSettings: () => ReaderSettingsSheets.showMoreSettings(context, p),
               onAutoPage: () async {
                 if (!p.isAutoPaging) p.toggleAutoPage();
-                // 對話框開啟期間暫停自動翻頁，關閉後恢復（對標 Android onMenuShow）
-                p.pauseAutoPage();
                 await AutoReadDialog.show(context);
-                if (p.isAutoPaging) p.resumeAutoPage();
               },
               onToggleDayNight: () => p.setTheme(p.themeIndex == 1 ? 0 : 1),
               onSearch: () {
@@ -150,7 +138,12 @@ class _ReaderPageState extends State<ReaderPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(child: Text(p.book.name, style: TextStyle(color: p.currentTheme.textColor.withValues(alpha: 0.4), fontSize: 10), overflow: TextOverflow.ellipsis)),
-              Text('${p.currentPageIndex + 1}/${p.pages.length}', style: TextStyle(color: p.currentTheme.textColor.withValues(alpha: 0.4), fontSize: 10)),
+              Text(
+                p.pageTurnMode == PageAnim.scroll
+                    ? '${p.currentChapterIndex + 1}/${p.chapters.length}'
+                    : '${p.currentPageIndex + 1}/${p.slidePages.length}',
+                style: TextStyle(color: p.currentTheme.textColor.withValues(alpha: 0.4), fontSize: 10),
+              ),
               SizedBox(width: 60, child: Text('${(p.chapters.isEmpty ? 0 : p.currentChapterIndex / p.chapters.length * 100).toStringAsFixed(1)}%', textAlign: TextAlign.right, style: TextStyle(color: p.currentTheme.textColor.withValues(alpha: 0.4), fontSize: 10))),
             ],
           ),

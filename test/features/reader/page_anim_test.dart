@@ -11,15 +11,13 @@ void main() {
       expect(PageAnim.scroll, 3);
     });
 
-    test('cover 值為 0（已移除的模式）', () {
-      // cover 已從 UI 移除，確保值沒有被誤用為預設
-      expect(PageAnim.cover, 0);
-      // slide != cover 確保預設值不是 cover
-      expect(PageAnim.slide, isNot(PageAnim.cover));
-    });
-
-    test('各模式值互不重複', () {
-      final values = [PageAnim.cover, PageAnim.slide, PageAnim.simulation, PageAnim.scroll, PageAnim.none];
+    test('目前僅保留的模式值互不重複', () {
+      final values = [
+        PageAnim.slide,
+        PageAnim.simulation,
+        PageAnim.scroll,
+        PageAnim.none,
+      ];
       final unique = values.toSet();
       expect(unique.length, values.length, reason: '每個 PageAnim 模式應有唯一的值');
     });

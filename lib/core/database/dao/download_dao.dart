@@ -7,7 +7,7 @@ part 'download_dao.g.dart';
 
 @DriftAccessor(tables: [DownloadTasks])
 class DownloadDao extends DatabaseAccessor<AppDatabase> with _$DownloadDaoMixin {
-  DownloadDao(AppDatabase db) : super(db);
+  DownloadDao(super.db);
 
   Future<List<DownloadTask>> getAll() => select(downloadTasks).get();
 

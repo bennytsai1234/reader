@@ -7,7 +7,7 @@ part 'server_dao.g.dart';
 
 @DriftAccessor(tables: [Servers])
 class ServerDao extends DatabaseAccessor<AppDatabase> with _$ServerDaoMixin {
-  ServerDao(AppDatabase db) : super(db);
+  ServerDao(super.db);
 
   Future<List<Server>> getAll() {
     return (select(servers)..orderBy([(t) => OrderingTerm(expression: t.sortNumber)])).get();

@@ -7,7 +7,7 @@ part 'read_record_dao.g.dart';
 
 @DriftAccessor(tables: [ReadRecords])
 class ReadRecordDao extends DatabaseAccessor<AppDatabase> with _$ReadRecordDaoMixin {
-  ReadRecordDao(AppDatabase db) : super(db);
+  ReadRecordDao(super.db);
 
   Future<List<ReadRecord>> getAll() => select(readRecords).get();
 

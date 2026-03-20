@@ -7,7 +7,7 @@ part 'search_book_dao.g.dart';
 
 @DriftAccessor(tables: [SearchBooks, BookSources])
 class SearchBookDao extends DatabaseAccessor<AppDatabase> with _$SearchBookDaoMixin {
-  SearchBookDao(AppDatabase db) : super(db);
+  SearchBookDao(super.db);
 
   Future<SearchBook?> getSearchBook(String bookUrl) {
     return (select(searchBooks)..where((t) => t.bookUrl.equals(bookUrl))).getSingleOrNull();

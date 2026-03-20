@@ -12,8 +12,6 @@ class FakeCookieDao extends Fake implements CookieDao {
   @override
   Future<void> upsert(Cookie cookie) async {}
 
-  @override
-  Future<void> insertOrUpdateCookie(Cookie cookie) async {}
 }
 
 class FakeCacheDao extends Fake implements CacheDao {

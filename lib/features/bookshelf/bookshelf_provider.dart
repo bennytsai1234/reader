@@ -7,6 +7,7 @@ class BookshelfProvider extends BookshelfProviderBase
     with BookshelfLogicMixin, BookshelfUpdateMixin, BookshelfImportMixin {
   
   BookshelfProvider() {
+    loadUiPreferences();
     loadBooks();
     loadGroups();
   }
@@ -36,8 +37,6 @@ class BookshelfProvider extends BookshelfProviderBase
     counts[-1] = books.length;
     return counts;
   }
-
-  void setGridView(bool v) => toggleViewMode();
 
   Future<void> removeFromBookshelf(String url) async {
     await bookDao.deleteByUrl(url);

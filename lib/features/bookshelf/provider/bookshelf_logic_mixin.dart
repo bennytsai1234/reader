@@ -5,9 +5,25 @@ import 'package:legado_reader/core/models/book.dart';
 
 /// BookshelfProvider 的 UI 狀態與分組邏輯擴展
 mixin BookshelfLogicMixin on BookshelfProviderBase {
+  Future<void> loadUiPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    isGridView = prefs.getBool('bookshelf_is_grid') ?? isGridView;
+    showLastUpdate =
+        prefs.getBool('bookshelf_show_last_update') ?? showLastUpdate;
+    notifyListeners();
+  }
+
   void toggleViewMode() {
     isGridView = !isGridView;
     SharedPreferences.getInstance().then((p) => p.setBool('bookshelf_is_grid', isGridView));
+    notifyListeners();
+  }
+
+  void setGridView(bool value) {
+    if (isGridView == value) return;
+    isGridView = value;
+    SharedPreferences.getInstance()
+        .then((p) => p.setBool('bookshelf_is_grid', isGridView));
     notifyListeners();
   }
 

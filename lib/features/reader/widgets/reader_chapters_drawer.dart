@@ -23,14 +23,14 @@ class ReaderChaptersDrawer extends StatelessWidget {
                 final isCur = provider.currentChapterIndex == index;
                 return ListTile(
                   title: Text(
-                    provider.chapters[index].title,
+                    provider.displayChapterTitleAt(index),
                     style: TextStyle(
                       color: isCur ? Colors.blue : null,
                       fontWeight: isCur ? FontWeight.bold : null,
                     ),
                   ),
                   onTap: () {
-                    provider.loadChapter(index);
+                    provider.jumpToChapter(index);
                     Navigator.pop(context);
                   },
                 );

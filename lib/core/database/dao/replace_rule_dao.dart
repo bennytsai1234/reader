@@ -7,7 +7,7 @@ part 'replace_rule_dao.g.dart';
 
 @DriftAccessor(tables: [ReplaceRules])
 class ReplaceRuleDao extends DatabaseAccessor<AppDatabase> with _$ReplaceRuleDaoMixin {
-  ReplaceRuleDao(AppDatabase db) : super(db);
+  ReplaceRuleDao(super.db);
 
   Future<List<ReplaceRule>> getAll() {
     return (select(replaceRules)..orderBy([(t) => OrderingTerm(expression: t.order)])).get();

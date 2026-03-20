@@ -24,13 +24,13 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
                 title: const Text('選擇本地備份目錄'),
                 subtitle: const Text('設定或變更本地配置備份的資料夾'),
                 leading: const Icon(Icons.folder_open),
-                onTap: () => _showComingSoon(context),
+                onTap: _showComingSoon,
               ),
               ListTile(
                 title: const Text('手動備份 (本地)'),
                 subtitle: const Text('將目前所有書架與配置進行備份至手機存儲'),
                 leading: const Icon(Icons.backup_outlined),
-                onTap: () => _showComingSoon(context),
+                onTap: _showComingSoon,
               ),
               ListTile(
                 title: const Text('手動還原 (本地文件)'),
@@ -38,9 +38,10 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
                 leading: const Icon(Icons.restore),
                 onTap: () async {
                   final result = await FilePicker.platform.pickFiles();
+                  if (!mounted) return;
                   if (result != null && result.files.single.path != null) {
                     // TODO: 實作本地還原邏輯
-                    _showComingSoon(context);
+                    _showComingSoon();
                   }
                 },
               ),
@@ -73,7 +74,7 @@ class _BackupSettingsPageState extends State<BackupSettingsPage> {
     );
   }
 
-  void _showComingSoon(BuildContext context) {
+  void _showComingSoon() {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('功能開發中')));
   }
 }

@@ -21,6 +21,11 @@ class ContentProcessor {
     bool includeTitle = true,
   }) async {
     if (rawContent.isEmpty) return BookContent(content: '');
+    final parsedRules =
+        rulesJson.map((j) => ReplaceRule.fromJson(j)).where((r) => r.isEnabled).toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
+    final titleRules = parsedRules.where((r) => r.scopeTitle).toList();
+    final contentRules = parsedRules.where((r) => r.scopeContent).toList();
 
     // 1. 在 Isolate 中執行 CPU 密集型操作
     final resultData = await compute(_internalProcess, {
@@ -28,10 +33,9 @@ class ContentProcessor {
       'bookOrigin': book.origin,
       'chapterTitle': chapter.title,
       'rawContent': rawContent,
-      'rulesJson': rulesJson,
+      'rulesJson': contentRules.map((r) => r.toJson()).toList(),
       'reSegmentEnabled': reSegmentEnabled,
       'removeSameTitle': removeSameTitle,
-      'includeTitle': includeTitle,
     });
 
 
@@ -49,9 +53,8 @@ class ContentProcessor {
 
     // 3. 重新添加處理後的標題
     if (includeTitle) {
-      final rules = rulesJson.map((j) => ReplaceRule.fromJson(j)).toList();
       final processedTitle = await chapter.getDisplayTitle(
-        replaceRules: rules,
+        replaceRules: titleRules,
         chineseConvertType: chineseConvertType,
       );
       content = '$processedTitle\n$content';
@@ -72,7 +75,9 @@ class ContentProcessor {
     final String chapterTitle = args['chapterTitle'] ?? '';
     final String rawContent = args['rawContent'] ?? '';
     final List<dynamic> rulesJson = args['rulesJson'] ?? [];
-    final List<ReplaceRule> rules = rulesJson.map((j) => ReplaceRule.fromJson(j)).toList();
+    final List<ReplaceRule> rules =
+        rulesJson.map((j) => ReplaceRule.fromJson(j)).where((r) => r.isEnabled).toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
     final bool reSegmentEnabled = args['reSegmentEnabled'] ?? true;
     final bool removeSameTitle = args['removeSameTitle'] ?? true;
 
@@ -85,9 +90,11 @@ class ContentProcessor {
     // 1. 去除重複標題 (對標 Android ContentProcessor.kt line 110)
     if (removeSameTitle) {
       final nameRegex = RegExp.escape(bookName);
-      final titleRegex = RegExp.escape(chapterTitle).replaceAll(AppPattern.spaceRegex, r'\s*');
-      final pattern = RegExp('^(\\s|\\p{P}|$nameRegex)*$titleRegex(\\s)*', unicode: true);
-      
+      final titleRegex =
+          RegExp.escape(chapterTitle).replaceAll(AppPattern.spaceRegex, r'\s*');
+      final pattern =
+          RegExp('^(\\s|\\p{P}|$nameRegex)*$titleRegex(\\s)*', unicode: true);
+
       final match = pattern.firstMatch(mContent);
       if (match != null) {
         mContent = mContent.substring(match.end);
@@ -144,7 +151,7 @@ class ContentProcessor {
     const indent = '　　'; // 預設使用兩個全形空格作為縮進
     
     mContent.split('\n').forEach((line) {
-      final p = line.trim();
+      final p = line.trim().replaceAll('\u00A0', ' ');
       if (p.isNotEmpty) {
         finalParagraphs.add('$indent$p');
       }
@@ -158,7 +165,9 @@ class ContentProcessor {
   }
 
   static String _reSegment(String content) {
-    // 簡單的重新分段邏輯
-    return content.replaceAll(RegExp(r'\n+'), '\n');
+    return content
+        .replaceAll(RegExp(r'\r\n?'), '\n')
+        .replaceAll(RegExp(r'\n{2,}'), '\n')
+        .replaceAll(RegExp(r'[ \t]+\n'), '\n');
   }
 }

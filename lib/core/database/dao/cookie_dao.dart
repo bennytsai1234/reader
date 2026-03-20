@@ -7,7 +7,7 @@ part 'cookie_dao.g.dart';
 
 @DriftAccessor(tables: [Cookies])
 class CookieDao extends DatabaseAccessor<AppDatabase> with _$CookieDaoMixin {
-  CookieDao(AppDatabase db) : super(db);
+  CookieDao(super.db);
 
   Future<Cookie?> getByUrl(String url) {
     return (select(cookies)..where((t) => t.url.equals(url))).getSingleOrNull();

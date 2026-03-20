@@ -6,7 +6,7 @@ part 'search_history_dao.g.dart';
 
 @DriftAccessor(tables: [SearchHistoryTable])
 class SearchHistoryDao extends DatabaseAccessor<AppDatabase> with _$SearchHistoryDaoMixin {
-  SearchHistoryDao(AppDatabase db) : super(db);
+  SearchHistoryDao(super.db);
 
   Future<List<SearchHistoryRow>> getAll() {
     return (select(searchHistoryTable)..orderBy([(t) => OrderingTerm(expression: t.searchTime, mode: OrderingMode.desc)])).get();
