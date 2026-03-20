@@ -13,10 +13,14 @@ mixin ReaderProgressMixin
   int initialCharOffset = 0;
   int? pendingRestorePos;
   Timer? scrollSaveTimer;
-  int _lastSavedCharOffset = -1;
 
   List<TextPage> _pagesForChapter(int chapterIndex) =>
       (this as dynamic).pagesForChapter(chapterIndex) as List<TextPage>;
+
+  dynamic _runtimeChapterFor(int chapterIndex) =>
+      (this as dynamic).chapterAt?.call(chapterIndex);
+
+  dynamic get _progressStore => (this as dynamic).progressStore;
 
   void updateVisibleChapterPosition({
     required int chapterIndex,
@@ -28,29 +32,47 @@ mixin ReaderProgressMixin
     visibleChapterAlignment = alignment;
 
     if (pageTurnMode != PageAnim.scroll || isRestoring || isLoading) return;
+    if (!((this as dynamic).shouldPersistVisiblePosition() as bool)) return;
 
+    final runtimeChapter = _runtimeChapterFor(chapterIndex);
     final pages = _pagesForChapter(chapterIndex);
-    final currentCharOffset =
-        ChapterPositionResolver.localOffsetToCharOffset(pages, localOffset);
+    final currentCharOffset = runtimeChapter != null
+        ? runtimeChapter.charOffsetFromLocalOffset(localOffset) as int
+        : ChapterPositionResolver.localOffsetToCharOffset(pages, localOffset);
     if (book.durChapterIndex == chapterIndex &&
         book.durChapterPos == currentCharOffset) {
       return;
     }
 
-    book.durChapterIndex = chapterIndex;
-    book.durChapterPos = currentCharOffset;
-    final crossThreshold = _lastSavedCharOffset == -1 ||
-        (currentCharOffset - _lastSavedCharOffset).abs() > 600 ||
-        currentChapterIndex != chapterIndex;
+    _progressStore.updateBookProgress(
+      book: book,
+      chapterIndex: chapterIndex,
+      charOffset: currentCharOffset,
+    );
+    final crossThreshold = _progressStore.shouldSaveImmediately(
+      currentCharOffset: currentCharOffset,
+      currentChapterIndex: currentChapterIndex,
+      targetChapterIndex: chapterIndex,
+    ) as bool;
     currentChapterIndex = chapterIndex;
 
     if (crossThreshold) {
       scrollSaveTimer?.cancel();
-      saveProgress(chapterIndex, currentPageIndex);
+      (this as dynamic).persistCurrentProgress(
+        chapterIndex: chapterIndex,
+        pageIndex: currentPageIndex,
+        reason: ReaderCommandReason.userScroll,
+      );
     } else {
       scrollSaveTimer?.cancel();
       scrollSaveTimer = Timer(const Duration(milliseconds: 500), () {
-        if (!isDisposed) saveProgress(chapterIndex, currentPageIndex);
+        if (!isDisposed) {
+          (this as dynamic).persistCurrentProgress(
+            chapterIndex: chapterIndex,
+            pageIndex: currentPageIndex,
+            reason: ReaderCommandReason.userScroll,
+          );
+        }
       });
     }
   }
@@ -66,16 +88,28 @@ mixin ReaderProgressMixin
     if (isRestoringJump) lifecycle = ReaderLifecycle.restoring;
 
     if (pageTurnMode == PageAnim.scroll) {
+      final runtimeChapter = _runtimeChapterFor(targetChapter);
       final pages = _pagesForChapter(targetChapter);
       final targetCharOffset = charOffset ?? 0;
-      final localOffset =
-          ChapterPositionResolver.charOffsetToLocalOffset(pages, targetCharOffset);
-      final alignment =
-          ChapterPositionResolver.charOffsetToAlignment(pages, targetCharOffset);
-      requestJumpToChapter(
+      final localOffset = runtimeChapter != null
+          ? runtimeChapter.localOffsetFromCharOffset(targetCharOffset) as double
+          : ChapterPositionResolver.charOffsetToLocalOffset(
+              pages,
+              targetCharOffset,
+            );
+      final alignment = runtimeChapter != null
+          ? runtimeChapter.alignmentForCharOffset(targetCharOffset) as double
+          : ChapterPositionResolver.charOffsetToAlignment(
+              pages,
+              targetCharOffset,
+            );
+      (this as dynamic).jumpToChapterLocalOffset(
         chapterIndex: targetChapter,
-        alignment: alignment,
         localOffset: localOffset,
+        alignment: alignment,
+        reason: isRestoringJump
+            ? ReaderCommandReason.restore
+            : ReaderCommandReason.system,
       );
       notifyListeners();
       return;
@@ -84,8 +118,10 @@ mixin ReaderProgressMixin
     final pages = _pagesForChapter(targetChapter);
     var targetPage = 0;
     if (charOffset != null && charOffset > 0) {
-      final localPageIndex =
-          ChapterPositionResolver.findPageIndexByCharOffset(pages, charOffset);
+      final runtimeChapter = _runtimeChapterFor(targetChapter);
+      final localPageIndex = runtimeChapter != null
+          ? runtimeChapter.getPageIndexByCharIndex(charOffset) as int
+          : ChapterPositionResolver.findPageIndexByCharOffset(pages, charOffset);
       final globalIndex = slidePages.indexWhere(
         (page) =>
             page.chapterIndex == targetChapter && page.index == localPageIndex,
@@ -95,7 +131,12 @@ mixin ReaderProgressMixin
       targetPage = pageIndex.clamp(0, slidePages.length - 1);
     }
     currentPageIndex = targetPage;
-    requestJumpToPage(targetPage);
+    (this as dynamic).jumpToSlidePage(
+      targetPage,
+      reason: isRestoringJump
+          ? ReaderCommandReason.restore
+          : ReaderCommandReason.system,
+    );
     notifyListeners();
   }
 
@@ -103,54 +144,77 @@ mixin ReaderProgressMixin
     if (pendingRestorePos == null) return;
     final pos = pendingRestorePos!;
     pendingRestorePos = null;
-    jumpToPosition(
+    (this as dynamic).jumpToChapterCharOffset(
       chapterIndex: currentChapterIndex,
       charOffset: pos,
+      reason: ReaderCommandReason.restore,
       isRestoringJump: true,
     );
   }
 
-  void saveProgress(int chapterIndex, int pageIndex) {
-    final title = chapters.isNotEmpty && chapterIndex < chapters.length
-        ? chapters[chapterIndex].title
-        : null;
+  void saveProgress(
+    int chapterIndex,
+    int pageIndex, {
+    ReaderCommandReason reason = ReaderCommandReason.system,
+  }) {
+    final runtimeChapter = _runtimeChapterFor(chapterIndex);
     final pages = _pagesForChapter(chapterIndex);
     final charOffset = pageTurnMode == PageAnim.scroll
-        ? ChapterPositionResolver.localOffsetToCharOffset(
-            _pagesForChapter(chapterIndex),
-            visibleChapterLocalOffset,
-          )
+        ? (runtimeChapter != null
+            ? runtimeChapter.charOffsetFromLocalOffset(visibleChapterLocalOffset)
+                as int
+            : ChapterPositionResolver.localOffsetToCharOffset(
+                _pagesForChapter(chapterIndex),
+                visibleChapterLocalOffset,
+              ))
         : () {
             if (pageIndex >= 0 && pageIndex < slidePages.length) {
               final page = slidePages[pageIndex];
+              final runtime = _runtimeChapterFor(page.chapterIndex);
               final chapterPages = _pagesForChapter(page.chapterIndex);
-              return ChapterPositionResolver.getCharOffsetForPage(
-                chapterPages,
-                page.index,
-              );
+              return runtime != null
+                  ? runtime.charOffsetForPageIndex(page.index) as int
+                  : ChapterPositionResolver.getCharOffsetForPage(
+                      chapterPages,
+                      page.index,
+                    );
             }
-            return ChapterPositionResolver.getCharOffsetForPage(
-              pages,
-              pageIndex.clamp(0, (pages.length - 1).clamp(0, 1 << 20)),
-            );
+            return runtimeChapter != null
+                ? runtimeChapter.charOffsetForPageIndex(
+                    pageIndex.clamp(0, (pages.length - 1).clamp(0, 1 << 20)),
+                  ) as int
+                : ChapterPositionResolver.getCharOffsetForPage(
+                    pages,
+                    pageIndex.clamp(0, (pages.length - 1).clamp(0, 1 << 20)),
+                  );
           }();
 
-    book.durChapterIndex = chapterIndex;
-    book.durChapterPos = charOffset;
-    book.durChapterTitle = title;
-    _lastSavedCharOffset = charOffset;
     unawaited(
-      bookDao.updateProgress(book.bookUrl, chapterIndex, title ?? '', charOffset),
+      _progressStore.persistCharOffset(
+        write: (chapterIndex, title, charOffset) => bookDao.updateProgress(
+          book.bookUrl,
+          chapterIndex,
+          title,
+          charOffset,
+        ),
+        book: book,
+        chapters: chapters,
+        chapterIndex: chapterIndex,
+        charOffset: charOffset,
+      ),
     );
   }
 
   void updateScrollPageIndex(int chapterIndex, double localOffset) {
     visibleChapterIndex = chapterIndex;
+    final runtimeChapter = _runtimeChapterFor(chapterIndex);
     final pages = _pagesForChapter(chapterIndex);
-    currentPageIndex = ChapterPositionResolver.pageIndexAtLocalOffset(
-      pages,
-      localOffset,
-    );
+    currentPageIndex = runtimeChapter != null
+        ? runtimeChapter.pageIndexAtLocalOffset(localOffset) as int
+        : ChapterPositionResolver.pageIndexAtLocalOffset(
+            pages,
+            localOffset,
+          );
     currentChapterIndex = chapterIndex;
   }
 }

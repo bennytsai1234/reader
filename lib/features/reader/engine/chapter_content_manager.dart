@@ -202,6 +202,10 @@ class ChapterContentManager {
     }
   }
 
+  Future<List<TextPage>> ensureChapterReady(int index) {
+    return getChapterPages(index);
+  }
+
   void setProgressivePaginationEnabled(bool enabled) {
     _progressivePaginationEnabled = enabled;
   }
@@ -265,12 +269,18 @@ class ChapterContentManager {
     }
 
     _targetWindow = newIndices;
-    evictOutsideWindow();
     debugPrint('ChapterContentManager: Window updated to $_targetWindow (center: $centerChapterIndex)');
 
     if (preload) {
       _startPreloading(centerChapterIndex, preloadRadius: preloadRadius);
     }
+  }
+
+  void warmChaptersAround(
+    int centerChapterIndex, {
+    int radius = 2,
+  }) {
+    warmupWindow(centerChapterIndex, preloadRadius: radius);
   }
 
   /// 取得目標視窗
@@ -286,7 +296,11 @@ class ChapterContentManager {
     if (!_userInteractionActive) {
       _priorityChapters.clear();
     }
-    _startPreloading(centerChapterIndex, preloadRadius: preloadRadius);
+    _startPreloading(
+      centerChapterIndex,
+      preloadRadius: preloadRadius,
+      scopeOverride: _buildWindow(centerChapterIndex, radius: preloadRadius),
+    );
   }
 
   void prioritizeChapter(int index, {int preloadRadius = 1}) {
@@ -315,6 +329,22 @@ class ChapterContentManager {
     _startPreloading(index, preloadRadius: preloadRadius);
   }
 
+  void prioritize(Iterable<int> chapterIndexes, {int centerIndex = 0}) {
+    final ordered = chapterIndexes
+        .where((idx) => idx >= 0 && idx < _chapters.length)
+        .toList()
+      ..sort((a, b) => (a - centerIndex).abs().compareTo((b - centerIndex).abs()));
+    if (ordered.isEmpty) return;
+    _priorityChapters
+      ..clear()
+      ..addAll(ordered);
+    for (final chapterIndex in ordered.reversed) {
+      _preloadQueue.remove(chapterIndex);
+      _preloadQueue.insert(0, chapterIndex);
+    }
+    _startPreloading(centerIndex, preloadRadius: ordered.length);
+  }
+
   /// 驅逐視窗外的分頁快取，回傳被驅逐的章節索引
   Set<int> evictOutsideWindow() {
     if (_targetWindow.isEmpty || _wholeBookPreloadEnabled) return {};
@@ -330,6 +360,20 @@ class ChapterContentManager {
       _paginatedCache.remove(idx);
     }
 
+    return toEvict;
+  }
+
+  Set<int> evictOutside(Set<int> indexesToKeep) {
+    if (indexesToKeep.isEmpty || _wholeBookPreloadEnabled) return {};
+    final toEvict = <int>{};
+    for (final idx in _paginatedCache.keys.toList()) {
+      if (!indexesToKeep.contains(idx)) {
+        toEvict.add(idx);
+      }
+    }
+    for (final idx in toEvict) {
+      _paginatedCache.remove(idx);
+    }
     return toEvict;
   }
 
@@ -481,6 +525,10 @@ class ChapterContentManager {
     }
   }
 
+  Future<void> repaginateVisibleWindow(Iterable<int> chapterIndexes) {
+    return repaginateWindow(chapterIndexes);
+  }
+
   String _buildPaginatedCacheKey({
     required int index,
     required String content,
@@ -541,7 +589,11 @@ class ChapterContentManager {
     }
   }
 
-  void _startPreloading(int centerChapterIndex, {int preloadRadius = 2}) {
+  void _startPreloading(
+    int centerChapterIndex, {
+    int preloadRadius = 2,
+    Iterable<int>? scopeOverride,
+  }) {
     // 一般模式保留目前執行中的第一項，替換 pending 部分；
     // 整本書模式則保留整條 queue，直到全書吃完。
     if (!_isPreloadingQueueActive) {
@@ -551,9 +603,10 @@ class ChapterContentManager {
     }
 
     final List<int> candidates = [];
-    final Iterable<int> preloadScope = _wholeBookPreloadEnabled
+    final Iterable<int> preloadScope = scopeOverride ??
+        (_wholeBookPreloadEnabled
         ? Iterable<int>.generate(_chapters.length)
-        : _targetWindow;
+        : _targetWindow);
     for (final idx in preloadScope) {
       if (!_paginatedCache.containsKey(idx) &&
           !_activeLoadingChapters.contains(idx) &&
@@ -738,8 +791,28 @@ class ChapterContentManager {
   Set<int> _buildWindow(int centerChapterIndex, {int radius = 2}) {
     if (_chapters.isEmpty) return {};
     final safeCenter = centerChapterIndex.clamp(0, _chapters.length - 1).toInt();
-    final start = (safeCenter - radius).clamp(0, _chapters.length - 1).toInt();
-    final end = (safeCenter + radius).clamp(0, _chapters.length - 1).toInt();
+    final desiredSize = (radius * 2) + 1;
+    var start = safeCenter - radius;
+    var end = safeCenter + radius;
+
+    if (start < 0) {
+      end += -start;
+      start = 0;
+    }
+    if (end >= _chapters.length) {
+      start -= end - (_chapters.length - 1);
+      end = _chapters.length - 1;
+    }
+
+    start = start.clamp(0, _chapters.length - 1).toInt();
+    end = end.clamp(0, _chapters.length - 1).toInt();
+
+    final currentSize = end - start + 1;
+    if (currentSize < desiredSize && currentSize < _chapters.length) {
+      final missing = desiredSize - currentSize;
+      start = (start - missing).clamp(0, _chapters.length - 1).toInt();
+    }
+
     return {
       for (int i = start; i <= end; i++) i,
     };

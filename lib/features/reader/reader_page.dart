@@ -66,6 +66,7 @@ class _ReaderPageState extends State<ReaderPage> {
       body: Consumer<ReaderProvider>(builder: (context, p, _) {
         final pendingJump = p.consumePendingJump();
         if (pendingJump != null) {
+          p.consumePendingSlideJumpReason();
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted || !_pageCtrl.hasClients) return;
             if (_pageCtrl.page?.round() != pendingJump) {

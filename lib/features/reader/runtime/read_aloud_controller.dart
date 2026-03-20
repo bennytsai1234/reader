@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:legado_reader/core/services/tts_service.dart';
-import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:legado_reader/features/reader/engine/reader_perf_trace.dart';
 import 'package:legado_reader/features/reader/runtime/models/reader_chapter.dart';
 
 enum ReadAloudState { idle, speaking, paused, transitioning }
@@ -263,7 +263,10 @@ class ReadAloudController extends ChangeNotifier {
     );
     _anchorChapterIdx = targetChapterIndex;
 
-    await _tts.speak(data.text);
+    await ReaderPerfTrace.measureAsync(
+      'tts speak chapter $targetChapterIndex',
+      () => _tts.speak(data.text),
+    );
     if (!_isCurrent(version)) return;
     updateMediaInfo('', '');
     _prefetchNextChapter();
@@ -285,6 +288,9 @@ class ReadAloudController extends ChangeNotifier {
       baseOffset: data.baseOffset,
       offsetMap: data.offsetMap,
     );
+    ReaderPerfTrace.mark(
+      'tts prefetched next chapter $nextIdx textLength=${data.text.length}',
+    );
   }
 
   int _chapterOffsetFromTtsOffset(ReadAloudSession session, int rawStart) {
@@ -298,59 +304,18 @@ class ReadAloudController extends ChangeNotifier {
     return chapterOffset;
   }
 
-  ({int start, int end, int pageIndex}) _resolveHighlight(
-    ReaderChapter chapter,
-    int chapterOffset,
-  ) {
-    final pages = chapter.pages;
-    final pageIndex = chapter.getPageIndexByCharIndex(chapterOffset);
-    var hlStart = chapterOffset;
-    var hlEnd = chapterOffset + 1;
-
-    if (pageIndex >= 0 && pageIndex < pages.length) {
-      final page = pages[pageIndex];
-      int? targetParagraphNum;
-      for (final line in page.lines) {
-        if (line.image != null) continue;
-        final lineEnd = line.chapterPosition + line.text.length;
-        if (chapterOffset >= line.chapterPosition && chapterOffset < lineEnd) {
-          targetParagraphNum = line.paragraphNum;
-          break;
-        }
-      }
-      if (targetParagraphNum != null) {
-        final paraLines = page.lines
-            .where((line) =>
-                line.paragraphNum == targetParagraphNum && line.image == null)
-            .toList();
-        if (paraLines.isNotEmpty) {
-          hlStart = paraLines.first.chapterPosition;
-          hlEnd = paraLines.last.chapterPosition + paraLines.last.text.length;
-        }
-      }
-    }
-
-    return (start: hlStart, end: hlEnd, pageIndex: pageIndex);
-  }
-
   void _jumpToChapterOffset({
     required ReaderChapter chapter,
     required int chapterOffset,
     int? pageIndex,
   }) {
-    final pages = chapter.pages;
     final resolvedPageIndex = pageIndex ?? chapter.getPageIndexByCharIndex(chapterOffset);
     if (isScrollMode()) {
+      final anchor = chapter.resolveScrollAnchor(chapterOffset);
       requestJumpToChapter(
         chapterIndex: chapter.index,
-        alignment: ChapterPositionResolver.charOffsetToAlignment(
-          pages,
-          chapterOffset,
-        ),
-        localOffset: ChapterPositionResolver.charOffsetToLocalOffset(
-          pages,
-          chapterOffset,
-        ),
+        alignment: anchor.alignment,
+        localOffset: anchor.localOffset,
       );
       return;
     }
@@ -372,7 +337,7 @@ class ReadAloudController extends ChangeNotifier {
 
     final chapter = chapterOf(ttsChapterIndex);
     if (chapter == null) return;
-    final highlight = _resolveHighlight(chapter, chapterBase);
+    final highlight = chapter.resolveHighlightRange(chapterBase);
 
     _lastHighlightStart = highlight.start;
     _lastHighlightEnd = highlight.end;
@@ -399,7 +364,10 @@ class ReadAloudController extends ChangeNotifier {
       _lastHighlightStart = -1;
       _lastHighlightEnd = -1;
       final prefetched = _session?.prefetchedNext;
-      await nextChapter();
+      await ReaderPerfTrace.measureAsync(
+        'tts chapter handoff nextChapter',
+        () => nextChapter(),
+      );
       if (!_isCurrent(version)) return;
       if (_stopAfterChapter) {
         _stopAfterChapter = false;
@@ -416,7 +384,10 @@ class ReadAloudController extends ChangeNotifier {
           offsetMap: prefetched.offsetMap,
         );
         _state = ReadAloudState.speaking;
-        await _tts.speak(prefetched.text);
+        await ReaderPerfTrace.measureAsync(
+          'tts handoff speak chapter ${prefetched.chapterIndex}',
+          () => _tts.speak(prefetched.text),
+        );
         if (!_isCurrent(version)) return;
         _prefetchNextChapter();
       } else {
@@ -437,16 +408,14 @@ class ReadAloudController extends ChangeNotifier {
       final chapterIndex = ttsChapterIndex >= 0 ? ttsChapterIndex : visibleChapterIndex();
       final chapter = chapterOf(chapterIndex);
       final currentOffset = _ttsStart >= 0 ? _ttsStart : visibleCharOffset();
-      final currentPageIndex = chapter?.getPageIndexByCharIndex(currentOffset) ?? -1;
-      if (chapter != null &&
-          currentPageIndex >= 0 &&
-          currentPageIndex < chapter.pages.length - 1) {
-        final nextPage = chapter.pages[currentPageIndex + 1];
-        final nextOffset = chapter.firstCharOffset(nextPage);
+      final nextOffset = chapter?.nextPageStartCharOffset(currentOffset) ?? -1;
+      final nextPageIndex =
+          nextOffset >= 0 ? chapter!.getPageIndexByCharIndex(nextOffset) : -1;
+      if (chapter != null && nextOffset >= 0 && nextPageIndex >= 0) {
         _jumpToChapterOffset(
           chapter: chapter,
           chapterOffset: nextOffset,
-          pageIndex: currentPageIndex + 1,
+          pageIndex: nextPageIndex,
         );
         if (_isCurrent(version)) {
           await _start(
@@ -482,14 +451,14 @@ class ReadAloudController extends ChangeNotifier {
       final chapterIndex = ttsChapterIndex >= 0 ? ttsChapterIndex : visibleChapterIndex();
       final chapter = chapterOf(chapterIndex);
       final currentOffset = _ttsStart >= 0 ? _ttsStart : visibleCharOffset();
-      final currentPageIndex = chapter?.getPageIndexByCharIndex(currentOffset) ?? -1;
-      if (chapter != null && currentPageIndex > 0) {
-        final prevPage = chapter.pages[currentPageIndex - 1];
-        final prevOffset = chapter.firstCharOffset(prevPage);
+      final prevOffset = chapter?.prevPageStartCharOffset(currentOffset) ?? -1;
+      final prevPageIndex =
+          prevOffset >= 0 ? chapter!.getPageIndexByCharIndex(prevOffset) : -1;
+      if (chapter != null && prevOffset >= 0 && prevPageIndex >= 0) {
         _jumpToChapterOffset(
           chapter: chapter,
           chapterOffset: prevOffset,
-          pageIndex: currentPageIndex - 1,
+          pageIndex: prevPageIndex,
         );
         if (_isCurrent(version)) {
           await _start(

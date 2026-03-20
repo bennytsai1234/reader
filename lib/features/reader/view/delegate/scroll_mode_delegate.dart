@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
 import 'package:legado_reader/features/reader/engine/page_view_widget.dart';
 import 'package:legado_reader/features/reader/reader_provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -91,7 +90,7 @@ class ScrollModeDelegate extends PageModeDelegate {
                     '$chapterIndex:${page.index}',
                     GlobalKey.new,
                   ),
-                  height: ChapterPositionResolver.pageHeight(page),
+                  height: runtimeChapter?.pageHeightAt(page.index) ?? 0,
                   child: PageViewWidget(
                     page: page,
                     contentStyle: contentStyle,

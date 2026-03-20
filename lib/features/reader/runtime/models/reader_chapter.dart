@@ -22,6 +22,9 @@ class ReaderChapter {
   TextPage? get firstPage => pages.isEmpty ? null : pages.first;
   TextPage? get lastPage => pages.isEmpty ? null : pages.last;
   int get lastReadLength => getReadLength(lastIndex);
+  double get chapterHeight =>
+      pages.isEmpty ? 0.0 : ChapterPositionResolver.chapterHeight(pages);
+  late final List<TextLine> _allTextLines = allLines();
 
   late final List<ReaderParagraph> paragraphs = _buildParagraphs();
   late final List<ReaderParagraph> pageParagraphs = _buildPageParagraphs();
@@ -37,6 +40,12 @@ class ReaderChapter {
     return pageAt(index);
   }
 
+  TextPage? pageAtLocalOffset(double localOffset) {
+    final pageIndex = pageIndexAtLocalOffset(localOffset);
+    if (pageIndex < 0) return null;
+    return pageAt(pageIndex);
+  }
+
   int getReadLength(int pageIndex) {
     if (pages.isEmpty || pageIndex < 0) return 0;
     final safeIndex = pageIndex.clamp(0, pages.length - 1);
@@ -46,6 +55,181 @@ class ReaderChapter {
   int getPageIndexByCharIndex(int charIndex) {
     if (pages.isEmpty) return -1;
     return ChapterPositionResolver.findPageIndexByCharOffset(pages, charIndex);
+  }
+
+  TextLine? lineAtCharOffset(int charOffset) {
+    for (final line in _allTextLines) {
+      if (line.image != null) continue;
+      final lineEnd = line.chapterPosition + line.text.length;
+      if (charOffset >= line.chapterPosition && charOffset < lineEnd) {
+        return line;
+      }
+    }
+    return null;
+  }
+
+  ReaderParagraph? paragraphAtCharOffset(
+    int charOffset, {
+    bool pageSplit = false,
+  }) {
+    for (final paragraph in getParagraphs(pageSplit: pageSplit)) {
+      if (paragraph.containsCharOffset(charOffset)) {
+        return paragraph;
+      }
+    }
+    return null;
+  }
+
+  int charOffsetFromLocalOffset(double localOffset) {
+    if (pages.isEmpty) return 0;
+    return ChapterPositionResolver.localOffsetToCharOffset(pages, localOffset);
+  }
+
+  double localOffsetFromCharOffset(int charOffset) {
+    if (pages.isEmpty) return 0.0;
+    return ChapterPositionResolver.charOffsetToLocalOffset(pages, charOffset);
+  }
+
+  double alignmentForCharOffset(int charOffset) {
+    if (pages.isEmpty) return 0.0;
+    return ChapterPositionResolver.charOffsetToAlignment(pages, charOffset);
+  }
+
+  int pageIndexAtLocalOffset(double localOffset) {
+    if (pages.isEmpty) return -1;
+    return ChapterPositionResolver.pageIndexAtLocalOffset(pages, localOffset);
+  }
+
+  int charOffsetForPageIndex(int pageIndex) {
+    if (pages.isEmpty) return 0;
+    final safeIndex = pageIndex.clamp(0, pages.length - 1);
+    return ChapterPositionResolver.getCharOffsetForPage(pages, safeIndex);
+  }
+
+  int nextPageStartCharOffset(int charOffset) {
+    final pageIndex = getPageIndexByCharIndex(charOffset);
+    if (pageIndex < 0 || pageIndex >= lastIndex) return -1;
+    return charOffsetForPageIndex(pageIndex + 1);
+  }
+
+  int prevPageStartCharOffset(int charOffset) {
+    final pageIndex = getPageIndexByCharIndex(charOffset);
+    if (pageIndex <= 0) return -1;
+    return charOffsetForPageIndex(pageIndex - 1);
+  }
+
+  double localOffsetForPageIndex(int pageIndex) {
+    if (pages.isEmpty) return 0.0;
+    final charOffset = charOffsetForPageIndex(pageIndex);
+    return localOffsetFromCharOffset(charOffset);
+  }
+
+  double pageHeightAt(int pageIndex) {
+    final page = pageAt(pageIndex);
+    if (page == null) return 0.0;
+    return ChapterPositionResolver.pageHeight(page);
+  }
+
+  bool isCharOffsetVisibleInPage(int charOffset, int pageIndex) {
+    final page = pageAt(pageIndex);
+    if (page == null) return false;
+    final start = firstCharOffset(page);
+    final end = pageEndCharOffset(page);
+    return charOffset >= start && charOffset <= end;
+  }
+
+  ({
+    int pageIndex,
+    int pageStartCharOffset,
+    double pageStartLocalOffset,
+    double intraPageOffset,
+  }) resolveLocalOffsetTarget(double localOffset) {
+    final pageIndex = pageIndexAtLocalOffset(localOffset);
+    final safePageIndex = pageIndex < 0 ? 0 : pageIndex;
+    final pageStartCharOffset = charOffsetForPageIndex(safePageIndex);
+    final pageStartLocalOffset = localOffsetFromCharOffset(pageStartCharOffset);
+    final intraPageOffset =
+        (localOffset - pageStartLocalOffset).clamp(0.0, double.infinity);
+    return (
+      pageIndex: safePageIndex,
+      pageStartCharOffset: pageStartCharOffset,
+      pageStartLocalOffset: pageStartLocalOffset,
+      intraPageOffset: intraPageOffset,
+    );
+  }
+
+  ({
+    int start,
+    int end,
+    int pageIndex,
+    int paragraphNum,
+  }) resolveHighlightRange(
+    int charOffset, {
+    bool pageSplit = true,
+  }) {
+    final pageIndex = getPageIndexByCharIndex(charOffset);
+    final safePageIndex = pageIndex < 0 ? 0 : pageIndex;
+    final paragraph = paragraphAtCharOffset(charOffset, pageSplit: pageSplit);
+    if (paragraph == null) {
+      return (
+        start: charOffset,
+        end: charOffset + 1,
+        pageIndex: safePageIndex,
+        paragraphNum: -1,
+      );
+    }
+    return (
+      start: paragraph.chapterPosition,
+      end: paragraph.chapterEndPosition,
+      pageIndex: safePageIndex,
+      paragraphNum: paragraph.num,
+    );
+  }
+
+  ({
+    int pageIndex,
+    int pageStartCharOffset,
+    double pageStartLocalOffset,
+    double targetLocalOffset,
+    double intraPageOffset,
+    double alignment,
+  }) resolveRestoreTarget({
+    int? charOffset,
+    double? localOffset,
+  }) {
+    final targetLocalOffset = localOffset ??
+        localOffsetFromCharOffset(
+          charOffset ?? 0,
+        );
+    final target = resolveLocalOffsetTarget(targetLocalOffset);
+    return (
+      pageIndex: target.pageIndex,
+      pageStartCharOffset: target.pageStartCharOffset,
+      pageStartLocalOffset: target.pageStartLocalOffset,
+      targetLocalOffset: targetLocalOffset,
+      intraPageOffset: target.intraPageOffset,
+      alignment: alignmentForCharOffset(
+        charOffset ?? target.pageStartCharOffset,
+      ),
+    );
+  }
+
+  ({
+    int pageIndex,
+    double localOffset,
+    double alignment,
+  }) resolveScrollAnchor(
+    int charOffset, {
+    double anchorPadding = 0.0,
+  }) {
+    final localOffset = localOffsetFromCharOffset(charOffset);
+    final targetLocalOffset =
+        (localOffset - anchorPadding).clamp(0.0, double.infinity);
+    return (
+      pageIndex: pageIndexAtLocalOffset(localOffset),
+      localOffset: targetLocalOffset,
+      alignment: alignmentForCharOffset(charOffset),
+    );
   }
 
   int getNextPageLength(int charIndex) {

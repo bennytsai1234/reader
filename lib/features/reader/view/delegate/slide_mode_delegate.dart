@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:legado_reader/features/reader/engine/page_view_widget.dart';
 import 'package:legado_reader/features/reader/reader_provider.dart';
-import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
-
 import 'page_mode_delegate.dart';
 
 class SlideModeDelegate extends PageModeDelegate {
@@ -32,12 +30,7 @@ class SlideModeDelegate extends PageModeDelegate {
       physics: const BouncingScrollPhysics(),
       itemCount: provider.slidePages.length,
       onPageChanged: (i) {
-        if (provider.slidePages.isEmpty) return;
-        if (provider.isRestoring) {
-          provider.lifecycle = ReaderLifecycle.ready;
-          return;
-        }
-        provider.onPageChanged(i);
+        provider.handleSlidePageChanged(i);
       },
       itemBuilder: (_, i) {
         if (i < 0 || i >= provider.slidePages.length) {

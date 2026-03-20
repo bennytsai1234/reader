@@ -14,6 +14,17 @@ import 'package:legado_reader/features/reader/engine/text_page.dart';
 
 enum ReaderLifecycle { loading, restoring, ready, disposed }
 
+enum ReaderCommandReason {
+  restore,
+  user,
+  userScroll,
+  tts,
+  autoPage,
+  chapterChange,
+  settingsRepaginate,
+  system,
+}
+
 abstract class ReaderProviderBase extends ChangeNotifier {
   final BookDao bookDao = getIt<BookDao>();
   final ChapterDao chapterDao = getIt<ChapterDao>();
@@ -43,6 +54,7 @@ abstract class ReaderProviderBase extends ChangeNotifier {
   double? _pendingJumpAlignment;
   double? _pendingJumpLocalOffset;
   int? _pendingSlidePageIndex;
+  ReaderCommandReason _pendingChapterJumpReason = ReaderCommandReason.system;
 
   bool showControls = false;
   int scrubbingChapterIndex = -1;
@@ -60,7 +72,10 @@ abstract class ReaderProviderBase extends ChangeNotifier {
   bool _isDisposed = false;
   bool get isDisposed => _isDisposed;
 
-  void requestJumpToPage(int pageIndex) {
+  void requestJumpToPage(
+    int pageIndex, {
+    ReaderCommandReason reason = ReaderCommandReason.system,
+  }) {
     _pendingJumpTarget = pageIndex;
     _pendingSlidePageIndex = pageIndex;
   }
@@ -75,24 +90,34 @@ abstract class ReaderProviderBase extends ChangeNotifier {
     required int chapterIndex,
     double alignment = 0.0,
     double localOffset = 0.0,
+    ReaderCommandReason reason = ReaderCommandReason.system,
   }) {
     _pendingJumpChapterIndex = chapterIndex;
     _pendingJumpAlignment = alignment;
     _pendingJumpLocalOffset = localOffset;
+    _pendingChapterJumpReason = reason;
   }
 
-  ({int chapterIndex, double alignment, double localOffset})? consumePendingChapterJump() {
+  ({
+    int chapterIndex,
+    double alignment,
+    double localOffset,
+    ReaderCommandReason reason,
+  })? consumePendingChapterJump() {
     final chapterIndex = _pendingJumpChapterIndex;
     if (chapterIndex == null) return null;
     final alignment = _pendingJumpAlignment ?? 0.0;
     final localOffset = _pendingJumpLocalOffset ?? 0.0;
+    final reason = _pendingChapterJumpReason;
     _pendingJumpChapterIndex = null;
     _pendingJumpAlignment = null;
     _pendingJumpLocalOffset = null;
+    _pendingChapterJumpReason = ReaderCommandReason.system;
     return (
       chapterIndex: chapterIndex,
       alignment: alignment,
       localOffset: localOffset,
+      reason: reason,
     );
   }
 
@@ -101,7 +126,6 @@ abstract class ReaderProviderBase extends ChangeNotifier {
     _pendingSlidePageIndex = null;
     return value;
   }
-
   @override
   void dispose() {
     _isDisposed = true;

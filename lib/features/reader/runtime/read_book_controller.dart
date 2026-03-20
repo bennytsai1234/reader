@@ -7,6 +7,7 @@ import 'package:legado_reader/core/models/bookmark.dart';
 import 'package:legado_reader/core/models/chapter.dart';
 import 'package:legado_reader/core/services/tts_service.dart';
 import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:legado_reader/features/reader/engine/reader_perf_trace.dart';
 import 'package:legado_reader/features/reader/engine/text_page.dart';
 import 'package:legado_reader/features/reader/provider/reader_auto_page_mixin.dart';
 import 'package:legado_reader/features/reader/provider/reader_content_mixin.dart';
@@ -16,7 +17,11 @@ import 'package:legado_reader/features/reader/provider/reader_settings_mixin.dar
 import 'package:legado_reader/features/reader/runtime/models/reader_chapter.dart';
 import 'package:legado_reader/features/reader/runtime/read_aloud_controller.dart';
 import 'package:legado_reader/features/reader/runtime/reader_chapter_provider.dart';
+import 'package:legado_reader/features/reader/runtime/reader_navigation_controller.dart';
 import 'package:legado_reader/features/reader/runtime/reader_page_factory.dart';
+import 'package:legado_reader/features/reader/runtime/reader_progress_store.dart';
+import 'package:legado_reader/features/reader/runtime/reader_restore_coordinator.dart';
+import 'package:legado_reader/features/reader/runtime/reader_scroll_visibility_coordinator.dart';
 import 'package:legado_reader/shared/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -30,6 +35,11 @@ class ReadBookController extends ReaderProviderBase
   List<String> _chapterDisplayTitles = const [];
   final Map<int, ReaderChapter> _chapterRuntimeCache = {};
   final ReaderChapterProvider _chapterProvider = const ReaderChapterProvider();
+  final ReaderNavigationController _navigation = ReaderNavigationController();
+  final ReaderRestoreCoordinator _restore = ReaderRestoreCoordinator();
+  final ReaderProgressStore _progressStore = ReaderProgressStore();
+  final ReaderScrollVisibilityCoordinator _scrollVisibility =
+      ReaderScrollVisibilityCoordinator();
   late final ReadAloudController _readAloudController;
   int _ttsMode = 0;
   bool _initialSessionPrimed = false;
@@ -45,16 +55,21 @@ class ReadBookController extends ReaderProviderBase
     initialCharOffset = chapterPos;
     _readAloudController = ReadAloudController(
       tts: TTSService(),
-      nextChapter: nextChapter,
-      prevChapter: ({bool fromEnd = true}) => prevChapter(fromEnd: fromEnd),
+      nextChapter: () => nextChapter(reason: ReaderCommandReason.tts),
+      prevChapter: ({
+        bool fromEnd = true,
+      }) => prevChapter(
+        fromEnd: fromEnd,
+        reason: ReaderCommandReason.tts,
+      ),
       nextPage: () async {
         if (currentPageIndex < slidePages.length - 1) {
-          onPageChanged(currentPageIndex + 1);
+          nextPage(reason: ReaderCommandReason.tts);
         }
       },
       prevPage: () async {
         if (currentPageIndex > 0) {
-          onPageChanged(currentPageIndex - 1);
+          prevPage(reason: ReaderCommandReason.tts);
         }
       },
       canMoveToNextPage: () => currentPageIndex >= 0 && currentPageIndex < slidePages.length - 1,
@@ -67,7 +82,7 @@ class ReadBookController extends ReaderProviderBase
           localPageIndex: pageIndex,
         );
         if (globalIndex != null && globalIndex >= 0) {
-          requestJumpToPage(globalIndex);
+          jumpToSlidePage(globalIndex, reason: ReaderCommandReason.tts);
         }
       },
       requestJumpToChapter: ({
@@ -75,10 +90,11 @@ class ReadBookController extends ReaderProviderBase
         required double alignment,
         required double localOffset,
       }) {
-        requestJumpToChapter(
+        jumpToChapterLocalOffset(
           chapterIndex: chapterIndex,
           alignment: alignment,
           localOffset: localOffset,
+          reason: ReaderCommandReason.tts,
         );
       },
       chapterOf: chapterAt,
@@ -86,6 +102,10 @@ class ReadBookController extends ReaderProviderBase
       visibleChapterIndex: () => visibleChapterIndex,
       currentCharOffset: () {
         if (pageTurnMode == PageAnim.scroll) {
+          final chapter = chapterAt(visibleChapterIndex);
+          if (chapter != null) {
+            return chapter.charOffsetFromLocalOffset(visibleChapterLocalOffset);
+          }
           final pages = pagesForChapter(visibleChapterIndex);
           return ChapterPositionResolver.localOffsetToCharOffset(
             pages,
@@ -94,6 +114,10 @@ class ReadBookController extends ReaderProviderBase
         }
         if (currentPageIndex >= 0 && currentPageIndex < slidePages.length) {
           final page = slidePages[currentPageIndex];
+          final chapter = chapterAt(page.chapterIndex);
+          if (chapter != null) {
+            return chapter.charOffsetForPageIndex(page.index);
+          }
           final chapterPages = pagesForChapter(page.chapterIndex);
           return ChapterPositionResolver.getCharOffsetForPage(
             chapterPages,
@@ -103,6 +127,10 @@ class ReadBookController extends ReaderProviderBase
         return book.durChapterPos;
       },
       visibleCharOffset: () {
+        final chapter = chapterAt(visibleChapterIndex);
+        if (chapter != null) {
+          return chapter.charOffsetFromLocalOffset(visibleChapterLocalOffset);
+        }
         final pages = pagesForChapter(visibleChapterIndex);
         return ChapterPositionResolver.localOffsetToCharOffset(
           pages,
@@ -143,6 +171,205 @@ class ReadBookController extends ReaderProviderBase
   int get ttsChapterIndex => _readAloudController.ttsChapterIndex;
   bool get isTtsActive => _readAloudController.isActive;
   bool get stopAfterChapter => _readAloudController.stopAfterChapter;
+  ReaderCommandReason? get activeCommandReason => _navigation.activeCommandReason;
+  ReaderProgressStore get progressStore => _progressStore;
+
+  void jumpToSlidePage(
+    int pageIndex, {
+    ReaderCommandReason reason = ReaderCommandReason.system,
+  }) {
+    if (!_navigation.beginSlideJump(reason)) return;
+    requestJumpToPage(pageIndex, reason: reason);
+  }
+
+  void jumpToChapterLocalOffset({
+    required int chapterIndex,
+    required double localOffset,
+    double alignment = 0.0,
+    ReaderCommandReason reason = ReaderCommandReason.system,
+  }) {
+    if (!_navigation.beginChapterJump(reason)) return;
+    requestJumpToChapter(
+      chapterIndex: chapterIndex,
+      alignment: alignment,
+      localOffset: localOffset,
+      reason: reason,
+    );
+  }
+
+  void jumpToChapterCharOffset({
+    required int chapterIndex,
+    required int charOffset,
+    ReaderCommandReason reason = ReaderCommandReason.system,
+    bool isRestoringJump = false,
+  }) {
+    if (!_navigation.beginCharJump(reason)) return;
+    jumpToPosition(
+      chapterIndex: chapterIndex,
+      charOffset: charOffset,
+      isRestoringJump: isRestoringJump,
+    );
+    if (!isRestoringJump) {
+      notifyListeners();
+    }
+  }
+
+  void persistCurrentProgress({
+    required int chapterIndex,
+    int? pageIndex,
+    ReaderCommandReason reason = ReaderCommandReason.system,
+  }) {
+    if (!_navigation.canPersistProgress(reason)) return;
+    saveProgress(chapterIndex, pageIndex ?? currentPageIndex, reason: reason);
+  }
+
+  void persistChapterCharOffsetProgress({
+    required int chapterIndex,
+    required int charOffset,
+  }) {
+    unawaited(
+      _progressStore.persistCharOffset(
+        write: (chapterIndex, title, charOffset) => bookDao.updateProgress(
+          book.bookUrl,
+          chapterIndex,
+          title,
+          charOffset,
+        ),
+        book: book,
+        chapters: chapters,
+        chapterIndex: chapterIndex,
+        charOffset: charOffset,
+      ),
+    );
+  }
+
+  bool shouldPersistVisiblePosition() {
+    return _navigation.shouldPersistVisiblePosition();
+  }
+
+  void reconcileVisibleScrollLoads() {
+    _scrollVisibility.reconcile(hasRuntimeChapter);
+  }
+
+  void handleVisibleScrollState({
+    required int chapterIndex,
+    required double localOffset,
+    required double alignment,
+    required List<int> visibleChapterIndexes,
+  }) {
+    updateVisibleChapterPosition(
+      chapterIndex: chapterIndex,
+      localOffset: localOffset,
+      alignment: alignment,
+    );
+    updateScrollPageIndex(chapterIndex, localOffset);
+
+    final update = _scrollVisibility.evaluate(
+      visibleChapterIndexes: visibleChapterIndexes,
+      currentChapterIndex: currentChapterIndex,
+      hasRuntimeChapter: hasRuntimeChapter,
+      isLoadingChapter: (targetChapter) => loadingChapters.contains(targetChapter),
+    );
+
+    for (final visibleChapter in update.chaptersToEnsure) {
+      unawaited(
+        ensureChapterCached(
+          visibleChapter,
+          silent: false,
+          prioritize: true,
+          preloadRadius: 1,
+        ),
+      );
+    }
+
+    final preloadCenterChapter = update.preloadCenterChapter;
+    if (preloadCenterChapter != null) {
+      updateScrollPreloadForVisibleChapter(preloadCenterChapter);
+    }
+  }
+
+  ReaderCommandReason consumePendingSlideJumpReason() {
+    return _navigation.consumePendingSlideJumpReason();
+  }
+
+  ReaderCommandReason consumePageChangeReason() {
+    return _navigation.consumePageChangeReason();
+  }
+
+  bool shouldPersistForReason(ReaderCommandReason reason) {
+    return _navigation.shouldPersistForReason(reason);
+  }
+
+  void completeRestoreTransition() {
+    if (!isDisposed && lifecycle == ReaderLifecycle.restoring) {
+      ReaderPerfTrace.mark(
+        'restore ready chapter=$visibleChapterIndex offset=${visibleChapterLocalOffset.toStringAsFixed(1)}',
+      );
+      _restore.clear();
+      _navigation.clear(ReaderCommandReason.restore);
+      lifecycle = ReaderLifecycle.ready;
+      notifyListeners();
+    }
+  }
+
+  int registerPendingScrollRestore({
+    required int chapterIndex,
+    required double localOffset,
+  }) {
+    return _restore.registerPendingScrollRestore(
+      chapterIndex: chapterIndex,
+      localOffset: localOffset,
+    );
+  }
+
+  int get pendingScrollRestoreToken => _restore.pendingScrollRestoreToken;
+  int? get pendingScrollRestoreChapterIndex =>
+      _restore.pendingScrollRestoreChapterIndex;
+  double? get pendingScrollRestoreLocalOffset =>
+      _restore.pendingScrollRestoreLocalOffset;
+
+  bool matchesPendingScrollRestore(int token) =>
+      _restore.matchesPendingScrollRestore(token);
+
+  ({int chapterIndex, double localOffset})? consumePendingScrollRestore() {
+    return _restore.consumePendingScrollRestore();
+  }
+
+  ({int chapterIndex, double localOffset})? nextAutoScrollTarget(
+    double dtSeconds,
+  ) {
+    return _navigation.nextAutoScrollTarget(
+      isAutoPaging: isAutoPaging,
+      pageTurnMode: pageTurnMode,
+      viewSize: viewSize,
+      visibleChapterIndex: visibleChapterIndex,
+      visibleChapterLocalOffset: visibleChapterLocalOffset,
+      scrollDeltaPerFrame: scrollDeltaPerFrame,
+      chapterAt: chapterAt,
+      pagesForChapter: pagesForChapter,
+      dtSeconds: dtSeconds,
+    );
+  }
+
+  ({
+    int? chapterIndex,
+    double? localOffset,
+    bool advanceChapter,
+  })? evaluateScrollAutoPageStep(double dtSeconds) {
+    return _navigation.evaluateScrollAutoPageStep(
+      isAutoPaging: isAutoPaging,
+      isAutoPagePaused: isAutoPagePaused,
+      isLoading: isLoading,
+      pageTurnMode: pageTurnMode,
+      viewSize: viewSize,
+      visibleChapterIndex: visibleChapterIndex,
+      visibleChapterLocalOffset: visibleChapterLocalOffset,
+      scrollDeltaPerFrame: scrollDeltaPerFrame,
+      chapterAt: chapterAt,
+      pagesForChapter: pagesForChapter,
+      dtSeconds: dtSeconds,
+    );
+  }
 
   void refreshChapterRuntime(int index) {
     final pages = chapterPagesCache[index];
@@ -251,12 +478,26 @@ class ReadBookController extends ReaderProviderBase
     if (i < 0 || i >= slidePages.length) return;
 
     super.onPageChanged(i);
-    if (!isRestoring) {
-      saveProgress(currentChapterIndex, i);
+    final reason = consumePageChangeReason();
+    if (!isRestoring && shouldPersistForReason(reason)) {
+      persistCurrentProgress(
+        chapterIndex: currentChapterIndex,
+        pageIndex: i,
+        reason: reason,
+      );
     }
     if (i >= slidePages.length - 2 && !isLoading) {
       triggerSilentPreload();
     }
+  }
+
+  void handleSlidePageChanged(int index) {
+    if (slidePages.isEmpty) return;
+    if (isRestoring) {
+      completeRestoreTransition();
+      return;
+    }
+    onPageChanged(index);
   }
 
   @override
@@ -265,11 +506,14 @@ class ReadBookController extends ReaderProviderBase
     if (isTtsActive) {
       saveTtsProgress();
     } else {
-      saveProgress(currentChapterIndex, currentPageIndex);
+      persistCurrentProgress(
+        chapterIndex: currentChapterIndex,
+        pageIndex: currentPageIndex,
+      );
     }
     scrollSaveTimer?.cancel();
     _heartbeatTimer?.cancel();
-    autoPageTimer?.cancel();
+    disposeAutoPageCoordinator();
     _readAloudController.detach();
     disposeContentManager();
     super.dispose();
@@ -295,7 +539,10 @@ class ReadBookController extends ReaderProviderBase
         if (isTtsActive) {
           saveTtsProgress();
         } else {
-          saveProgress(currentChapterIndex, currentPageIndex);
+          persistCurrentProgress(
+            chapterIndex: currentChapterIndex,
+            pageIndex: currentPageIndex,
+          );
         }
       }
     }
@@ -404,7 +651,7 @@ class ReadBookController extends ReaderProviderBase
       chapterPagesCache.remove(index);
       _chapterRuntimeCache.remove(index);
       if (index == currentChapterIndex) {
-        unawaited(loadChapter(index));
+        unawaited(loadChapter(index, reason: ReaderCommandReason.system));
       }
       notifyListeners();
     }
@@ -413,7 +660,7 @@ class ReadBookController extends ReaderProviderBase
   Future<void> jumpToChapter(int index) async {
     if (index >= 0 && index < chapters.length) {
       book.durChapterPos = 0;
-      await loadChapter(index);
+      await loadChapter(index, reason: ReaderCommandReason.user);
     }
   }
 
@@ -423,7 +670,12 @@ class ReadBookController extends ReaderProviderBase
     disposeContentManager();
     initContentManager();
     updatePaginationConfig();
-    unawaited(loadChapter(currentChapterIndex));
+    unawaited(
+      loadChapter(
+        currentChapterIndex,
+        reason: ReaderCommandReason.settingsRepaginate,
+      ),
+    );
   }
 
   void setTtsMode(int val) {
@@ -477,9 +729,12 @@ class ReadBookController extends ReaderProviderBase
     _initialSessionPrimed = true;
     final initialPreloadRadius =
         pageTurnMode == PageAnim.scroll && book.origin == 'local' ? 1 : 0;
-    await loadChapterWithPreloadRadius(
-      currentChapterIndex,
-      preloadRadius: pageTurnMode == PageAnim.scroll ? initialPreloadRadius : 1,
+    await ReaderPerfTrace.measureAsync(
+      'prime initial window chapter $currentChapterIndex',
+      () => loadChapterWithPreloadRadius(
+        currentChapterIndex,
+        preloadRadius: pageTurnMode == PageAnim.scroll ? initialPreloadRadius : 1,
+      ),
     );
     if (isDisposed) return;
     bootstrapChapterWindow(currentChapterIndex);
@@ -519,6 +774,7 @@ class ReadBookController extends ReaderProviderBase
 
   void stopTts() {
     _readAloudController.stop();
+    _navigation.clear(ReaderCommandReason.tts);
   }
 
   Future<void> nextPageOrChapter() {
@@ -532,18 +788,10 @@ class ReadBookController extends ReaderProviderBase
   void saveTtsProgress() {
     unawaited(_readAloudController.saveProgress(
       persist: (chapterIndex, charOffset) {
-        book.durChapterIndex = chapterIndex;
-        book.durChapterPos = charOffset;
-        final title = chapters.isNotEmpty && chapterIndex < chapters.length
-            ? chapters[chapterIndex].title
-            : '';
-        book.durChapterTitle = title;
-        unawaited(bookDao.updateProgress(
-          book.bookUrl,
-          chapterIndex,
-          title,
-          charOffset,
-        ));
+        persistChapterCharOffsetProgress(
+          chapterIndex: chapterIndex,
+          charOffset: charOffset,
+        );
       },
     ));
   }

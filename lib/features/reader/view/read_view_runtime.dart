@@ -8,6 +8,8 @@ import 'package:legado_reader/features/reader/provider/reader_provider_base.dart
 import 'package:legado_reader/features/reader/reader_provider.dart';
 import 'package:legado_reader/features/reader/view/delegate/scroll_mode_delegate.dart';
 import 'package:legado_reader/features/reader/view/delegate/slide_mode_delegate.dart';
+import 'package:legado_reader/features/reader/view/scroll_execution_adapter.dart';
+import 'package:legado_reader/features/reader/view/scroll_restore_runner.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class ReadViewRuntime extends StatefulWidget {
@@ -35,11 +37,15 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
   Timer? _userScrollResetTimer;
   bool _isUserScrolling = false;
   int _lastTtsScrolledStart = -1;
-  int _lastPreloadChapterIndex = -1;
-  int _pendingRestoreToken = 0;
-  int? _pendingRestoreChapterIndex;
-  double? _pendingRestoreLocalOffset;
-  final Set<int> _requestedVisibleChapterLoads = <int>{};
+  late final ScrollExecutionAdapter _scrollExecution = ScrollExecutionAdapter(
+    pageKeys: _pageKeys,
+    onStateChanged: () {
+      if (mounted) {
+        setState(() {});
+      }
+    },
+  );
+  final ScrollRestoreRunner _scrollRestoreRunner = const ScrollRestoreRunner();
 
   @override
   void initState() {
@@ -61,7 +67,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
   void _onProviderStateChanged() {
     if (!mounted) return;
     final p = widget.provider;
-    _requestedVisibleChapterLoads.removeWhere(p.hasRuntimeChapter);
+    p.reconcileVisibleScrollLoads();
 
     if (p.pageTurnMode == PageAnim.scroll && p.isAutoPaging && !p.isAutoPagePaused) {
       _startScrollAutoPage();
@@ -72,10 +78,10 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     final pendingChapterJump = p.consumePendingChapterJump();
     if (pendingChapterJump != null && p.pageTurnMode == PageAnim.scroll) {
       if (p.isRestoring) {
-        _pendingRestoreToken++;
-        final token = _pendingRestoreToken;
-        _pendingRestoreChapterIndex = pendingChapterJump.chapterIndex;
-        _pendingRestoreLocalOffset = pendingChapterJump.localOffset;
+        final token = p.registerPendingScrollRestore(
+          chapterIndex: pendingChapterJump.chapterIndex,
+          localOffset: pendingChapterJump.localOffset,
+        );
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _restoreScrollPosition(
             provider: p,
@@ -93,17 +99,18 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
         });
       }
     } else if (p.pageTurnMode == PageAnim.scroll &&
-        p.isRestoring &&
-        _pendingRestoreChapterIndex != null &&
-        _pendingRestoreLocalOffset != null) {
-      final token = _pendingRestoreToken;
-      final chapterIndex = _pendingRestoreChapterIndex!;
-      final localOffset = _pendingRestoreLocalOffset!;
+        p.isRestoring) {
+      final pendingRestore = p.consumePendingScrollRestore();
+      if (pendingRestore == null) {
+        setState(() {});
+        return;
+      }
+      final token = p.pendingScrollRestoreToken;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _restoreScrollPosition(
           provider: p,
-          chapterIndex: chapterIndex,
-          localOffset: localOffset,
+          chapterIndex: pendingRestore.chapterIndex,
+          localOffset: pendingRestore.localOffset,
           token: token,
         );
       });
@@ -136,34 +143,12 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     final chapterIndex = topItem.index;
     final viewportHeight = context.size?.height ?? 1.0;
     final localOffset = (-topItem.itemLeadingEdge * viewportHeight).clamp(0.0, double.infinity);
-    p.updateVisibleChapterPosition(
+    p.handleVisibleScrollState(
       chapterIndex: chapterIndex,
       localOffset: localOffset,
       alignment: topItem.itemLeadingEdge.clamp(0.0, 1.0),
+      visibleChapterIndexes: visible.map((item) => item.index).toList(),
     );
-    p.updateScrollPageIndex(chapterIndex, localOffset);
-    for (final item in visible) {
-      final visibleChapter = item.index;
-      if (p.hasRuntimeChapter(visibleChapter) ||
-          p.loadingChapters.contains(visibleChapter) ||
-          _requestedVisibleChapterLoads.contains(visibleChapter)) {
-        continue;
-      }
-      if ((visibleChapter - p.currentChapterIndex).abs() > 1) continue;
-      _requestedVisibleChapterLoads.add(visibleChapter);
-      unawaited(
-        p.ensureChapterCached(
-          visibleChapter,
-          silent: false,
-          prioritize: true,
-          preloadRadius: 1,
-        ),
-      );
-    }
-    if (_lastPreloadChapterIndex != chapterIndex) {
-      _lastPreloadChapterIndex = chapterIndex;
-      p.updateScrollPreloadForVisibleChapter(chapterIndex);
-    }
   }
 
   void _startScrollAutoPage() {
@@ -179,8 +164,6 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
         _stopScrollAutoPage();
         return;
       }
-      final viewSize = p.viewSize;
-      if (viewSize == null) return;
       if (_lastTickTime == Duration.zero) {
         _lastTickTime = elapsed;
         return;
@@ -188,18 +171,20 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       final dtSeconds =
           (elapsed.inMicroseconds - _lastTickTime.inMicroseconds) / 1000000.0;
       _lastTickTime = elapsed;
-      final delta = p.scrollDeltaPerFrame(viewSize, dtSeconds);
-      final pages = p.pagesForChapter(p.visibleChapterIndex);
-      final nextLocalOffset = p.visibleChapterLocalOffset + delta;
-      final chapterHeight = ChapterPositionResolver.chapterHeight(pages);
-      if (chapterHeight > 0 && nextLocalOffset < chapterHeight) {
+      final step = p.evaluateScrollAutoPageStep(dtSeconds);
+      if (step == null) {
+        return;
+      }
+      if (!step.advanceChapter &&
+          step.chapterIndex != null &&
+          step.localOffset != null) {
         _scrollToChapterLocalOffset(
-          chapterIndex: p.visibleChapterIndex,
-          localOffset: nextLocalOffset,
+          chapterIndex: step.chapterIndex!,
+          localOffset: step.localOffset!,
           animate: false,
         );
-      } else if (!p.isLoading) {
-        p.nextChapter();
+      } else if (step.advanceChapter) {
+        p.nextChapter(reason: ReaderCommandReason.autoPage);
       }
     });
     _autoScrollTicker!.start();
@@ -211,22 +196,6 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     _autoScrollTicker = null;
   }
 
-  void _scrollToPageKey({
-    required int chapterIndex,
-    required int pageIndex,
-    bool animate = false,
-  }) {
-    final key = _pageKeys['$chapterIndex:$pageIndex'];
-    final context = key?.currentContext;
-    if (context == null) return;
-    Scrollable.ensureVisible(
-      context,
-      duration: animate ? const Duration(milliseconds: 240) : Duration.zero,
-      alignment: 0,
-      curve: Curves.easeOut,
-    );
-  }
-
   void _scrollToChapterLocalOffset({
     required int chapterIndex,
     required double localOffset,
@@ -234,68 +203,14 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     Duration duration = Duration.zero,
     double topPadding = 0.0,
   }) {
-    final provider = widget.provider;
-    final pages = provider.pagesForChapter(chapterIndex);
-    if (pages.isEmpty) return;
-    final pageIndex = ChapterPositionResolver.pageIndexAtLocalOffset(
-      pages,
-      localOffset,
+    _scrollExecution.scrollToChapterLocalOffset(
+      provider: widget.provider,
+      chapterIndex: chapterIndex,
+      localOffset: localOffset,
+      animate: animate,
+      duration: duration,
+      topPadding: topPadding,
     );
-    final pageStartOffset = ChapterPositionResolver.getCharOffsetForPage(
-      pages,
-      pageIndex,
-    );
-    final pageStartLocalOffset = ChapterPositionResolver.charOffsetToLocalOffset(
-      pages,
-      pageStartOffset,
-    );
-    final intraPageOffset = (localOffset - pageStartLocalOffset).clamp(
-      0.0,
-      double.infinity,
-    );
-    final key = _pageKeys['$chapterIndex:$pageIndex'];
-    final pageContext = key?.currentContext;
-    if (pageContext == null) {
-      _scrollToPageKey(
-        chapterIndex: chapterIndex,
-        pageIndex: pageIndex,
-        animate: animate,
-      );
-      return;
-    }
-    Scrollable.ensureVisible(
-      pageContext,
-      duration: animate ? duration : Duration.zero,
-      alignment: 0,
-      curve: Curves.easeOut,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final position = Scrollable.maybeOf(pageContext)?.position;
-      final renderObject = pageContext.findRenderObject();
-      final viewportObject = Scrollable.maybeOf(pageContext)?.context.findRenderObject();
-      if (position == null ||
-          renderObject is! RenderBox ||
-          viewportObject is! RenderBox) {
-        return;
-      }
-      final pageTop =
-          renderObject.localToGlobal(Offset.zero, ancestor: viewportObject).dy;
-      final targetPixels =
-          (position.pixels + pageTop + intraPageOffset - topPadding).clamp(
-        position.minScrollExtent,
-        position.maxScrollExtent,
-      );
-      if (animate) {
-        position.animateTo(
-          targetPixels,
-          duration: duration,
-          curve: Curves.easeOut,
-        );
-      } else {
-        position.jumpTo(targetPixels);
-      }
-    });
   }
 
   void _jumpScrollPosition({
@@ -324,97 +239,58 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     required int token,
     int retries = 20,
   }) {
-    if (!mounted || token != _pendingRestoreToken) return;
-    if (!_itemScrollController.isAttached) {
-      if (retries <= 0) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _restoreScrollPosition(
-          provider: provider,
+    _scrollRestoreRunner.run(
+      provider: provider,
+      chapterIndex: chapterIndex,
+      localOffset: localOffset,
+      token: token,
+      retries: retries,
+      isMounted: () => mounted,
+      isScrollControllerAttached: () => _itemScrollController.isAttached,
+      ensureChapterVisible: () {
+        _itemScrollController.jumpTo(
+          index: chapterIndex,
+          alignment: 0,
+        );
+      },
+      completeRestore: () => _completeScrollRestore(provider, token),
+      scrollToChapterLocalOffset: ({
+        required int chapterIndex,
+        required double localOffset,
+        required bool animate,
+      }) {
+        _scrollToChapterLocalOffset(
           chapterIndex: chapterIndex,
           localOffset: localOffset,
-          token: token,
-          retries: retries - 1,
+          animate: animate,
         );
-      });
-      return;
-    }
-
-    final pages = provider.pagesForChapter(chapterIndex);
-    if (pages.isEmpty) {
-      if (provider.loadingChapters.contains(chapterIndex) && retries > 0) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _restoreScrollPosition(
-            provider: provider,
-            chapterIndex: chapterIndex,
-            localOffset: localOffset,
-            token: token,
-            retries: retries - 1,
-          );
-        });
-        return;
-      }
-      unawaited(
-        provider.ensureChapterCached(
-          chapterIndex,
+      },
+      ensureChapterCached: (targetChapterIndex) {
+        return provider.ensureChapterCached(
+          targetChapterIndex,
           silent: false,
           prioritize: true,
           preloadRadius: 1,
-        ),
-      );
-      if (retries > 0) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _restoreScrollPosition(
-            provider: provider,
-            chapterIndex: chapterIndex,
-            localOffset: localOffset,
-            token: token,
-            retries: retries - 1,
-          );
-        });
-      }
-      return;
-    }
-
-    _itemScrollController.jumpTo(
-      index: chapterIndex,
-      alignment: 0,
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || token != _pendingRestoreToken) return;
-      final pageIndex = ChapterPositionResolver.pageIndexAtLocalOffset(
-        pages,
-        localOffset,
-      );
-      final key = _pageKeys['$chapterIndex:$pageIndex'];
-      final pageContext = key?.currentContext;
-      if (pageContext == null && retries > 0) {
-        _restoreScrollPosition(
-          provider: provider,
-          chapterIndex: chapterIndex,
-          localOffset: localOffset,
-          token: token,
-          retries: retries - 1,
         );
-        return;
-      }
-      if (pageContext == null) return;
-      _scrollToChapterLocalOffset(
-        chapterIndex: chapterIndex,
-        localOffset: localOffset,
-        animate: false,
-      );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _completeScrollRestore(provider, token);
-      });
-    });
+      },
+      hasTargetPageContext: (targetChapterIndex) {
+        final runtimeChapter = provider.chapterAt(targetChapterIndex);
+        final pages = provider.pagesForChapter(targetChapterIndex);
+        final pageIndex = runtimeChapter != null
+            ? runtimeChapter.pageIndexAtLocalOffset(localOffset)
+            : ChapterPositionResolver.pageIndexAtLocalOffset(
+                pages,
+                localOffset,
+              );
+        return _pageKeys['$targetChapterIndex:$pageIndex']?.currentContext !=
+            null;
+      },
+    );
   }
 
   void _completeScrollRestore(ReaderProvider provider, int token) {
-    if (!mounted || token != _pendingRestoreToken) return;
-    _pendingRestoreChapterIndex = null;
-    _pendingRestoreLocalOffset = null;
-    provider.lifecycle = ReaderLifecycle.ready;
+    if (!mounted || !provider.matchesPendingScrollRestore(token)) return;
+    provider.completeRestoreTransition();
     setState(() {});
   }
 
@@ -423,12 +299,21 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     final chapterIndex = provider.ttsChapterIndex >= 0
         ? provider.ttsChapterIndex
         : provider.currentChapterIndex;
+    final runtimeChapter = provider.chapterAt(chapterIndex);
     final pages = provider.pagesForChapter(chapterIndex);
-    if (pages.isEmpty || provider.ttsStart < 0) return;
-    final targetLocalOffset = ChapterPositionResolver.charOffsetToLocalOffset(
-      pages,
-      provider.ttsStart,
-    );
+    if (((runtimeChapter == null && pages.isEmpty) ||
+            (runtimeChapter != null && runtimeChapter.isEmpty)) ||
+        provider.ttsStart < 0) {
+      return;
+    }
+    final targetLocalOffset = runtimeChapter != null
+        ? runtimeChapter.resolveScrollAnchor(
+            provider.ttsStart,
+          ).localOffset
+        : ChapterPositionResolver.charOffsetToLocalOffset(
+            pages,
+            provider.ttsStart,
+          );
     final viewportHeight = context.size?.height ?? 0.0;
     final anchorPadding = viewportHeight * 0.12;
     if (chapterIndex == provider.visibleChapterIndex && viewportHeight > 0) {
@@ -509,7 +394,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
                 widget.pageController.page?.round() != provider.currentPageIndex) {
               widget.pageController.jumpToPage(provider.currentPageIndex);
             }
-            provider.lifecycle = ReaderLifecycle.ready;
+            provider.completeRestoreTransition();
           });
         }
 
