@@ -44,7 +44,6 @@ class ReaderChapterProvider {
       chapter: chapter,
       rawContent: rawContent,
       rulesJson: rulesJson,
-      chineseConvertType: chineseConvertType,
     );
 
     final List<TextPage> pages = await ChapterProvider.paginate(

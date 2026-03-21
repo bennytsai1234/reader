@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:legado_reader/core/constant/page_anim.dart';
-import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
-import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:legado_reader/features/reader/runtime/read_view_runtime_coordinator.dart';
 import 'package:legado_reader/features/reader/view/delegate/scroll_mode_delegate.dart';
 import 'package:legado_reader/features/reader/view/delegate/slide_mode_delegate.dart';
+import 'package:legado_reader/features/reader/view/scroll_auto_page_driver.dart';
 import 'package:legado_reader/features/reader/view/scroll_execution_adapter.dart';
 import 'package:legado_reader/features/reader/view/scroll_restore_runner.dart';
+import 'package:legado_reader/features/reader/view/scroll_runtime_executor.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class ReadViewRuntime extends StatefulWidget {
@@ -32,8 +32,6 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
   final ItemPositionsListener _itemPositionsListener =
       ItemPositionsListener.create();
   final Map<String, GlobalKey> _pageKeys = {};
-  Ticker? _autoScrollTicker;
-  Duration _lastTickTime = Duration.zero;
   Timer? _userScrollResetTimer;
   bool _isUserScrolling = false;
   int _lastTtsScrolledStart = -1;
@@ -46,10 +44,43 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     },
   );
   final ScrollRestoreRunner _scrollRestoreRunner = const ScrollRestoreRunner();
+  final ReadViewRuntimeCoordinator _coordinator =
+      const ReadViewRuntimeCoordinator();
+  late final ScrollAutoPageDriver _scrollAutoPageDriver;
+  late final ScrollRuntimeExecutor _scrollRuntimeExecutor;
 
   @override
   void initState() {
     super.initState();
+    _scrollRuntimeExecutor = ScrollRuntimeExecutor(
+      provider: widget.provider,
+      itemScrollController: _itemScrollController,
+      pageKeys: _pageKeys,
+      scrollExecution: _scrollExecution,
+      scrollRestoreRunner: _scrollRestoreRunner,
+      isMounted: () => mounted,
+      onRestoreCompleted: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+      viewportHeight: () => context.size?.height ?? 0.0,
+    );
+    _scrollAutoPageDriver = ScrollAutoPageDriver(
+      createTicker: createTicker,
+      isMounted: () => mounted,
+      scrollToChapterLocalOffset: ({
+        required int chapterIndex,
+        required double localOffset,
+        required bool animate,
+      }) {
+        _scrollRuntimeExecutor.scrollToChapterLocalOffset(
+          chapterIndex: chapterIndex,
+          localOffset: localOffset,
+          animate: animate,
+        );
+      },
+    );
     widget.provider.addListener(_onProviderStateChanged);
     _itemPositionsListener.itemPositions.addListener(_handleItemPositionsChanged);
   }
@@ -58,7 +89,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
   void dispose() {
     widget.provider.removeListener(_onProviderStateChanged);
     _itemPositionsListener.itemPositions.removeListener(_handleItemPositionsChanged);
-    _stopScrollAutoPage();
+    _scrollAutoPageDriver.stop();
     _userScrollResetTimer?.cancel();
     widget.provider.setScrollInteractionActive(false);
     super.dispose();
@@ -69,60 +100,37 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     final p = widget.provider;
     p.reconcileVisibleScrollLoads();
 
-    if (p.pageTurnMode == PageAnim.scroll && p.isAutoPaging && !p.isAutoPagePaused) {
-      _startScrollAutoPage();
-    } else {
-      _stopScrollAutoPage();
-    }
+    _scrollAutoPageDriver.sync(p);
 
-    final pendingChapterJump = p.consumePendingChapterJump();
-    if (pendingChapterJump != null && p.pageTurnMode == PageAnim.scroll) {
-      if (p.isRestoring) {
-        final token = p.registerPendingScrollRestore(
-          chapterIndex: pendingChapterJump.chapterIndex,
-          localOffset: pendingChapterJump.localOffset,
-        );
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _restoreScrollPosition(
-            provider: p,
-            chapterIndex: pendingChapterJump.chapterIndex,
-            localOffset: pendingChapterJump.localOffset,
-            token: token,
-          );
-        });
-      } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _jumpScrollPosition(
-            chapterIndex: pendingChapterJump.chapterIndex,
-            localOffset: pendingChapterJump.localOffset,
-          );
-        });
-      }
-    } else if (p.pageTurnMode == PageAnim.scroll &&
-        p.isRestoring) {
-      final pendingRestore = p.consumePendingScrollRestore();
-      if (pendingRestore == null) {
-        setState(() {});
-        return;
-      }
-      final token = p.pendingScrollRestoreToken;
+    final pendingScrollAction = _coordinator.consumePendingScrollAction(p);
+    if (pendingScrollAction != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _restoreScrollPosition(
-          provider: p,
-          chapterIndex: pendingRestore.chapterIndex,
-          localOffset: pendingRestore.localOffset,
-          token: token,
+        if (pendingScrollAction.isRestore) {
+          _scrollRuntimeExecutor.restoreScrollPosition(
+            chapterIndex: pendingScrollAction.chapterIndex,
+            localOffset: pendingScrollAction.localOffset,
+            token: pendingScrollAction.token,
+          );
+          return;
+        }
+        _scrollRuntimeExecutor.jumpScrollPosition(
+          chapterIndex: pendingScrollAction.chapterIndex,
+          localOffset: pendingScrollAction.localOffset,
         );
       });
+    } else if (p.pageTurnMode == PageAnim.scroll && p.isRestoring) {
+      setState(() {});
+      return;
     }
 
-    if (p.pageTurnMode == PageAnim.scroll &&
-        p.ttsStart >= 0 &&
-        p.ttsStart != _lastTtsScrolledStart &&
-        !_isUserScrolling) {
+    if (_coordinator.shouldFollowTts(
+      p,
+      lastTtsScrolledStart: _lastTtsScrolledStart,
+      isUserScrolling: _isUserScrolling,
+    )) {
       _lastTtsScrolledStart = p.ttsStart;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _scrollToTtsHighlight();
+        if (mounted) _scrollRuntimeExecutor.scrollToTtsHighlight();
       });
     }
 
@@ -151,174 +159,6 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     );
   }
 
-  void _startScrollAutoPage() {
-    if (_autoScrollTicker != null) return;
-    _lastTickTime = Duration.zero;
-    _autoScrollTicker = createTicker((elapsed) {
-      if (!mounted) {
-        _stopScrollAutoPage();
-        return;
-      }
-      final p = widget.provider;
-      if (!p.isAutoPaging || p.isAutoPagePaused || p.pageTurnMode != PageAnim.scroll) {
-        _stopScrollAutoPage();
-        return;
-      }
-      if (_lastTickTime == Duration.zero) {
-        _lastTickTime = elapsed;
-        return;
-      }
-      final dtSeconds =
-          (elapsed.inMicroseconds - _lastTickTime.inMicroseconds) / 1000000.0;
-      _lastTickTime = elapsed;
-      final step = p.evaluateScrollAutoPageStep(dtSeconds);
-      if (step == null) {
-        return;
-      }
-      if (!step.advanceChapter &&
-          step.chapterIndex != null &&
-          step.localOffset != null) {
-        _scrollToChapterLocalOffset(
-          chapterIndex: step.chapterIndex!,
-          localOffset: step.localOffset!,
-          animate: false,
-        );
-      } else if (step.advanceChapter) {
-        p.nextChapter(reason: ReaderCommandReason.autoPage);
-      }
-    });
-    _autoScrollTicker!.start();
-  }
-
-  void _stopScrollAutoPage() {
-    _autoScrollTicker?.stop();
-    _autoScrollTicker?.dispose();
-    _autoScrollTicker = null;
-  }
-
-  void _scrollToChapterLocalOffset({
-    required int chapterIndex,
-    required double localOffset,
-    bool animate = false,
-    Duration duration = Duration.zero,
-    double topPadding = 0.0,
-  }) {
-    _scrollExecution.scrollToChapterLocalOffset(
-      provider: widget.provider,
-      chapterIndex: chapterIndex,
-      localOffset: localOffset,
-      animate: animate,
-      duration: duration,
-      topPadding: topPadding,
-    );
-  }
-
-  void _jumpScrollPosition({
-    required int chapterIndex,
-    required double localOffset,
-  }) {
-    if (!_itemScrollController.isAttached) return;
-    _itemScrollController.jumpTo(
-      index: chapterIndex,
-      alignment: 0,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _scrollToChapterLocalOffset(
-        chapterIndex: chapterIndex,
-        localOffset: localOffset,
-        animate: false,
-      );
-    });
-  }
-
-  void _restoreScrollPosition({
-    required ReaderProvider provider,
-    required int chapterIndex,
-    required double localOffset,
-    required int token,
-    int retries = 20,
-  }) {
-    _scrollRestoreRunner.run(
-      provider: provider,
-      chapterIndex: chapterIndex,
-      localOffset: localOffset,
-      token: token,
-      retries: retries,
-      isMounted: () => mounted,
-      isScrollControllerAttached: () => _itemScrollController.isAttached,
-      ensureChapterVisible: () {
-        _itemScrollController.jumpTo(
-          index: chapterIndex,
-          alignment: 0,
-        );
-      },
-      completeRestore: () => _completeScrollRestore(provider, token),
-      scrollToChapterLocalOffset: ({
-        required int chapterIndex,
-        required double localOffset,
-        required bool animate,
-      }) {
-        _scrollToChapterLocalOffset(
-          chapterIndex: chapterIndex,
-          localOffset: localOffset,
-          animate: animate,
-        );
-      },
-      ensureChapterCached: (targetChapterIndex) {
-        return provider.ensureChapterCached(
-          targetChapterIndex,
-          silent: false,
-          prioritize: true,
-          preloadRadius: 1,
-        );
-      },
-      hasTargetPageContext: (targetChapterIndex) {
-        final runtimeChapter = provider.chapterAt(targetChapterIndex);
-        final pages = provider.pagesForChapter(targetChapterIndex);
-        final pageIndex = runtimeChapter != null
-            ? runtimeChapter.pageIndexAtLocalOffset(localOffset)
-            : ChapterPositionResolver.pageIndexAtLocalOffset(
-                pages,
-                localOffset,
-              );
-        return _pageKeys['$targetChapterIndex:$pageIndex']?.currentContext !=
-            null;
-      },
-    );
-  }
-
-  void _completeScrollRestore(ReaderProvider provider, int token) {
-    if (!mounted || !provider.matchesPendingScrollRestore(token)) return;
-    provider.completeRestoreTransition();
-    setState(() {});
-  }
-
-  void _scrollToTtsHighlight() {
-    final provider = widget.provider;
-    final viewportHeight = context.size?.height ?? 0.0;
-    final target = provider.evaluateTtsFollowTarget(
-      viewportHeight: viewportHeight,
-    );
-    if (target == null) {
-      return;
-    }
-    _itemScrollController.scrollTo(
-      index: target.chapterIndex,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToChapterLocalOffset(
-        chapterIndex: target.chapterIndex,
-        localOffset: target.localOffset,
-        animate: true,
-        duration: const Duration(milliseconds: 160),
-        topPadding: target.topPadding,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final provider = widget.provider;
@@ -333,16 +173,15 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
             ? provider.pageFactory.orderedChapters.isNotEmpty
             : provider.slidePages.isNotEmpty;
 
-        final waitingForFirstContent =
-            !hasVisibleData &&
-            (provider.lifecycle == ReaderLifecycle.loading ||
-                provider.lifecycle == ReaderLifecycle.restoring ||
-                provider.viewSize == null ||
-                provider.chapters.isNotEmpty);
+        final waitingForFirstContent = _coordinator.shouldWaitForFirstContent(
+          provider,
+          hasVisibleData: hasVisibleData,
+        );
         final holdScrollUntilRestored =
-            provider.pageTurnMode == PageAnim.scroll &&
-            provider.lifecycle == ReaderLifecycle.restoring &&
-            hasVisibleData;
+            _coordinator.shouldHoldScrollUntilRestored(
+          provider,
+          hasVisibleData: hasVisibleData,
+        );
 
         if ((provider.isLoading && !hasVisibleData) || waitingForFirstContent) {
           return Container(
@@ -363,7 +202,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
           );
         }
 
-        if (provider.isRestoring && provider.pageTurnMode != PageAnim.scroll) {
+        if (_coordinator.shouldRestoreSlidePage(provider)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (widget.pageController.hasClients &&
                 widget.pageController.page?.round() != provider.currentPageIndex) {
@@ -383,24 +222,8 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
             : const SlideModeDelegate();
 
         final content = NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            if (provider.pageTurnMode != PageAnim.scroll) return false;
-            if (notification is ScrollStartNotification &&
-                notification.dragDetails != null) {
-              _isUserScrolling = true;
-              _userScrollResetTimer?.cancel();
-              provider.setScrollInteractionActive(true);
-            } else if (notification is ScrollEndNotification) {
-              _userScrollResetTimer?.cancel();
-              _userScrollResetTimer = Timer(const Duration(milliseconds: 800), () {
-                if (mounted) {
-                  _isUserScrolling = false;
-                  provider.setScrollInteractionActive(false);
-                }
-              });
-            }
-            return false;
-          },
+          onNotification: (notification) =>
+              _handleScrollNotification(notification, provider),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             child: delegate.build(
@@ -431,5 +254,38 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
         return content;
       },
     );
+  }
+
+  bool _handleScrollNotification(
+    ScrollNotification notification,
+    ReaderProvider provider,
+  ) {
+    if (provider.pageTurnMode != PageAnim.scroll) return false;
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _beginUserScroll(provider);
+    } else if (notification is ScrollEndNotification) {
+      _scheduleUserScrollReset(provider);
+    }
+    return false;
+  }
+
+  void _beginUserScroll(ReaderProvider provider) {
+    _isUserScrolling = true;
+    _userScrollResetTimer?.cancel();
+    provider.pauseAutoPage();
+    provider.setScrollInteractionActive(true);
+  }
+
+  void _scheduleUserScrollReset(ReaderProvider provider) {
+    _userScrollResetTimer?.cancel();
+    _userScrollResetTimer = Timer(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      _isUserScrolling = false;
+      provider.setScrollInteractionActive(false);
+      if (!provider.showControls) {
+        provider.resumeAutoPage();
+      }
+    });
   }
 }

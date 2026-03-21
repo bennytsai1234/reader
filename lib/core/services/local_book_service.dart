@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -14,6 +15,10 @@ class LocalBookService {
   factory LocalBookService() => _instance;
   LocalBookService._internal();
 
+  RandomAccessFile? _txtAccessFile;
+  String? _txtAccessFilePath;
+  Future<void> _txtReadChain = Future<void>.value();
+
   /// 獲取本地書籍章節內容
   Future<String> getContent(Book book, BookChapter chapter) async {
     final path = book.bookUrl.replaceFirst('local://', '');
@@ -25,17 +30,15 @@ class LocalBookService {
     if (ext == 'txt') {
       // 根據章節索引 (start, end) 指標讀取 TXT 部分內容 (對標 Android ReadLocalBook.kt)
       if (chapter.start != null && chapter.end != null) {
-        final accessFile = await file.open(mode: FileMode.read);
-        try {
+        return _queueTxtRead(() async {
+          final accessFile = await _getTxtAccessFile(file, path);
           final start = chapter.start!;
           final end = chapter.end!;
           debugPrint('LocalBookService: Reading bytes from $start to $end (length: ${end - start})');
           await accessFile.setPosition(start);
           final bytes = await accessFile.read(end - start);
           return _decodeBytes(bytes, book.charset ?? 'utf-8');
-        } finally {
-          await accessFile.close();
-        }
+        });
       }
       debugPrint('LocalBookService: Missing offsets for chapter ${chapter.title}');
       return '本地 TXT 索引缺失，請重新匯入';
@@ -44,6 +47,32 @@ class LocalBookService {
       return await EpubService().getChapterContent(file, chapter.url);
     }
     return '不支援的本地格式: $ext';
+  }
+
+  Future<T> _queueTxtRead<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    _txtReadChain = _txtReadChain.then((_) async {
+      try {
+        completer.complete(await action());
+      } catch (e, st) {
+        completer.completeError(e, st);
+      }
+    });
+    return completer.future;
+  }
+
+  Future<RandomAccessFile> _getTxtAccessFile(File file, String path) async {
+    if (_txtAccessFile != null && _txtAccessFilePath == path) {
+      return _txtAccessFile!;
+    }
+    if (_txtAccessFile != null) {
+      await _txtAccessFile!.close();
+      _txtAccessFile = null;
+      _txtAccessFilePath = null;
+    }
+    _txtAccessFile = await file.open(mode: FileMode.read);
+    _txtAccessFilePath = path;
+    return _txtAccessFile!;
   }
 
   String _decodeBytes(List<int> bytes, String charset) {

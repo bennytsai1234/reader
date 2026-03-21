@@ -1,8 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:crypto/crypto.dart';
-import 'package:legado_reader/core/services/cache_manager.dart';
 import 'text_page.dart';
 import 'chapter_provider.dart';
 import 'reader_perf_trace.dart';
@@ -276,6 +273,21 @@ class ChapterContentManager {
     }
   }
 
+  Set<int> activateWindow(
+    int centerChapterIndex, {
+    int preloadRadius = 2,
+    bool preload = true,
+    bool evictOutsideWindow = false,
+  }) {
+    updateWindow(
+      centerChapterIndex,
+      preloadRadius: preloadRadius,
+      preload: preload,
+    );
+    if (!evictOutsideWindow) return {};
+    return evictOutsideActiveWindow();
+  }
+
   void warmChaptersAround(
     int centerChapterIndex, {
     int radius = 2,
@@ -422,6 +434,8 @@ class ChapterContentManager {
   Future<void> _fetchAndPaginate(int index) async {
     final completer = Completer<void>();
     _loadCompleters[index] = completer;
+    final trace = Stopwatch()..start();
+    ReaderPerfTrace.mark('chapter $index fetch/paginate start');
 
     try {
       final result = await _fetchFn(index);
@@ -441,6 +455,11 @@ class ChapterContentManager {
         }
       }
     } finally {
+      trace.stop();
+      ReaderPerfTrace.mark(
+        'chapter $index fetch/paginate done '
+        '(pages: ${_paginatedCache[index]?.length ?? 0}, total: ${trace.elapsedMilliseconds}ms)',
+      );
       _loadCompleters.remove(index);
       if (!completer.isCompleted) completer.complete();
     }
@@ -452,26 +471,6 @@ class ChapterContentManager {
       return [];
     }
     if (index < 0 || index >= _chapters.length) return [];
-
-    final cacheKey = _buildPaginatedCacheKey(
-      index: index,
-      content: content,
-      config: config,
-    );
-    final cacheManager = _tryGetCacheManager();
-    if (cacheManager != null) {
-      final persisted = await cacheManager.get(cacheKey);
-      if (persisted?.isNotEmpty ?? false) {
-        try {
-          final decoded = jsonDecode(persisted!) as List<dynamic>;
-          return decoded
-              .map((page) => TextPage.fromJson(Map<String, dynamic>.from(page as Map)))
-              .toList();
-        } catch (e) {
-          debugPrint('ChapterContentManager: Restore paginated cache failed for $index: $e');
-        }
-      }
-    }
 
     final pages = await ReaderPerfTrace.measureAsync(
       'paginate chapter $index',
@@ -488,17 +487,6 @@ class ChapterContentManager {
         textFullJustify: config.textFullJustify,
       ),
     );
-
-    if (pages.isNotEmpty && cacheManager != null) {
-      final payload = jsonEncode(pages.map((page) => page.toJson()).toList());
-      unawaited(
-        cacheManager.put(
-          cacheKey,
-          payload,
-          saveTimeSeconds: 60 * 60 * 24 * 30,
-        ),
-      );
-    }
 
     return pages;
   }
@@ -529,45 +517,24 @@ class ChapterContentManager {
     return repaginateWindow(chapterIndexes);
   }
 
-  String _buildPaginatedCacheKey({
-    required int index,
-    required String content,
-    required PaginationConfig config,
-  }) {
-    final chapter = _chapters[index];
-    final contentHash = sha1.convert(utf8.encode(content)).toString();
-    final configHash = sha1.convert(utf8.encode(jsonEncode({
-      'viewWidth': config.viewSize.width,
-      'viewHeight': config.viewSize.height,
-      'titleFontSize': config.titleStyle.fontSize,
-      'titleHeight': config.titleStyle.height,
-      'titleLetterSpacing': config.titleStyle.letterSpacing,
-      'contentFontSize': config.contentStyle.fontSize,
-      'contentHeight': config.contentStyle.height,
-      'contentLetterSpacing': config.contentStyle.letterSpacing,
-      'paragraphSpacing': config.paragraphSpacing,
-      'textIndent': config.textIndent,
-      'textFullJustify': config.textFullJustify,
-      'padding': config.padding,
-      'chapterSize': _chapters.length,
-      'chapterTitle': chapter.title,
-    }))).toString();
-    final digest = sha1.convert(utf8.encode([
-      chapter.bookUrl,
-      chapter.url,
-      index.toString(),
-      configHash,
-      contentHash,
-    ].join('|'))).toString();
-    return 'reader_paginated_v2_$digest';
+  Future<Set<int>> repaginateForDisplay({
+    required int centerChapterIndex,
+    required bool isScrollMode,
+    int scrollRadius = 1,
+  }) async {
+    final scope = isScrollMode
+        ? _buildWindow(centerChapterIndex, radius: scrollRadius)
+        : Set<int>.from(_targetWindow);
+    if (isScrollMode) {
+      await repaginateWindow(scope);
+    } else {
+      await repaginateAll();
+    }
+    return scope;
   }
 
-  CacheManager? _tryGetCacheManager() {
-    try {
-      return CacheManager();
-    } catch (_) {
-      return null;
-    }
+  Set<int> evictOutsideActiveWindow() {
+    return evictOutside(_targetWindow);
   }
 
   void _saveContentCache(int index, String content) {
@@ -683,6 +650,8 @@ class ChapterContentManager {
         _paginatedCache.containsKey(index)) {
       return;
     }
+    final trace = Stopwatch()..start();
+    ReaderPerfTrace.mark('chapter $index silent preload start');
 
     try {
       final result = await _fetchFn(index);
@@ -709,6 +678,11 @@ class ChapterContentManager {
     } catch (e) {
       debugPrint('ChapterContentManager: Preload chapter $index failed: $e');
     } finally {
+      trace.stop();
+      ReaderPerfTrace.mark(
+        'chapter $index silent preload done '
+        '(pages: ${_paginatedCache[index]?.length ?? 0}, total: ${trace.elapsedMilliseconds}ms)',
+      );
       _silentLoadingChapters.remove(index);
       _loadCompleters.remove(index);
       if (!completer.isCompleted) completer.complete();
@@ -722,33 +696,9 @@ class ChapterContentManager {
     }
     if (index < 0 || index >= _chapters.length) return;
 
-    final cacheKey = _buildPaginatedCacheKey(
-      index: index,
-      content: content,
-      config: config,
-    );
-    final cacheManager = _tryGetCacheManager();
-    if (cacheManager != null) {
-      final persisted = await cacheManager.get(cacheKey);
-      if (persisted?.isNotEmpty ?? false) {
-        try {
-          final decoded = jsonDecode(persisted!) as List<dynamic>;
-          final restored = decoded
-              .map((page) => TextPage.fromJson(Map<String, dynamic>.from(page as Map)))
-              .toList();
-          if (restored.isNotEmpty) {
-            _paginatedCache[index] = restored;
-            _onChapterReadyController.add(index);
-            return;
-          }
-        } catch (e) {
-          debugPrint('ChapterContentManager: Restore paginated cache failed for $index: $e');
-        }
-      }
-    }
-
     final chapter = _chapters[index];
     List<TextPage> latestPages = const <TextPage>[];
+    final progressiveTrace = Stopwatch()..start();
     await for (final pages in ChapterProvider.paginateProgressive(
       content: content,
       chapter: chapter,
@@ -766,25 +716,22 @@ class ChapterContentManager {
       if (pages.isNotEmpty) {
         _paginatedCache[index] = pages;
         _onChapterReadyController.add(index);
+        ReaderPerfTrace.mark(
+          'paginate chapter $index progressive chunk '
+          '(pages: ${pages.length}, elapsed: ${progressiveTrace.elapsedMilliseconds}ms)',
+        );
       }
       await Future.delayed(Duration.zero);
     }
+    progressiveTrace.stop();
+    ReaderPerfTrace.mark(
+      'paginate chapter $index progressive done '
+      '(pages: ${latestPages.length}, total: ${progressiveTrace.elapsedMilliseconds}ms)',
+    );
 
     if (latestPages.isEmpty) {
       _paginatedCache.remove(index);
       return;
-    }
-
-    if (cacheManager != null) {
-      final payload =
-          jsonEncode(latestPages.map((page) => page.toJson()).toList());
-      unawaited(
-        cacheManager.put(
-          cacheKey,
-          payload,
-          saveTimeSeconds: 60 * 60 * 24 * 30,
-        ),
-      );
     }
   }
 

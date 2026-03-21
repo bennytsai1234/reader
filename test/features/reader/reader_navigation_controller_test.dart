@@ -95,5 +95,26 @@ void main() {
       expect(nav.beginChapterJump(ReaderCommandReason.user), isTrue);
       expect(nav.activeCommandReason, ReaderCommandReason.user);
     });
+
+    test('userScroll 可以打斷 tts command', () {
+      final nav = ReaderNavigationController();
+
+      expect(nav.beginChapterJump(ReaderCommandReason.tts), isTrue);
+      expect(nav.beginChapterJump(ReaderCommandReason.userScroll), isTrue);
+      expect(nav.activeCommandReason, ReaderCommandReason.userScroll);
+    });
+
+    test('restore 期間的 page change reason 不會被誤判成可持久化進度', () {
+      final nav = ReaderNavigationController();
+
+      expect(nav.beginSlideJump(ReaderCommandReason.restore), isTrue);
+      final jumpReason = nav.consumePendingSlideJumpReason();
+      final pageChangeReason = nav.consumePageChangeReason();
+
+      expect(jumpReason, ReaderCommandReason.restore);
+      expect(pageChangeReason, ReaderCommandReason.restore);
+      expect(nav.shouldPersistForReason(pageChangeReason), isFalse);
+      expect(nav.shouldPersistVisiblePosition(DateTime.now()), isFalse);
+    });
   });
 }

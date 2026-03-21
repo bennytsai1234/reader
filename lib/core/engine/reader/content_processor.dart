@@ -3,7 +3,6 @@ import 'package:legado_reader/core/models/book.dart';
 import 'package:legado_reader/core/models/chapter.dart';
 import 'package:legado_reader/core/models/replace_rule.dart';
 import 'package:legado_reader/core/models/book/book_content.dart';
-import 'package:legado_reader/core/services/chinese_utils.dart';
 import 'package:legado_reader/core/constant/app_pattern.dart';
 
 /// ContentProcessor - 閱讀器正文處理引擎 (對標 Android ContentProcessor.kt)
@@ -15,16 +14,13 @@ class ContentProcessor {
     required BookChapter chapter,
     required String rawContent,
     required List<Map<String, dynamic>> rulesJson,
-    int chineseConvertType = 0,
     bool reSegmentEnabled = true,
     bool removeSameTitle = true,
-    bool includeTitle = true,
   }) async {
     if (rawContent.isEmpty) return BookContent(content: '');
     final parsedRules =
         rulesJson.map((j) => ReplaceRule.fromJson(j)).where((r) => r.isEnabled).toList()
           ..sort((a, b) => a.order.compareTo(b.order));
-    final titleRules = parsedRules.where((r) => r.scopeTitle).toList();
     final contentRules = parsedRules.where((r) => r.scopeContent).toList();
 
     // 1. 在 Isolate 中執行 CPU 密集型操作
@@ -42,24 +38,6 @@ class ContentProcessor {
     String content = resultData['content'];
     final effectiveRules = resultData['effectiveRules'] as List<ReplaceRule>;
     final bool sameTitleRemoved = resultData['sameTitleRemoved'];
-
-    // 2. 簡繁轉換 (這部分保持在主 Isolate 呼叫 OpenCC 插件)
-    // value 1 = 簡轉繁 (s2t), value 2 = 繁轉簡 (t2s)
-    if (chineseConvertType == 1) {
-      content = await ChineseUtils.s2t(content);
-    } else if (chineseConvertType == 2) {
-      content = await ChineseUtils.t2s(content);
-    }
-
-    // 3. 重新添加處理後的標題
-    if (includeTitle) {
-      final processedTitle = await chapter.getDisplayTitle(
-        replaceRules: titleRules,
-        chineseConvertType: chineseConvertType,
-      );
-      content = '$processedTitle\n$content';
-    }
-
 
     return BookContent(
       content: content,

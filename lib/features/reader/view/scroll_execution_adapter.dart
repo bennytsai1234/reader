@@ -83,13 +83,7 @@ class ScrollExecutionAdapter {
       );
       return;
     }
-    Scrollable.ensureVisible(
-      pageContext,
-      duration: animate ? duration : Duration.zero,
-      alignment: 0,
-      curve: Curves.easeOut,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    void applyScrollOffset() {
       final position = Scrollable.maybeOf(pageContext)?.position;
       final renderObject = pageContext.findRenderObject();
       final viewportObject =
@@ -117,6 +111,29 @@ class ScrollExecutionAdapter {
         position.jumpTo(targetPixels);
       }
       onStateChanged?.call();
-    });
+    }
+
+    final renderObject = pageContext.findRenderObject();
+    final viewportObject =
+        Scrollable.maybeOf(pageContext)?.context.findRenderObject();
+    if (renderObject is RenderBox && viewportObject is RenderBox) {
+      final pageTop =
+          renderObject.localToGlobal(Offset.zero, ancestor: viewportObject).dy;
+      final pageBottom = pageTop + renderObject.size.height;
+      final viewportHeight = viewportObject.size.height;
+      final isVisible = pageBottom > 0 && pageTop < viewportHeight;
+      if (isVisible) {
+        applyScrollOffset();
+        return;
+      }
+    }
+
+    Scrollable.ensureVisible(
+      pageContext,
+      duration: animate ? duration : Duration.zero,
+      alignment: 0,
+      curve: Curves.easeOut,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => applyScrollOffset());
   }
 }

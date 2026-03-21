@@ -29,6 +29,7 @@ class ReaderPage extends StatefulWidget {
 class _ReaderPageState extends State<ReaderPage> {
   late PageController _pageCtrl;
   final GlobalKey<ScaffoldState> _key = GlobalKey<ScaffoldState>();
+  int? _deferredPendingJump;
 
   @override
   void initState() {
@@ -38,6 +39,23 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   @override void dispose() { _pageCtrl.dispose(); super.dispose(); }
+
+  void _schedulePendingJump(int pageIndex) {
+    _deferredPendingJump = pageIndex;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pending = _deferredPendingJump;
+      if (!mounted || pending == null || !_pageCtrl.hasClients) return;
+      final position = _pageCtrl.position;
+      if (position.isScrollingNotifier.value) {
+        _schedulePendingJump(pending);
+        return;
+      }
+      _deferredPendingJump = null;
+      if (_pageCtrl.page?.round() != pending) {
+        _pageCtrl.jumpToPage(pending);
+      }
+    });
+  }
 
   void _handleTap(Offset pos, Size size, ReaderProvider p) {
     final x = pos.dx, y = pos.dy, w = size.width, h = size.height;
@@ -67,12 +85,7 @@ class _ReaderPageState extends State<ReaderPage> {
         final pendingJump = p.consumePendingJump();
         if (pendingJump != null) {
           p.consumePendingSlideJumpReason();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted || !_pageCtrl.hasClients) return;
-            if (_pageCtrl.page?.round() != pendingJump) {
-              _pageCtrl.jumpToPage(pendingJump);
-            }
-          });
+          _schedulePendingJump(pendingJump);
         }
         return Container(
           color: p.currentTheme.backgroundColor,

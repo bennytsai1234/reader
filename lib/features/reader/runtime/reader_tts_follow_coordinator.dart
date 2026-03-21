@@ -24,13 +24,12 @@ class ReaderTtsFollowCoordinator {
     final anchorPadding = viewportHeight * 0.12;
     if (chapterIndex == visibleChapterIndex) {
       final visibleTop = visibleChapterLocalOffset;
-      final visibleBottom = visibleTop + viewportHeight;
       if (targetLocalOffset <= anchorPadding && visibleTop <= 2.0) {
         return null;
       }
-      final safeTop = visibleTop + anchorPadding;
-      final safeBottom = visibleBottom - (viewportHeight * 0.22);
-      if (targetLocalOffset >= safeTop && targetLocalOffset <= safeBottom) {
+      final anchorTop = visibleTop;
+      final anchorBottom = visibleTop + anchorPadding;
+      if (targetLocalOffset >= anchorTop && targetLocalOffset <= anchorBottom) {
         return null;
       }
     }

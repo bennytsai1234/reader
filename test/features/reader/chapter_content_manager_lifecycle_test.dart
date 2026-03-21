@@ -17,7 +17,7 @@ void main() {
       chapters: chapters,
     );
     manager.updateConfig(
-      PaginationConfig(
+      const PaginationConfig(
         viewSize: const Size(360, 640),
         titleStyle: const TextStyle(fontSize: 20),
         contentStyle: const TextStyle(fontSize: 16, height: 1.5),
