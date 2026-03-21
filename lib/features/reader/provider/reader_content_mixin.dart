@@ -311,6 +311,10 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   }
 
   void _refreshSlidePages() {
+    final previousPage =
+        currentPageIndex >= 0 && currentPageIndex < slidePages.length
+            ? slidePages[currentPageIndex]
+            : null;
     final runtimePages = (this as dynamic).buildSlideRuntimePages?.call();
     if (runtimePages is List<TextPage>) {
       slidePages = runtimePages;
@@ -318,7 +322,28 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
         currentPageIndex = 0;
         return;
       }
-      currentPageIndex = currentPageIndex.clamp(0, slidePages.length - 1);
+      final remappedIndex = previousPage != null
+          ? slidePages.indexWhere(
+              (page) =>
+                  page.chapterIndex == previousPage.chapterIndex &&
+                  page.index == previousPage.index,
+            )
+          : -1;
+      final targetIndex = remappedIndex >= 0
+          ? remappedIndex
+          : _findSlidePageIndexByCharOffset(
+              chapterIndex: currentChapterIndex,
+              charOffset: book.durChapterPos,
+            );
+      final clampedIndex = targetIndex.clamp(0, slidePages.length - 1);
+      final indexChanged = clampedIndex != currentPageIndex;
+      currentPageIndex = clampedIndex;
+      if (indexChanged) {
+        requestJumpToPage(
+          currentPageIndex,
+          reason: ReaderCommandReason.system,
+        );
+      }
       return;
     }
 
@@ -339,7 +364,28 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       currentPageIndex = 0;
       return;
     }
-    currentPageIndex = currentPageIndex.clamp(0, slidePages.length - 1);
+    final remappedIndex = previousPage != null
+        ? slidePages.indexWhere(
+            (page) =>
+                page.chapterIndex == previousPage.chapterIndex &&
+                page.index == previousPage.index,
+          )
+        : -1;
+    final targetIndex = remappedIndex >= 0
+        ? remappedIndex
+        : _findSlidePageIndexByCharOffset(
+            chapterIndex: currentChapterIndex,
+            charOffset: book.durChapterPos,
+          );
+    final clampedIndex = targetIndex.clamp(0, slidePages.length - 1);
+    final indexChanged = clampedIndex != currentPageIndex;
+    currentPageIndex = clampedIndex;
+    if (indexChanged) {
+      requestJumpToPage(
+        currentPageIndex,
+        reason: ReaderCommandReason.system,
+      );
+    }
   }
 
   int _findSlidePageIndexByCharOffset({
