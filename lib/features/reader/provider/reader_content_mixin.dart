@@ -836,7 +836,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       charOffset: targetCharOffset,
       fromEnd: fromEnd,
     );
-    (this as dynamic).jumpToSlidePage(
+    _contentCallbacks.jumpToSlidePage?.call(
       currentPageIndex,
       reason: reason,
     );
@@ -890,7 +890,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       charOffset: book.durChapterPos,
       fromEnd: fromEnd,
     );
-    (this as dynamic).jumpToSlidePage(
+    _contentCallbacks.jumpToSlidePage?.call(
       currentPageIndex,
       reason: reason,
     );
