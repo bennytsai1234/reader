@@ -17,6 +17,7 @@ import 'view/read_view_runtime.dart';
 import 'tts_dialog.dart';
 import 'auto_read_dialog.dart';
 import 'package:legado_reader/core/constant/page_anim.dart';
+import 'package:legado_reader/features/reader/view/slide_page_controller.dart';
 
 class ReaderPage extends StatefulWidget {
   final Book book;
@@ -29,33 +30,17 @@ class ReaderPage extends StatefulWidget {
 class _ReaderPageState extends State<ReaderPage> {
   late PageController _pageCtrl;
   final GlobalKey<ScaffoldState> _key = GlobalKey<ScaffoldState>();
-  int? _deferredPendingJump;
+  late final SlidePageController _slideCtrl;
 
   @override
   void initState() {
     super.initState();
     _pageCtrl = PageController(initialPage: 0);
+    _slideCtrl = SlidePageController(_pageCtrl);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
-  @override void dispose() { _pageCtrl.dispose(); super.dispose(); }
-
-  void _schedulePendingJump(int pageIndex) {
-    _deferredPendingJump = pageIndex;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final pending = _deferredPendingJump;
-      if (!mounted || pending == null || !_pageCtrl.hasClients) return;
-      final position = _pageCtrl.position;
-      if (position.isScrollingNotifier.value) {
-        _schedulePendingJump(pending);
-        return;
-      }
-      _deferredPendingJump = null;
-      if (_pageCtrl.page?.round() != pending) {
-        _pageCtrl.jumpToPage(pending);
-      }
-    });
-  }
+  @override void dispose() { _slideCtrl.dispose(); _pageCtrl.dispose(); super.dispose(); }
 
   void _handleTap(Offset pos, Size size, ReaderProvider p) {
     final x = pos.dx, y = pos.dy, w = size.width, h = size.height;
@@ -85,7 +70,7 @@ class _ReaderPageState extends State<ReaderPage> {
         final pendingJump = p.consumePendingJump();
         if (pendingJump != null) {
           p.consumePendingSlideJumpReason();
-          _schedulePendingJump(pendingJump);
+          _slideCtrl.jumpTo(pendingJump);
         }
         return Container(
           color: p.currentTheme.backgroundColor,
