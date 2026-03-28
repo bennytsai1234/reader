@@ -181,6 +181,24 @@ class ChapterContentManager {
   /// 取得原始內容快取
   String? getCachedContent(int index) => _contentCache[index];
 
+  /// Paginate a chapter whose content is already cached, skipping the fetch.
+  /// Returns empty list if config is not set or content is not cached.
+  /// Used as a fast path for local books to minimize placeholder display time.
+  Future<List<TextPage>> paginateIfCached(int index) async {
+    // Already paginated?
+    final existing = _paginatedCache[index];
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    final content = _contentCache[index];
+    if (content == null) return [];
+
+    final pages = await _doPaginate(index, content);
+    if (pages.isNotEmpty) {
+      _paginatedCache[index] = pages;
+    }
+    return pages;
+  }
+
   /// 更新分頁設定並清除分頁快取（保留內容快取）
   void updateConfig(PaginationConfig config) {
     _config = config;
