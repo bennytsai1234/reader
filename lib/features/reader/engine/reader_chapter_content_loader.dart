@@ -68,7 +68,10 @@ class ReaderChapterContentLoader {
       processedContent: bookContent.content,
       chineseConvertType: chineseConvertType,
     );
-    return FetchResult(content: '$convertedTitle\n$convertedContent');
+    return FetchResult(
+      content: '$convertedTitle\n$convertedContent',
+      displayTitle: convertedTitle,
+    );
   }
 
   void resetProcessingContext() {
@@ -110,7 +113,10 @@ class ReaderChapterContentLoader {
 
   Future<List<Map<String, dynamic>>> _loadRulesJson() async {
     _cachedRulesJson ??=
-        (await replaceDao.getEnabled()).map((r) => r.toJson()).toList().cast<Map<String, dynamic>>();
+        (await replaceDao.getEnabled())
+            .map((r) => r.toJson())
+            .toList()
+            .cast<Map<String, dynamic>>();
     return _cachedRulesJson!;
   }
 
@@ -147,11 +153,12 @@ class ReaderChapterContentLoader {
         '${chapter.url}:${chapter.title.hashCode}:$chineseConvertType';
     final cached = _convertedTitleCache[cacheKey];
     if (cached != null) return cached;
-    final titleRules = rulesJson
-        .map((json) => ReplaceRule.fromJson(json))
-        .where((rule) => rule.isEnabled && rule.scopeTitle)
-        .toList()
-      ..sort((a, b) => a.order.compareTo(b.order));
+    final titleRules =
+        rulesJson
+            .map((json) => ReplaceRule.fromJson(json))
+            .where((rule) => rule.isEnabled && rule.scopeTitle)
+            .toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
     final converted = await ReaderPerfTrace.measureAsync(
       'convert title chapter ${chapter.index}',
       () async {

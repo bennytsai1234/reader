@@ -29,7 +29,8 @@ class PaginationConfig {
 /// 章節內容取得結果
 class FetchResult {
   final String content;
-  FetchResult({required this.content});
+  final String? displayTitle;
+  FetchResult({required this.content, this.displayTitle});
 }
 
 /// 章節內容取得函數的型別定義
@@ -58,6 +59,7 @@ class ChapterContentManager {
 
   /// 分頁結果快取
   final Map<int, List<TextPage>> _paginatedCache = {};
+  final Map<int, String> _displayTitleCache = {};
 
   /// 目標預載視窗
   Set<int> _targetWindow = {};
@@ -94,8 +96,8 @@ class ChapterContentManager {
   ChapterContentManager({
     required ChapterFetchFn fetchFn,
     required List<BookChapter> chapters,
-  })  : _fetchFn = fetchFn,
-        _chapters = chapters;
+  }) : _fetchFn = fetchFn,
+       _chapters = chapters;
 
   // --- 公開 API ---
 
@@ -106,10 +108,12 @@ class ChapterContentManager {
   bool get isLoading => _activeLoadingChapters.isNotEmpty;
 
   /// 正在主動載入的章節集合
-  Set<int> get activeLoadingChapters => Set.unmodifiable(_activeLoadingChapters);
+  Set<int> get activeLoadingChapters =>
+      Set.unmodifiable(_activeLoadingChapters);
 
   /// 正在靜默預載的章節集合
-  Set<int> get silentLoadingChapters => Set.unmodifiable(_silentLoadingChapters);
+  Set<int> get silentLoadingChapters =>
+      Set.unmodifiable(_silentLoadingChapters);
 
   /// 是否啟用整本書預載
   bool get wholeBookPreloadEnabled => _wholeBookPreloadEnabled;
@@ -208,6 +212,7 @@ class ChapterContentManager {
   /// 更新章節列表
   void updateChapters(List<BookChapter> chapters) {
     _chapters = chapters;
+    _displayTitleCache.clear();
   }
 
   void setUserInteractionActive(bool active) {
@@ -233,9 +238,7 @@ class ChapterContentManager {
   void enableWholeBookPreload({int? startIndex}) {
     if (_chapters.isEmpty) return;
     _wholeBookPreloadEnabled = true;
-    _targetWindow = {
-      for (int i = 0; i < _chapters.length; i++) i,
-    };
+    _targetWindow = {for (int i = 0; i < _chapters.length; i++) i};
     final center = (startIndex ?? 0).clamp(0, _chapters.length - 1).toInt();
     debugPrint(
       'ChapterContentManager: Whole-book preload enabled '
@@ -253,9 +256,7 @@ class ChapterContentManager {
     if (_chapters.isEmpty) return;
     if (_wholeBookPreloadEnabled) {
       if (_targetWindow.length != _chapters.length) {
-        _targetWindow = {
-          for (int i = 0; i < _chapters.length; i++) i,
-        };
+        _targetWindow = {for (int i = 0; i < _chapters.length; i++) i};
       }
       if (preload) {
         _startPreloading(centerChapterIndex, preloadRadius: _chapters.length);
@@ -265,7 +266,8 @@ class ChapterContentManager {
     final windowRadius = preloadRadius.clamp(0, _chapters.length).toInt();
 
     // 遲滯邏輯：只有當前中心仍落在窗口中間時才不更新。
-    if (_targetWindow.isNotEmpty && _targetWindow.contains(centerChapterIndex)) {
+    if (_targetWindow.isNotEmpty &&
+        _targetWindow.contains(centerChapterIndex)) {
       final sorted = _targetWindow.toList()..sort();
       final currentLeft = sorted.first;
       final currentRight = sorted.last;
@@ -284,7 +286,9 @@ class ChapterContentManager {
     }
 
     _targetWindow = newIndices;
-    debugPrint('ChapterContentManager: Window updated to $_targetWindow (center: $centerChapterIndex)');
+    debugPrint(
+      'ChapterContentManager: Window updated to $_targetWindow (center: $centerChapterIndex)',
+    );
 
     if (preload) {
       _startPreloading(centerChapterIndex, preloadRadius: preloadRadius);
@@ -306,10 +310,7 @@ class ChapterContentManager {
     return evictOutsideActiveWindow();
   }
 
-  void warmChaptersAround(
-    int centerChapterIndex, {
-    int radius = 2,
-  }) {
+  void warmChaptersAround(int centerChapterIndex, {int radius = 2}) {
     warmupWindow(centerChapterIndex, preloadRadius: radius);
   }
 
@@ -336,7 +337,10 @@ class ChapterContentManager {
   void prioritizeChapter(int index, {int preloadRadius = 1}) {
     if (_disposed || index < 0 || index >= _chapters.length) return;
     if (!_wholeBookPreloadEnabled) {
-      _targetWindow = _buildWindow(index, radius: preloadRadius.clamp(0, _chapters.length).toInt());
+      _targetWindow = _buildWindow(
+        index,
+        radius: preloadRadius.clamp(0, _chapters.length).toInt(),
+      );
       evictOutsideWindow();
     }
     _priorityChapters
@@ -349,8 +353,9 @@ class ChapterContentManager {
       _preloadQueue.removeRange(1, _preloadQueue.length);
     }
 
-    final prioritized = _priorityChapters.toList()
-      ..sort((a, b) => (a - index).abs().compareTo((b - index).abs()));
+    final prioritized =
+        _priorityChapters.toList()
+          ..sort((a, b) => (a - index).abs().compareTo((b - index).abs()));
     for (final chapterIndex in prioritized.reversed) {
       _preloadQueue.remove(chapterIndex);
       _preloadQueue.insert(0, chapterIndex);
@@ -360,10 +365,14 @@ class ChapterContentManager {
   }
 
   void prioritize(Iterable<int> chapterIndexes, {int centerIndex = 0}) {
-    final ordered = chapterIndexes
-        .where((idx) => idx >= 0 && idx < _chapters.length)
-        .toList()
-      ..sort((a, b) => (a - centerIndex).abs().compareTo((b - centerIndex).abs()));
+    final ordered =
+        chapterIndexes
+            .where((idx) => idx >= 0 && idx < _chapters.length)
+            .toList()
+          ..sort(
+            (a, b) =>
+                (a - centerIndex).abs().compareTo((b - centerIndex).abs()),
+          );
     if (ordered.isEmpty) return;
     _priorityChapters
       ..clear()
@@ -460,6 +469,9 @@ class ChapterContentManager {
       if (_disposed) return;
 
       _saveContentCache(index, result.content);
+      if (result.displayTitle != null && result.displayTitle!.isNotEmpty) {
+        _displayTitleCache[index] = result.displayTitle!;
+      }
       if (_progressivePaginationEnabled) {
         await _doPaginateProgressive(index, result.content);
       } else {
@@ -485,7 +497,9 @@ class ChapterContentManager {
 
   Future<List<TextPage>> _doPaginate(int index, String content) async {
     final config = _config;
-    if (config == null || config.viewSize.width <= 0 || config.viewSize.height <= 0) {
+    if (config == null ||
+        config.viewSize.width <= 0 ||
+        config.viewSize.height <= 0) {
       return [];
     }
     if (index < 0 || index >= _chapters.length) return [];
@@ -495,6 +509,7 @@ class ChapterContentManager {
       () => ChapterProvider.paginate(
         content: content,
         chapter: _chapters[index],
+        displayTitle: _chapterDisplayTitle(index),
         chapterIndex: index,
         chapterSize: _chapters.length,
         viewSize: config.viewSize,
@@ -512,11 +527,12 @@ class ChapterContentManager {
   Future<void> repaginateWindow(Iterable<int> chapterIndexes) async {
     if (_config == null || _disposed) return;
 
-    final ordered = chapterIndexes
-        .where((idx) => idx >= 0 && idx < _chapters.length)
-        .toSet()
-        .toList()
-      ..sort();
+    final ordered =
+        chapterIndexes
+            .where((idx) => idx >= 0 && idx < _chapters.length)
+            .toSet()
+            .toList()
+          ..sort();
     for (final idx in ordered) {
       if (_disposed) return;
       final content = _contentCache[idx];
@@ -540,9 +556,10 @@ class ChapterContentManager {
     required bool isScrollMode,
     int scrollRadius = 1,
   }) async {
-    final scope = isScrollMode
-        ? _buildWindow(centerChapterIndex, radius: scrollRadius)
-        : Set<int>.from(_targetWindow);
+    final scope =
+        isScrollMode
+            ? _buildWindow(centerChapterIndex, radius: scrollRadius)
+            : Set<int>.from(_targetWindow);
     if (isScrollMode) {
       await repaginateWindow(scope);
     } else {
@@ -562,13 +579,15 @@ class ChapterContentManager {
     }
     if (_contentCache.length > _maxContentCacheSize) {
       // 找距離目標視窗中心最遠的章節驅逐（排除正在存入的）
-      final center = _targetWindow.isEmpty
-          ? index
-          : (_targetWindow.reduce((a, b) => a + b) ~/ _targetWindow.length);
+      final center =
+          _targetWindow.isEmpty
+              ? index
+              : (_targetWindow.reduce((a, b) => a + b) ~/ _targetWindow.length);
       final candidates = _contentCache.keys.where((k) => k != index);
       if (candidates.isNotEmpty) {
-        final farthest = candidates.reduce((a, b) =>
-            (a - center).abs() > (b - center).abs() ? a : b);
+        final farthest = candidates.reduce(
+          (a, b) => (a - center).abs() > (b - center).abs() ? a : b,
+        );
         _contentCache.remove(farthest);
       }
     }
@@ -588,10 +607,11 @@ class ChapterContentManager {
     }
 
     final List<int> candidates = [];
-    final Iterable<int> preloadScope = scopeOverride ??
+    final Iterable<int> preloadScope =
+        scopeOverride ??
         (_wholeBookPreloadEnabled
-        ? Iterable<int>.generate(_chapters.length)
-        : _targetWindow);
+            ? Iterable<int>.generate(_chapters.length)
+            : _targetWindow);
     for (final idx in preloadScope) {
       if (!_paginatedCache.containsKey(idx) &&
           !_activeLoadingChapters.contains(idx) &&
@@ -601,8 +621,11 @@ class ChapterContentManager {
     }
 
     // 依距離中心從近到遠排序
-    candidates.sort((a, b) =>
-        (a - centerChapterIndex).abs().compareTo((b - centerChapterIndex).abs()));
+    candidates.sort(
+      (a, b) => (a - centerChapterIndex).abs().compareTo(
+        (b - centerChapterIndex).abs(),
+      ),
+    );
 
     for (final c in candidates) {
       if ((_wholeBookPreloadEnabled ||
@@ -613,8 +636,12 @@ class ChapterContentManager {
     }
 
     if (_priorityChapters.isNotEmpty) {
-      final prioritized = _priorityChapters.toList()
-        ..sort((a, b) => (a - centerChapterIndex).abs().compareTo((b - centerChapterIndex).abs()));
+      final prioritized =
+          _priorityChapters.toList()..sort(
+            (a, b) => (a - centerChapterIndex).abs().compareTo(
+              (b - centerChapterIndex).abs(),
+            ),
+          );
       for (final chapterIndex in prioritized.reversed) {
         final existingIndex = _preloadQueue.indexOf(chapterIndex);
         if (existingIndex > 0) {
@@ -662,7 +689,10 @@ class ChapterContentManager {
     }
   }
 
-  Future<void> _preloadChapterSilently(int index, Completer<void> completer) async {
+  Future<void> _preloadChapterSilently(
+    int index,
+    Completer<void> completer,
+  ) async {
     if (index < 0 || index >= _chapters.length) return;
     if (_activeLoadingChapters.contains(index) ||
         _paginatedCache.containsKey(index)) {
@@ -676,6 +706,9 @@ class ChapterContentManager {
       if (_disposed) return;
 
       _saveContentCache(index, result.content);
+      if (result.displayTitle != null && result.displayTitle!.isNotEmpty) {
+        _displayTitleCache[index] = result.displayTitle!;
+      }
       if (_progressivePaginationEnabled) {
         await _doPaginateProgressive(index, result.content);
       } else {
@@ -709,7 +742,9 @@ class ChapterContentManager {
 
   Future<void> _doPaginateProgressive(int index, String content) async {
     final config = _config;
-    if (config == null || config.viewSize.width <= 0 || config.viewSize.height <= 0) {
+    if (config == null ||
+        config.viewSize.width <= 0 ||
+        config.viewSize.height <= 0) {
       return;
     }
     if (index < 0 || index >= _chapters.length) return;
@@ -720,6 +755,7 @@ class ChapterContentManager {
     await for (final pages in ChapterProvider.paginateProgressive(
       content: content,
       chapter: chapter,
+      displayTitle: _chapterDisplayTitle(index),
       chapterIndex: index,
       chapterSize: _chapters.length,
       viewSize: config.viewSize,
@@ -755,7 +791,8 @@ class ChapterContentManager {
 
   Set<int> _buildWindow(int centerChapterIndex, {int radius = 2}) {
     if (_chapters.isEmpty) return {};
-    final safeCenter = centerChapterIndex.clamp(0, _chapters.length - 1).toInt();
+    final safeCenter =
+        centerChapterIndex.clamp(0, _chapters.length - 1).toInt();
     final desiredSize = (radius * 2) + 1;
     var start = safeCenter - radius;
     var end = safeCenter + radius;
@@ -778,8 +815,10 @@ class ChapterContentManager {
       start = (start - missing).clamp(0, _chapters.length - 1).toInt();
     }
 
-    return {
-      for (int i = start; i <= end; i++) i,
-    };
+    return {for (int i = start; i <= end; i++) i};
+  }
+
+  String _chapterDisplayTitle(int index) {
+    return _displayTitleCache[index] ?? _chapters[index].title;
   }
 }
