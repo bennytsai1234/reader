@@ -88,6 +88,7 @@ class ChapterProvider {
   static Future<List<TextPage>> paginate({
     required String content,
     required BookChapter chapter,
+    String? displayTitle,
     required int chapterIndex,
     required int chapterSize,
     required Size viewSize,
@@ -111,12 +112,8 @@ class ChapterProvider {
       chapterSize: chapterSize,
     );
     final cursor = _PaginationCursor();
-    final titleLines = _layoutTitle(
-      chapter.title,
-      titleStyle,
-      metrics,
-      cursor,
-    );
+    final resolvedTitle = displayTitle ?? chapter.title;
+    final titleLines = _layoutTitle(resolvedTitle, titleStyle, metrics, cursor);
     final contentLines = await _layoutParagraphs(
       content,
       contentStyle,
@@ -129,6 +126,7 @@ class ChapterProvider {
       titleLines: titleLines,
       contentLines: contentLines,
       chapter: chapter,
+      displayTitle: resolvedTitle,
       metrics: metrics,
     );
   }
@@ -136,6 +134,7 @@ class ChapterProvider {
   static Stream<List<TextPage>> paginateProgressive({
     required String content,
     required BookChapter chapter,
+    String? displayTitle,
     required int chapterIndex,
     required int chapterSize,
     required Size viewSize,
@@ -159,8 +158,9 @@ class ChapterProvider {
       chapterSize: chapterSize,
     );
     final cursor = _PaginationCursor();
+    final resolvedTitle = displayTitle ?? chapter.title;
     final titleDrafts = _layoutTitle(
-      chapter.title,
+      resolvedTitle,
       titleStyle,
       metrics,
       cursor,
@@ -177,7 +177,7 @@ class ChapterProvider {
           TextPage(
             index: output.length,
             lines: List<TextLine>.from(currentLines),
-            title: chapter.title,
+            title: resolvedTitle,
             chapterIndex: metrics.chapterIndex,
             chapterSize: metrics.chapterSize,
           ),
@@ -186,10 +186,10 @@ class ChapterProvider {
       return output
           .asMap()
           .entries
-          .map((entry) => entry.value.copyWith(
-                index: entry.key,
-                pageSize: output.length,
-              ))
+          .map(
+            (entry) =>
+                entry.value.copyWith(index: entry.key, pageSize: output.length),
+          )
           .toList();
     }
 
@@ -199,7 +199,7 @@ class ChapterProvider {
         TextPage(
           index: pages.length,
           lines: List<TextLine>.from(currentLines),
-          title: chapter.title,
+          title: resolvedTitle,
           chapterIndex: metrics.chapterIndex,
           chapterSize: metrics.chapterSize,
         ),
@@ -262,9 +262,10 @@ class ChapterProvider {
     for (int pIdx = 0; pIdx < paragraphs.length; pIdx++) {
       if (yieldWatch.elapsed >= _yieldBudget) {
         final snapshot = snapshotPages();
-        final signature = snapshot.isEmpty
-            ? ''
-            : '${snapshot.length}:${snapshot.last.lines.length}:${snapshot.last.lineSize}:${snapshot.last.lines.last.chapterPosition}';
+        final signature =
+            snapshot.isEmpty
+                ? ''
+                : '${snapshot.length}:${snapshot.last.lines.length}:${snapshot.last.lineSize}:${snapshot.last.lines.last.chapterPosition}';
         if (snapshot.isNotEmpty && signature != lastYieldedSignature) {
           lastYieldedSignature = signature;
           pendingYield = snapshot;
@@ -311,17 +312,21 @@ class ChapterProvider {
             shouldJustify: textFullJustify && !isLastLine,
             chapterPosition: cursor.chapterPos,
             paragraphNum: pIdx,
-            spacingAfter: isLastLine
-                ? (contentStyle.fontSize! * (metrics.paragraphSpacing - 1.0))
-                    .clamp(0, 50.0)
-                    .toDouble()
-                : 0.0,
+            spacingAfter:
+                isLastLine
+                    ? (contentStyle.fontSize! *
+                            (metrics.paragraphSpacing - 1.0))
+                        .clamp(0, 50.0)
+                        .toDouble()
+                    : 0.0,
           ),
         );
 
         start += charsConsumed;
         final charsInIndent =
-            contentStart > 0 ? (charsConsumed > contentStart ? contentStart : charsConsumed) : 0;
+            contentStart > 0
+                ? (charsConsumed > contentStart ? contentStart : charsConsumed)
+                : 0;
         cursor.chapterPos += charsConsumed - charsInIndent;
         contentStart = (contentStart - charsConsumed).clamp(0, indentLen);
         isFirstLine = false;
@@ -367,9 +372,8 @@ class ChapterProvider {
           spacingBefore: i == 0 ? metrics.titleTopSpacing : 0.0,
           isTitle: true,
           chapterPosition: cursor.chapterPos,
-          spacingAfter: i == titleLines.length - 1
-              ? metrics.titleBottomSpacing
-              : 0.0,
+          spacingAfter:
+              i == titleLines.length - 1 ? metrics.titleBottomSpacing : 0.0,
         ),
       );
     }
@@ -432,17 +436,21 @@ class ChapterProvider {
             shouldJustify: textFullJustify && !isLastLine,
             chapterPosition: cursor.chapterPos,
             paragraphNum: pIdx,
-            spacingAfter: isLastLine
-                ? (contentStyle.fontSize! * (metrics.paragraphSpacing - 1.0))
-                    .clamp(0, 50.0)
-                    .toDouble()
-                : 0.0,
+            spacingAfter:
+                isLastLine
+                    ? (contentStyle.fontSize! *
+                            (metrics.paragraphSpacing - 1.0))
+                        .clamp(0, 50.0)
+                        .toDouble()
+                    : 0.0,
           ),
         );
 
         start += charsConsumed;
         final charsInIndent =
-            contentStart > 0 ? (charsConsumed > contentStart ? contentStart : charsConsumed) : 0;
+            contentStart > 0
+                ? (charsConsumed > contentStart ? contentStart : charsConsumed)
+                : 0;
         cursor.chapterPos += charsConsumed - charsInIndent;
         contentStart = (contentStart - charsConsumed).clamp(0, indentLen);
         isFirstLine = false;
@@ -458,12 +466,10 @@ class ChapterProvider {
     required List<_DraftLine> titleLines,
     required List<_DraftLine> contentLines,
     required BookChapter chapter,
+    required String displayTitle,
     required PaginationMetrics metrics,
   }) {
-    final drafts = <_DraftLine>[
-      ...titleLines,
-      ...contentLines,
-    ];
+    final drafts = <_DraftLine>[...titleLines, ...contentLines];
     final pages = <TextPage>[];
     var currentLines = <TextLine>[];
     double currentHeight = 0.0;
@@ -474,7 +480,7 @@ class ChapterProvider {
         TextPage(
           index: pages.length,
           lines: List<TextLine>.from(currentLines),
-          title: chapter.title,
+          title: displayTitle,
           chapterIndex: metrics.chapterIndex,
           chapterSize: metrics.chapterSize,
         ),
@@ -512,10 +518,10 @@ class ChapterProvider {
     return pages
         .asMap()
         .entries
-        .map((entry) => entry.value.copyWith(
-              index: entry.key,
-              pageSize: pages.length,
-            ))
+        .map(
+          (entry) =>
+              entry.value.copyWith(index: entry.key, pageSize: pages.length),
+        )
         .toList();
   }
 

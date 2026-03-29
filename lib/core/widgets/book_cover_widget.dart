@@ -1,5 +1,9 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:legado_reader/core/services/resource_service.dart';
 
 class BookCoverWidget extends StatelessWidget {
   final String? coverUrl;
@@ -48,6 +52,42 @@ class BookCoverWidget extends StatelessWidget {
       return _buildTextCover();
     }
 
+    if (coverUrl!.startsWith('memory://')) {
+      return FutureBuilder<Uint8List?>(
+        future: ResourceService().getMemoryResource(coverUrl!),
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          if (bytes == null || bytes.isEmpty) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return _buildPlaceholder();
+            }
+            return _buildTextCover();
+          }
+          return Image.memory(
+            bytes,
+            fit: BoxFit.cover,
+            width: width,
+            height: height,
+            errorBuilder: (context, error, stackTrace) => _buildTextCover(),
+          );
+        },
+      );
+    }
+
+    if (coverUrl!.startsWith('local://')) {
+      final file = File(coverUrl!.replaceFirst('local://', ''));
+      if (!file.existsSync()) {
+        return _buildTextCover();
+      }
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        width: width,
+        height: height,
+        errorBuilder: (context, error, stackTrace) => _buildTextCover(),
+      );
+    }
+
     return CachedNetworkImage(
       imageUrl: coverUrl!,
       fit: BoxFit.cover,
@@ -64,7 +104,8 @@ class BookCoverWidget extends StatelessWidget {
       color: Colors.grey.withValues(alpha: 0.1),
       child: const Center(
         child: SizedBox(
-          width: 16, height: 16,
+          width: 16,
+          height: 16,
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
@@ -86,12 +127,19 @@ class BookCoverWidget extends StatelessWidget {
           children: [
             Text(
               displayChar,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
               'No Image',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 8),
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 8,
+              ),
             ),
           ],
         ),
@@ -100,9 +148,17 @@ class BookCoverWidget extends StatelessWidget {
   }
 
   static const List<Color> _coverColors = [
-    Color(0xFFE57373), Color(0xFFF06292), Color(0xFFBA68C8),
-    Color(0xFF9575CD), Color(0xFF7986CB), Color(0xFF64B5F6),
-    Color(0xFF4FC3F7), Color(0xFF4DB6AC), Color(0xFF81C784),
-    Color(0xFFAED581), Color(0xFFFFB74D), Color(0xFFD4E157),
+    Color(0xFFE57373),
+    Color(0xFFF06292),
+    Color(0xFFBA68C8),
+    Color(0xFF9575CD),
+    Color(0xFF7986CB),
+    Color(0xFF64B5F6),
+    Color(0xFF4FC3F7),
+    Color(0xFF4DB6AC),
+    Color(0xFF81C784),
+    Color(0xFFAED581),
+    Color(0xFFFFB74D),
+    Color(0xFFD4E157),
   ];
 }

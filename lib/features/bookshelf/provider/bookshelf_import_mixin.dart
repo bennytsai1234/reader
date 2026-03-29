@@ -18,7 +18,8 @@ mixin BookshelfImportMixin on BookshelfProviderBase {
     final existingBook = await bookDao.getByUrl(bookUrl);
     if (existingBook != null && existingBook.isInBookshelf) return;
 
-    isLoading = true; notifyListeners();
+    isLoading = true;
+    notifyListeners();
 
     try {
       if (ext == 'txt') {
@@ -30,63 +31,72 @@ mixin BookshelfImportMixin on BookshelfProviderBase {
         final List<Map<String, dynamic>> chaptersData = result.chapters;
         final String detectedCharset = result.charset;
 
-
         final book = Book(
-          bookUrl: bookUrl, 
-          name: p.basenameWithoutExtension(path), 
-          author: '本地', 
-          origin: 'local', 
-          originName: '本地', 
-          isInBookshelf: true, 
+          bookUrl: bookUrl,
+          name: p.basenameWithoutExtension(path),
+          author: '本地',
+          origin: 'local',
+          originName: '本地',
+          isInBookshelf: true,
           type: 0,
           charset: detectedCharset,
         );
         await bookDao.upsert(book);
-        
+
         final bookChapters = <BookChapter>[];
         for (var i = 0; i < chaptersData.length; i++) {
-          bookChapters.add(BookChapter(
-            url: '$bookUrl#$i', 
-            title: chaptersData[i]['title'] ?? '第 $i 章', 
-            bookUrl: bookUrl, 
-            index: i,
-            start: chaptersData[i]['start'],
-            end: chaptersData[i]['end'],
-          ));
+          bookChapters.add(
+            BookChapter(
+              url: '$bookUrl#$i',
+              title: chaptersData[i]['title'] ?? '第 $i 章',
+              bookUrl: bookUrl,
+              index: i,
+              start: chaptersData[i]['start'],
+              end: chaptersData[i]['end'],
+            ),
+          );
         }
         await chapterDao.insertChapters(bookChapters);
       } else if (ext == 'epub') {
         final meta = await EpubService().parseMetadata(file);
 
         final book = Book(
-          bookUrl: bookUrl, 
-          name: meta.title, 
-          author: meta.author, 
-          origin: 'local', 
-          originName: '本地', 
-          isInBookshelf: true, 
+          bookUrl: bookUrl,
+          name: meta.title,
+          author: meta.author,
+          origin: 'local',
+          originName: '本地',
+          isInBookshelf: true,
           type: 1,
           coverUrl: meta.coverBytes != null ? 'memory://$bookUrl' : null,
         );
         if (meta.coverBytes != null) {
-          ResourceService().setMemoryResource('memory://$bookUrl', meta.coverBytes!);
+          await ResourceService().persistMemoryResource(
+            'memory://$bookUrl',
+            meta.coverBytes!,
+          );
         }
         await bookDao.upsert(book);
-        
+
         final bookChapters = <BookChapter>[];
         for (var i = 0; i < meta.chapters.length; i++) {
-          bookChapters.add(BookChapter(
-            url: meta.chapters[i]['href'] ?? '', 
-            title: meta.chapters[i]['title'] ?? '第 $i 章', 
-            bookUrl: bookUrl, 
-            index: i,
-          ));
+          bookChapters.add(
+            BookChapter(
+              url: meta.chapters[i]['href'] ?? '',
+              title: meta.chapters[i]['title'] ?? '第 $i 章',
+              bookUrl: bookUrl,
+              index: i,
+            ),
+          );
         }
         await chapterDao.insertChapters(bookChapters);
       }
       (this as dynamic).loadBooks();
-    } catch (e) { debugPrint('匯入本地書籍失敗: $e'); } 
-    finally { isLoading = false; notifyListeners(); }
+    } catch (e) {
+      debugPrint('匯入本地書籍失敗: $e');
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
   }
 }
-

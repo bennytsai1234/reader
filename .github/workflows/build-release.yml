@@ -59,6 +59,29 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Pods
+            ios/Podfile.lock
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods/repos
+          key: ${{ runner.os }}-pods-${{ hashFiles('pubspec.lock', 'ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: |
+          for i in 1 2 3; do
+            pod install && exit 0
+            echo "pod install failed (attempt $i), retrying in 15s..."
+            sleep 15
+          done
+          echo "pod install failed after 3 attempts"
+          exit 1
+
       - name: Build iOS without codesign
         run: flutter build ios --release --no-codesign
 
