@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:legado_reader/core/services/app_log_service.dart';
 
 class StorageMetrics {
   static String formatBytes(int bytes) {
@@ -27,7 +27,7 @@ class StorageMetrics {
         }
       }
     } catch (error) {
-      debugPrint('Error calculating dir size for ${dir.path}: $error');
+      AppLog.e('Error calculating dir size for ${dir.path}: $error', error: error);
     }
     return totalSize;
   }
@@ -39,7 +39,7 @@ class StorageMetrics {
         await entity.delete(recursive: true);
       }
     } catch (error) {
-      debugPrint('Error clearing directory ${dir.path}: $error');
+      AppLog.e('Error clearing directory ${dir.path}: $error', error: error);
     }
   }
 }

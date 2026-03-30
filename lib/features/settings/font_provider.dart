@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:legado_reader/core/services/app_log_service.dart';
 import 'package:legado_reader/core/storage/app_storage_paths.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,14 +57,14 @@ class FontProvider with ChangeNotifier {
               await fontLoader.load();
               loadedFonts.add(name);
             } catch (e) {
-              debugPrint('Failed to load font $name: $e');
+              AppLog.e('Failed to load font $name: $e', error: e);
             }
           }
         }
         _customFonts = loadedFonts;
       }
     } catch (e) {
-      debugPrint('loadCustomFonts error: $e');
+      AppLog.e('loadCustomFonts error: $e', error: e);
     }
   }
 
@@ -117,7 +118,7 @@ class FontProvider with ChangeNotifier {
       }
       return true;
     } catch (e) {
-      debugPrint('Download font failed: $e');
+      AppLog.e('Download font failed: $e', error: e);
       return false;
     } finally {
       _isLoading = false;
