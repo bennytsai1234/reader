@@ -54,6 +54,7 @@ abstract class ReaderProviderBase extends ChangeNotifier {
   double? _pendingJumpAlignment;
   double? _pendingJumpLocalOffset;
   int? _pendingSlidePageIndex;
+  int? _pendingControllerReset;
   ReaderCommandReason _pendingChapterJumpReason = ReaderCommandReason.system;
 
   bool showControls = false;
@@ -152,6 +153,20 @@ abstract class ReaderProviderBase extends ChangeNotifier {
   int? consumePendingSlidePageIndex() {
     final value = _pendingSlidePageIndex;
     _pendingSlidePageIndex = null;
+    return value;
+  }
+
+  /// Request PageController recreation at [pageIndex] to avoid
+  /// the one-frame glitch during slide window recentering.
+  void requestControllerReset(int pageIndex) {
+    _pendingControllerReset = pageIndex;
+  }
+
+  /// Consume the pending controller reset target.
+  /// Returns null if no reset is pending.
+  int? consumeControllerReset() {
+    final value = _pendingControllerReset;
+    _pendingControllerReset = null;
     return value;
   }
   @override

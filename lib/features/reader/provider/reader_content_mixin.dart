@@ -500,7 +500,10 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       _slideWindow = result.window;
       slidePages = result.window.flatPages;
       currentPageIndex = result.mappedIndex.clamp(0, slidePages.length - 1);
-      requestJumpToPage(currentPageIndex, reason: ReaderCommandReason.system);
+
+      // Use controller reset instead of requestJumpToPage to avoid the
+      // one-frame glitch where new data is rendered at the old position.
+      requestControllerReset(currentPageIndex);
 
       // Preload the new neighbor chapter
       _preloadSlideNeighbors(newChapterIndex, preloadRadius: _defaultSlideWarmupRadius);
@@ -678,6 +681,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     }
     if (!_isScrollMode) {
       _refreshSlidePages();
+      if (!isDisposed) notifyListeners();
     } else if (pages != null && pages.isNotEmpty) {
       notifyListeners();
     }

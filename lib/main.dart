@@ -13,6 +13,7 @@ import 'shared/theme/app_theme.dart';
 import 'features/settings/settings_provider.dart';
 import 'features/welcome/splash_page.dart';
 import 'core/services/app_log_service.dart';
+import 'core/services/chinese_utils.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -67,7 +68,10 @@ void main() {
 
     try {
       AppLog.i('Configuring Dependencies...');
-      await configureDependencies();
+      await Future.wait([
+        configureDependencies(),
+        ChineseUtils.initialize(),
+      ]);
       AppLog.i('Dependencies Configured Successfully');
 
       if (kDebugMode) {

@@ -6,7 +6,7 @@ import 'package:legado_reader/features/reader/provider/reader_provider_base.dart
 import 'package:legado_reader/features/reader/reader_provider.dart';
 import 'package:legado_reader/features/reader/runtime/read_view_runtime_coordinator.dart';
 import 'package:legado_reader/features/reader/view/delegate/scroll_mode_delegate.dart';
-import 'package:legado_reader/features/reader/view/delegate/slide_mode_delegate.dart';
+import 'package:legado_reader/features/reader/view/delegate/page_mode_delegate.dart';
 import 'package:legado_reader/features/reader/view/scroll_auto_page_driver.dart';
 import 'package:legado_reader/features/reader/view/scroll_execution_adapter.dart';
 import 'package:legado_reader/features/reader/view/scroll_restore_runner.dart';
@@ -224,7 +224,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
                 pageKeys: _pageKeys,
                 isUserScrolling: () => _isUserScrolling,
               )
-            : const SlideModeDelegate();
+            : const PageModeDelegate();
 
         final content = NotificationListener<ScrollNotification>(
           onNotification: (notification) =>

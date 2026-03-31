@@ -57,12 +57,12 @@ class ReaderChapterContentLoader {
         reSegmentEnabled: true,
       ),
     );
-    final convertedTitle = await _getConvertedTitle(
+    final convertedTitle = _getConvertedTitle(
       chapter: chapter,
       chineseConvertType: chineseConvertType,
       rulesJson: rulesJson,
     );
-    final convertedContent = await _getConvertedContent(
+    final convertedContent = _getConvertedContent(
       chapterIndex: chapterIndex,
       rawContent: rawContent,
       processedContent: bookContent.content,
@@ -120,17 +120,17 @@ class ReaderChapterContentLoader {
     return _cachedRulesJson!;
   }
 
-  Future<String> _getConvertedContent({
+  String _getConvertedContent({
     required int chapterIndex,
     required String rawContent,
     required String processedContent,
     required int chineseConvertType,
-  }) async {
+  }) {
     final cacheKey =
         '$chapterIndex:$chineseConvertType:${rawContent.hashCode}:${processedContent.hashCode}';
     final cached = _convertedContentCache[cacheKey];
     if (cached != null) return cached;
-    final converted = await ReaderPerfTrace.measureAsync(
+    final converted = ReaderPerfTrace.measureSync(
       'convert content chapter $chapterIndex',
       () => _textConverter.convert(
         processedContent,
@@ -144,11 +144,11 @@ class ReaderChapterContentLoader {
     return converted;
   }
 
-  Future<String> _getConvertedTitle({
+  String _getConvertedTitle({
     required BookChapter chapter,
     required int chineseConvertType,
     required List<Map<String, dynamic>> rulesJson,
-  }) async {
+  }) {
     final cacheKey =
         '${chapter.url}:${chapter.title.hashCode}:$chineseConvertType';
     final cached = _convertedTitleCache[cacheKey];
@@ -159,10 +159,10 @@ class ReaderChapterContentLoader {
             .where((rule) => rule.isEnabled && rule.scopeTitle)
             .toList()
           ..sort((a, b) => a.order.compareTo(b.order));
-    final converted = await ReaderPerfTrace.measureAsync(
+    final converted = ReaderPerfTrace.measureSync(
       'convert title chapter ${chapter.index}',
-      () async {
-        final displayTitle = await chapter.getDisplayTitle(
+      () {
+        final displayTitle = chapter.getDisplayTitle(
           replaceRules: titleRules,
           chineseConvertType: 0,
         );

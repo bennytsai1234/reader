@@ -36,7 +36,8 @@ class ReaderPage extends StatefulWidget {
 class _ReaderPageState extends State<ReaderPage> {
   late PageController _pageCtrl;
   final GlobalKey<ScaffoldState> _key = GlobalKey<ScaffoldState>();
-  late final SlidePageController _slideCtrl;
+  late SlidePageController _slideCtrl;
+  int _controllerGeneration = 0;
 
   @override
   void initState() {
@@ -51,6 +52,16 @@ class _ReaderPageState extends State<ReaderPage> {
     _slideCtrl.dispose();
     _pageCtrl.dispose();
     super.dispose();
+  }
+
+  /// Recreate the PageController at [initialPage] so the new PageView
+  /// starts at the correct position without a one-frame glitch.
+  void _resetController(int initialPage) {
+    _slideCtrl.dispose();
+    _pageCtrl.dispose();
+    _pageCtrl = PageController(initialPage: initialPage);
+    _slideCtrl = SlidePageController(_pageCtrl);
+    _controllerGeneration++;
   }
 
   void _handleTap(Offset pos, Size size, ReaderProvider p) {
@@ -94,6 +105,13 @@ class _ReaderPageState extends State<ReaderPage> {
       key: _key,
       body: Consumer<ReaderProvider>(
         builder: (context, p, _) {
+          // Controller reset: recreate PageController at the correct page
+          // to avoid the one-frame glitch during chapter recentering.
+          final resetTarget = p.consumeControllerReset();
+          if (resetTarget != null) {
+            _resetController(resetTarget);
+          }
+
           final pendingJump = p.consumePendingJump();
           if (pendingJump != null) {
             p.consumePendingSlideJumpReason();
@@ -128,7 +146,11 @@ class _ReaderPageState extends State<ReaderPage> {
                     ),
                   ),
 
-                ReadViewRuntime(provider: p, pageController: _pageCtrl),
+                ReadViewRuntime(
+                  key: ValueKey(_controllerGeneration),
+                  provider: p,
+                  pageController: _pageCtrl,
+                ),
                 if (((p.pageTurnMode == PageAnim.scroll &&
                             p.chapterPagesCache.isNotEmpty) ||
                         (p.pageTurnMode != PageAnim.scroll &&

@@ -55,19 +55,18 @@ class BookChapter {
   }
 
   /// 獲取顯示標題 (原 Android getDisplayTitle)
-  Future<String> getDisplayTitle({
+  String getDisplayTitle({
     List<ReplaceRule>? replaceRules,
     bool useReplace = true,
     int chineseConvertType = 0, // 0: 不轉換, 1: 簡轉繁, 2: 繁轉簡
-  }) async {
+  }) {
     var displayTitle = title.replaceAll(RegExp(r'[\r\n]'), '');
 
-    // 繁簡轉換 (異步 OpenCC)
-    // value 1 = 簡轉繁 (s2t), value 2 = 繁轉簡 (t2s)
+    // 繁簡轉換 (純 Dart 同步查表)
     if (chineseConvertType == 1) {
-      displayTitle = await ChineseUtils.s2t(displayTitle);
+      displayTitle = ChineseUtils.s2t(displayTitle);
     } else if (chineseConvertType == 2) {
-      displayTitle = await ChineseUtils.t2s(displayTitle);
+      displayTitle = ChineseUtils.t2s(displayTitle);
     }
 
     // 標題淨化規則

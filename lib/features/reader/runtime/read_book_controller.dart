@@ -683,15 +683,12 @@ class ReadBookController extends ReaderProviderBase
             .toList()
           ..sort((a, b) => a.order.compareTo(b.order));
 
-    final titles = <String>[];
-    for (final chapter in chapters) {
-      titles.add(
-        await chapter.getDisplayTitle(
-          replaceRules: titleRules,
-          chineseConvertType: chineseConvert,
-        ),
-      );
-    }
+    final titles = chapters
+        .map((chapter) => chapter.getDisplayTitle(
+              replaceRules: titleRules,
+              chineseConvertType: chineseConvert,
+            ))
+        .toList();
     if (isDisposed) return;
     _chapterDisplayTitles = titles;
     refreshAllChapterRuntime();
