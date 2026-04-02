@@ -177,15 +177,24 @@ M1 與 M2 的主要工作已完成：
 - 每個核心模組至少要有一條 integration path 可測
 - 大改動完成後必跑 `flutter analyze` 與 `flutter test`
 
-## 9. 最近建議執行順序
+## 9. 執行進度與下一步（2026-04-02）
 
-最接近現在代碼狀態、最值得優先做的順序：
+| # | 工作 | 狀態 |
+|---|------|------|
+| 1 | 整理 `settings / cache / storage / export`（M3） | ✅ 完成 |
+| 2 | 收斂 `reader` runtime 邊界（M1 lifecycle refactor） | ✅ 完成 |
+| 3 | `source_manager` 與 `core/engine` 登入 / parser 對齊（M2） | ✅ 完成 |
+| 4 | 整理 `bookshelf / book_detail / search` 的資料流（M4） | **下一主線** |
+| 5 | 平台能力與發版流程 | 待定 |
 
-1. 整理 `settings / cache / storage / export`
-2. 繼續收斂 `reader` runtime 邊界
-3. 補 `source_manager` 與 `core/engine` 的登入 / parser 對齊
-4. 整理 `bookshelf / book_detail / search` 的資料流
-5. 最後再擴大做平台能力與發版流程
+### M4 目標
+
+整理 `bookshelf`、`book_detail`、`search` 三個 feature 的資料流：
+
+- UI 不直接呼叫 DAO（目前仍有部分地方繞過 service 層）
+- `BookshelfProvider` 責任清晰化，不混入平台邏輯
+- `BookDetailProvider` / `SearchProvider` 的資料取得統一走 service 層
+- 完成標準：這三個 feature 的資料流可被追蹤，且任何一個的測試不依賴 widget 渲染
 
 ## 10. 成功判斷標準
 

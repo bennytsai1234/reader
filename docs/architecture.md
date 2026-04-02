@@ -1,6 +1,6 @@
 # Reader Architecture
 
-更新日期：2026-03-30
+更新日期：2026-04-02
 
 本文描述的是這個專案接下來應收斂到的架構方向。它不是要求一次性重寫，而是用來約束之後的整理順序與責任邊界。
 
@@ -50,9 +50,15 @@ lib/
 這個形狀基本可用，但還沒有完全做到語意清晰。幾個主要的歷史包袱仍然存在：
 
 - `features/*` 裡仍有部分 provider / mixin / service 邊界交疊
-- `core/services` 偶爾承擔了偏 feature-specific 的協調邏輯
 - `core/engine` 已經像獨立引擎，但命名與對外接口還不夠一致
 - `main.dart` 與 app 根組裝仍偏胖，後續可再薄化
+- `bookshelf / book_detail / search` 的資料流仍有直接碰 DAO 的情況（下一主線 M4）
+
+**2026-04-02 M3 已落地的改善：**
+- `core/storage/AppStoragePaths` 統一路徑管理，`BackupService`、`CacheManager`、`AppCache` 已改用
+- `AppVersion` 單例作為版本資訊單一來源，移除 hardcode
+- `BackupService` 補齊 bookGroup / dictRule / httpTts，與 RestoreService 對齊
+- `PreferKey` 補全，`SettingsProvider` 移除所有 raw 字串
 
 ## 建議的責任劃分
 
