@@ -513,17 +513,10 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     }
 
     notifyListeners();
-    final title = chapters.isNotEmpty ? chapters[currentChapterIndex].title : '';
-    unawaited(
-      bookDao.updateProgress(
-        book.bookUrl,
-        page.chapterIndex,
-        title,
-        ChapterPositionResolver.getCharOffsetForPage(
-          chapterPagesCache[page.chapterIndex] ?? const <TextPage>[],
-          page.index,
-        ),
-      ),
+    _contentCallbacks.persistCurrentProgress?.call(
+      chapterIndex: page.chapterIndex,
+      pageIndex: i,
+      reason: ReaderCommandReason.user,
     );
   }
 
