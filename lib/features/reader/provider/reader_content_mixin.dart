@@ -683,7 +683,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       _refreshSlidePages();
       if (!isDisposed) notifyListeners();
     } else if (pages != null && pages.isNotEmpty) {
-      notifyListeners();
+      if (!isDisposed) notifyListeners();
     }
     trace.stop();
     ReaderPerfTrace.mark(
