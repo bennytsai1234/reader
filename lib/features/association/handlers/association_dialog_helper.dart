@@ -1,4 +1,3 @@
-import 'package:legado_reader/core/di/injection.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -6,7 +5,7 @@ import 'association_base.dart';
 import 'package:legado_reader/features/source_manager/source_manager_provider.dart';
 import 'package:legado_reader/features/replace_rule/replace_rule_provider.dart';
 import 'package:legado_reader/features/bookshelf/bookshelf_provider.dart';
-import 'package:legado_reader/core/database/dao/http_tts_dao.dart';
+import 'package:legado_reader/features/settings/http_tts_provider.dart';
 import 'package:legado_reader/core/models/http_tts.dart';
 
 /// AssociationHandlerService 的對話框與 UI 邏輯擴展
@@ -41,12 +40,11 @@ mixin AssociationDialogHelper on AssociationBase {
 
   Future<void> _importTts(BuildContext context, String jsonStr) async {
     try {
-      final List<dynamic> list = jsonDecode(jsonStr) is List ? jsonDecode(jsonStr) : [jsonDecode(jsonStr)];
-      final dao = getIt<HttpTtsDao>();
-      for (var item in list) {
-        await dao.upsert(HttpTTS.fromJson(item as Map<String, dynamic>));
-      }
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('成功匯入 ${list.length} 個 TTS')));
+      final rawList = jsonDecode(jsonStr);
+      final List<dynamic> list = rawList is List ? rawList : [rawList];
+      final engines = list.map((e) => HttpTTS.fromJson(e as Map<String, dynamic>)).toList();
+      await HttpTtsProvider().importAll(engines);
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('成功匯入 ${engines.length} 個 TTS')));
     } catch (_) {}
   }
 

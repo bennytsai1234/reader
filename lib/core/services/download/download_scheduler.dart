@@ -77,7 +77,7 @@ mixin DownloadScheduler on DownloadBase {
     }
     update();
     if (!isDownloading) {
-      (this as dynamic).startDownloads();
+      startDownloads();
     }
   }
 
@@ -94,7 +94,7 @@ mixin DownloadScheduler on DownloadBase {
         if (activeTasks.length < maxConcurrent) {
           final nextTask = tasks.cast<DownloadTask?>().firstWhere((t) => t?.status == 0, orElse: () => null);
           if (nextTask != null) {
-            (this as dynamic).processTask(nextTask);
+            processTask(nextTask);
           } else if (activeTasks.isEmpty) {
             break;
           }

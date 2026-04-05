@@ -9,6 +9,7 @@ import 'package:legado_reader/core/services/app_log_service.dart';
 
 /// DownloadService 的任務執行邏輯擴展
 mixin DownloadExecutor on DownloadBase, DownloadScheduler {
+  @override
   Future<void> processTask(DownloadTask task) async {
     task.status = 1;
     await downloadDao.updateProgress(task.bookUrl, status: 1);

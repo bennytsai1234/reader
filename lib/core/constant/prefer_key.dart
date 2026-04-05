@@ -225,5 +225,10 @@ class PreferKey {
   static const String privacyAgreed = 'privacy_agreed';
   static const String bookStorageDir = 'book_storage_dir';
   static const String disableReturnKey = 'disable_return_key';
+
+  // 封面進階
+  static const String coverSearchPriority = 'cover_search_priority';
+  static const String coverTimeout = 'cover_timeout';
+  static const String globalCoverRule = 'global_cover_rule';
 }
 

@@ -4,6 +4,9 @@ import 'package:legado_reader/core/models/book_source.dart';
 import 'package:legado_reader/core/models/chapter.dart';
 import 'package:legado_reader/core/models/search_book.dart';
 import 'package:legado_reader/core/engine/web_book/web_book_service.dart';
+import 'package:legado_reader/core/database/dao/book_source_dao.dart';
+import 'package:legado_reader/core/database/dao/chapter_dao.dart';
+import 'package:legado_reader/core/di/injection.dart';
 
 /// BookSourceService - 書源核心業務調度 (對標 Android model/webBook/WebBook.kt)
 class BookSourceService {
@@ -54,5 +57,14 @@ class BookSourceService {
     // 實作從網址匯入書架邏輯 (例如：backup url or legacy share url)
     return [];
   }
+
+  /// 儲存（新增或更新）書源
+  Future<void> saveSource(BookSource source) => getIt<BookSourceDao>().upsert(source);
+
+  /// 依 URL 取得書源
+  Future<BookSource?> getSourceByUrl(String url) => getIt<BookSourceDao>().getByUrl(url);
+
+  /// 取得書籍所有章節（用於不帶完整 provider 的頁面）
+  Future<List<BookChapter>> getBookChapters(String bookUrl) => getIt<ChapterDao>().getChapters(bookUrl);
 }
 

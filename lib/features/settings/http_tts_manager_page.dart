@@ -1,47 +1,35 @@
-import 'package:legado_reader/core/di/injection.dart';
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/database/dao/http_tts_dao.dart';
+import 'package:provider/provider.dart';
 import 'package:legado_reader/core/models/http_tts.dart';
+import 'http_tts_provider.dart';
 
-class HttpTtsManagerPage extends StatefulWidget {
+class HttpTtsManagerPage extends StatelessWidget {
   const HttpTtsManagerPage({super.key});
 
   @override
-  State<HttpTtsManagerPage> createState() => _HttpTtsManagerPageState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => HttpTtsProvider(),
+      child: const _HttpTtsManagerView(),
+    );
+  }
 }
 
-class _HttpTtsManagerPageState extends State<HttpTtsManagerPage> {
-  final HttpTtsDao _dao = getIt<HttpTtsDao>();
-  List<HttpTTS> _engines = [];
+class _HttpTtsManagerView extends StatelessWidget {
+  const _HttpTtsManagerView();
 
-  @override
-  void initState() {
-    super.initState();
-    _loadEngines();
-  }
-
-  Future<void> _loadEngines() async {
-    final list = await _dao.getAll();
-    setState(() {
-      _engines = list;
-    });
-  }
-
-  void _addEngine({HttpTTS? existing}) {
+  void _showEditDialog(BuildContext context, {HttpTTS? existing}) {
     final nameController = TextEditingController(text: existing?.name ?? '');
     final urlController = TextEditingController(text: existing?.url ?? '');
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: Text(existing == null ? '新增 HTTP TTS 引擎' : '編輯 HTTP TTS 引擎'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: '引擎名稱'),
-            ),
+            TextField(controller: nameController, decoration: const InputDecoration(labelText: '引擎名稱')),
             TextField(
               controller: urlController,
               decoration: const InputDecoration(labelText: 'URL (包含 {{speakText}})'),
@@ -50,19 +38,19 @@ class _HttpTtsManagerPageState extends State<HttpTtsManagerPage> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.isNotEmpty && urlController.text.isNotEmpty) {
                 final engine = HttpTTS(
-                  id: existing?.id ?? 0, // Auto-increment if 0
+                  id: existing?.id ?? 0,
                   name: nameController.text,
                   url: urlController.text,
                 );
-                await _dao.upsert(engine);
-                if (!context.mounted) return;
-                Navigator.pop(context);
-                _loadEngines();
+                if (!ctx.mounted) return;
+                await context.read<HttpTtsProvider>().upsert(engine);
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
               }
             },
             child: const Text('儲存'),
@@ -72,63 +60,52 @@ class _HttpTtsManagerPageState extends State<HttpTtsManagerPage> {
     );
   }
 
-  void _deleteEngine(HttpTTS engine) async {
+  Future<void> _confirmDelete(BuildContext context, HttpTTS engine) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('刪除確認'),
         content: Text('確定要刪除引擎 "${engine.name}" 嗎？'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true), 
-            child: const Text('刪除', style: TextStyle(color: Colors.red)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('刪除', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
-
-    if (confirm == true) {
-      await _dao.deleteById(engine.id);
-      _loadEngines();
+    if (confirm == true && context.mounted) {
+      await context.read<HttpTtsProvider>().delete(engine.id);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<HttpTtsProvider>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('HTTP TTS 引擎管理'),
-        actions: [
-          IconButton(icon: const Icon(Icons.add), onPressed: () => _addEngine()),
-        ],
+        actions: [IconButton(icon: const Icon(Icons.add), onPressed: () => _showEditDialog(context))],
       ),
-      body: _engines.isEmpty
-          ? const Center(child: Text('尚未新增任何引擎'))
-          : ListView.builder(
-              itemCount: _engines.length,
-              itemBuilder: (context, index) {
-                final engine = _engines[index];
-                return ListTile(
-                  title: Text(engine.name),
-                  subtitle: Text(engine.url, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () => _addEngine(existing: engine),
+      body: provider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : provider.engines.isEmpty
+              ? const Center(child: Text('尚未新增任何引擎'))
+              : ListView.builder(
+                  itemCount: provider.engines.length,
+                  itemBuilder: (context, index) {
+                    final engine = provider.engines[index];
+                    return ListTile(
+                      title: Text(engine.name),
+                      subtitle: Text(engine.url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(icon: const Icon(Icons.edit), onPressed: () => _showEditDialog(context, existing: engine)),
+                          IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _confirmDelete(context, engine)),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteEngine(engine),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                    );
+                  },
+                ),
     );
   }
 }
-

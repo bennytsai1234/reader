@@ -5,8 +5,7 @@ import 'views/source_edit_basic.dart';
 import 'views/source_edit_search.dart';
 import 'views/source_edit_toc.dart';
 import 'views/source_edit_content.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:legado_reader/core/services/book_source_service.dart';
 
 class SourceEditorPage extends StatefulWidget {
   final BookSource? source;
@@ -77,7 +76,7 @@ class _SourceEditorPageState extends State<SourceEditorPage> with SingleTickerPr
 
   Future<void> _save() async {
     _syncSource();
-    await getIt<BookSourceDao>().upsert(_editingSource);
+    await BookSourceService().saveSource(_editingSource);
     if (mounted) Navigator.pop(context);
   }
 

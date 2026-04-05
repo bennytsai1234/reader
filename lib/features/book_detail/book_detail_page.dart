@@ -5,7 +5,6 @@ import 'package:legado_reader/features/book_detail/book_detail_provider.dart';
 import 'package:legado_reader/features/book_detail/change_cover_sheet.dart';
 import 'package:legado_reader/core/models/search_book.dart';
 import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
 import 'package:legado_reader/core/services/export_book_service.dart';
 import 'package:legado_reader/features/source_manager/source_editor_page.dart';
 import 'package:legado_reader/features/source_manager/source_debug_page.dart';
@@ -16,7 +15,6 @@ import 'widgets/book_info_header.dart';
 import 'widgets/book_info_intro.dart';
 import 'widgets/book_info_toc_bar.dart';
 import 'widgets/change_source_sheet.dart';
-import 'package:legado_reader/core/di/injection.dart';
 
 class BookDetailPage extends StatelessWidget {
   final Book? book;
@@ -81,22 +79,17 @@ class BookDetailPage extends StatelessWidget {
   }
 
   void _showSourceOptions(BuildContext context, Book b) {
+    final provider = context.read<BookDetailProvider>();
     showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(b.originName), actions: [
-      TextButton(onPressed: () async {
-        final s = await getIt<BookSourceDao>().getByUrl(b.origin);
-        if (!context.mounted) return;
-        if (ctx.mounted) {
-          Navigator.pop(ctx);
-          if (s != null) Navigator.push(context, MaterialPageRoute(builder: (_) => SourceEditorPage(source: s)));
-        }
+      TextButton(onPressed: () {
+        final s = provider.currentSource;
+        Navigator.pop(ctx);
+        if (s != null) Navigator.push(context, MaterialPageRoute(builder: (_) => SourceEditorPage(source: s)));
       }, child: const Text('詳情')),
-      TextButton(onPressed: () async {
-        final s = await getIt<BookSourceDao>().getByUrl(b.origin);
-        if (!context.mounted) return;
-        if (ctx.mounted) {
-          Navigator.pop(ctx);
-          if (s != null) Navigator.push(context, MaterialPageRoute(builder: (_) => SourceDebugPage(source: s, debugKey: b.name)));
-        }
+      TextButton(onPressed: () {
+        final s = provider.currentSource;
+        Navigator.pop(ctx);
+        if (s != null) Navigator.push(context, MaterialPageRoute(builder: (_) => SourceDebugPage(source: s, debugKey: b.name)));
       }, child: const Text('調試')),
       TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('關閉')),
     ]));

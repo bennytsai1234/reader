@@ -6,12 +6,9 @@ import 'package:legado_reader/core/models/book.dart';
 import 'package:legado_reader/core/models/chapter.dart';
 
 import 'package:legado_reader/core/services/book_source_service.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
 import 'widgets/manga/manga_image_view.dart';
 import 'widgets/manga/manga_top_bar.dart';
 import 'widgets/manga/manga_bottom_controls.dart';
-import 'package:legado_reader/core/di/injection.dart';
 
 class MangaReaderPage extends StatefulWidget {
   final Book book;
@@ -61,12 +58,12 @@ class _MangaReaderPageState extends State<MangaReaderPage> {
   }
 
   Future<void> _init() async {
-    _chapters = await getIt<ChapterDao>().getChapters(widget.book.bookUrl);
+    _chapters = await BookSourceService().getBookChapters(widget.book.bookUrl);
     _loadChapter(_currentIndex);
   }
 
   Future<void> _loadChapter(int i) async {
-    final s = await getIt<BookSourceDao>().getByUrl(widget.book.origin);
+    final s = await BookSourceService().getSourceByUrl(widget.book.origin);
     if (s == null) {
       return;
     }

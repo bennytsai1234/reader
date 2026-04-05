@@ -38,6 +38,8 @@ abstract class DownloadBase extends ChangeNotifier {
   }
 
   void update() => notifyListeners();
+
+  Future<void> processTask(DownloadTask task);
 }
 
 

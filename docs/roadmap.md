@@ -1,6 +1,6 @@
 # Reader Project Roadmap
 
-更新日期：2026-04-05
+更新日期：2026-04-05（M5 完成）
 
 這份 roadmap 不是零碎待辦清單，而是專案在 `0.1.6` 之後的優先級約束。原則只有一個：先讓已經存在的核心能力變穩，再決定要不要擴張功能面。
 
@@ -22,9 +22,9 @@ M1 與 M2 的主要工作已完成：
 - **Reader Lifecycle Refactor（M1）**：`ReaderLifecycle` 簡化（移除 `restoring`）、`batchUpdate`、`SlideWindow`/`SlideSegment`、`ContentCallbacks`（消滅 `this as dynamic`）、`SlidePageController`—— 均已落地
 - **Slide mode bugs**：Bug 1（`_handleChapterReady` 漏 notify）與 Bug 2（跨章節邊界閃現 PageController reset）均已修復
 
-目前狀態：324 tests 全通過，`flutter analyze` 零問題。
+目前狀態：363 tests 全通過，`flutter analyze` 零問題。
 
-**下一主線：M3（settings / cache / storage / export 收斂）**
+**M5 完成（2026-04-05）**：全域 Widget 層 DAO 呼叫消除。所有 widget 層直接 `getIt<*Dao>()` 呼叫已消除，改由 Provider getter 或 Service 方法代理。同時刪除兩個死碼檔（`bookmark_list_page.dart`、`local_book_provider.dart`），廢棄的 settings 擴展 mixin（3 個檔案）合併進 `SettingsProvider`，`HttpTtsProvider` 提取為獨立 provider。
 
 ---
 
@@ -185,7 +185,8 @@ M1 與 M2 的主要工作已完成：
 | 2 | 收斂 `reader` runtime 邊界（M1 lifecycle refactor） | ✅ 完成 |
 | 3 | `source_manager` 與 `core/engine` 登入 / parser 對齊（M2） | ✅ 完成 |
 | 4 | 整理 `bookshelf / book_detail / search` 的資料流（M4） | ✅ 完成 |
-| 5 | 平台能力與發版流程 | 待定 |
+| 5 | 全域 Widget 層 DAO 呼叫消除（M5） | ✅ 完成 |
+| 6 | 平台能力與發版流程 | 待定 |
 
 ### M4 目標
 

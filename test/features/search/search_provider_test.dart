@@ -57,7 +57,7 @@ void main() {
 
   tearDown(() async => GetIt.instance.reset());
 
-  Future<SearchProvider> _makeProvider() async {
+  Future<SearchProvider> makeProvider() async {
     final p = SearchProvider();
     await Future.delayed(Duration.zero); // 等 constructor async 完成
     return p;
@@ -65,7 +65,7 @@ void main() {
 
   group('SearchProvider - 書源群組', () {
     test('無書源時 sourceGroups 只有「全部」', () async {
-      final p = await _makeProvider();
+      final p = await makeProvider();
       expect(p.sourceGroups, ['全部']);
     });
 
@@ -74,7 +74,7 @@ void main() {
         BookSource(bookSourceUrl: 'http://a.com', bookSourceName: 'A', bookSourceGroup: '玄幻'),
         BookSource(bookSourceUrl: 'http://b.com', bookSourceName: 'B', bookSourceGroup: '都市'),
       ];
-      final p = await _makeProvider();
+      final p = await makeProvider();
       expect(p.sourceGroups, containsAll(['全部', '玄幻', '都市']));
     });
 
@@ -82,7 +82,7 @@ void main() {
       fakeSourceDao.sources = [
         BookSource(bookSourceUrl: 'http://a.com', bookSourceName: 'A', bookSourceGroup: '玄幻'),
       ];
-      final p = await _makeProvider();
+      final p = await makeProvider();
       p.setGroup('玄幻');
       expect(p.selectedGroup, '玄幻');
     });
@@ -90,12 +90,12 @@ void main() {
 
   group('SearchProvider - 精準搜尋', () {
     test('初始 precisionSearch 為 false', () async {
-      final p = await _makeProvider();
+      final p = await makeProvider();
       expect(p.precisionSearch, isFalse);
     });
 
     test('togglePrecisionSearch 切換狀態並寫入 prefs', () async {
-      final p = await _makeProvider();
+      final p = await makeProvider();
       await p.togglePrecisionSearch();
       expect(p.precisionSearch, isTrue);
       await p.togglePrecisionSearch();
@@ -105,14 +105,14 @@ void main() {
 
   group('SearchProvider - 搜尋狀態', () {
     test('search 空字串不啟動搜尋', () async {
-      final p = await _makeProvider();
+      final p = await makeProvider();
       await p.search('');
       expect(p.isSearching, isFalse);
       expect(p.lastSearchKey, isEmpty);
     });
 
     test('stopSearch 設定 isSearching = false', () async {
-      final p = await _makeProvider();
+      final p = await makeProvider();
       // 直接呼叫 stopSearch，不實際觸發網路
       p.stopSearch();
       expect(p.isSearching, isFalse);
@@ -120,7 +120,7 @@ void main() {
 
     test('無啟用書源時 search 完成後 isSearching = false', () async {
       fakeSourceDao.sources = [];
-      final p = await _makeProvider();
+      final p = await makeProvider();
       await p.search('測試');
       expect(p.isSearching, isFalse);
       expect(p.lastSearchKey, '測試');
@@ -129,20 +129,20 @@ void main() {
 
   group('SearchProvider - 搜尋歷史', () {
     test('初始歷史為空', () async {
-      final p = await _makeProvider();
+      final p = await makeProvider();
       expect(p.history, isEmpty);
     });
 
     test('搜尋後歷史更新', () async {
       fakeSourceDao.sources = [];
-      final p = await _makeProvider();
+      final p = await makeProvider();
       await p.search('閱讀');
       expect(p.history, contains('閱讀'));
     });
 
     test('clearHistory 清空歷史', () async {
       fakeSourceDao.sources = [];
-      final p = await _makeProvider();
+      final p = await makeProvider();
       await p.search('閱讀');
       await p.clearHistory();
       expect(p.history, isEmpty);
@@ -151,12 +151,12 @@ void main() {
 
   group('SearchProvider - progress', () {
     test('無書源時 progress 為 0', () async {
-      final p = await _makeProvider();
+      final p = await makeProvider();
       expect(p.progress, 0.0);
     });
 
     test('totalSources 初始為 0', () async {
-      final p = await _makeProvider();
+      final p = await makeProvider();
       expect(p.totalSources, 0);
     });
   });

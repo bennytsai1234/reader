@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:legado_reader/core/config/app_config.dart';
 import 'package:legado_reader/core/constant/prefer_key.dart';
+import 'package:legado_reader/core/services/app_log_service.dart';
 import 'provider/settings_base.dart';
 
 export 'provider/settings_base.dart';
-export 'provider/settings_ui_theme.dart';
-export 'provider/settings_reading.dart';
 export 'provider/settings_sync_backup.dart';
-export 'provider/settings_advanced.dart';
 
 /// SettingsProvider - 設置提供者 (重構後)
 /// (原 Android help/config/AppConfig.kt)
@@ -193,6 +193,11 @@ class SettingsProvider extends SettingsProviderBase {
     lastVersionCode = prefs.getInt(PreferKey.lastVersionCode) ?? 0;
     privacyAgreed = prefs.getBool(PreferKey.privacyAgreed) ?? false;
 
+    // --- 封面進階設定 ---
+    coverSearchPriority = prefs.getInt(PreferKey.coverSearchPriority) ?? 0;
+    coverTimeout = prefs.getInt(PreferKey.coverTimeout) ?? 5000;
+    globalCoverRule = prefs.getString(PreferKey.globalCoverRule) ?? '';
+
     // --- 歡迎與介面 ---
     welcomeImage = prefs.getString(PreferKey.welcomeImage) ?? '';
     welcomeImageDark = prefs.getString(PreferKey.welcomeImageDark) ?? '';
@@ -281,6 +286,48 @@ class SettingsProvider extends SettingsProviderBase {
     await save(PreferKey.themeMode, mode.toString().split('.').last);
     notifyListeners();
   }
+
+  // --- 封面進階 ---
+  void setCoverSearchPriority(int v) { coverSearchPriority = v; save(PreferKey.coverSearchPriority, v); update(); }
+  void setCoverTimeout(int v) { coverTimeout = v; save(PreferKey.coverTimeout, v); update(); }
+  void setGlobalCoverRule(String v) { globalCoverRule = v; save(PreferKey.globalCoverRule, v); update(); }
+  void setPrivacyAgreed(bool v) { privacyAgreed = v; save(PreferKey.privacyAgreed, v); update(); }
+  void setRecordLog(bool v) { recordLog = v; save(PreferKey.recordLog, v); update(); }
+
+  // --- 主題色彩 ---
+  void setDayPrimaryColor(Color c) { dayPrimaryColor = c; save(PreferKey.cPrimary, c.toARGB32()); update(); }
+  void setNightPrimaryColor(Color c) { nightPrimaryColor = c; save(PreferKey.cNPrimary, c.toARGB32()); update(); }
+  Future<void> setDayBackgroundImage(String v) async { dayBackgroundImage = v; await save(PreferKey.bgImage, v); update(); }
+  Future<void> setNightBackgroundImage(String v) async { nightBackgroundImage = v; await save(PreferKey.bgImageN, v); update(); }
+
+  // --- 歡迎介面 ---
+  Future<void> setWelcomeImage(String v) async { welcomeImage = v; await save(PreferKey.welcomeImage, v); update(); }
+  Future<void> setWelcomeShowText(bool v) async { welcomeShowText = v; await save(PreferKey.welcomeShowText, v); update(); }
+
+  // --- 啟動圖標 ---
+  Future<void> setLauncherIcon(String v) async {
+    launcherIcon = v;
+    await save(PreferKey.launcherIcon, v);
+    if (Platform.isAndroid) {
+      try {
+        const platform = MethodChannel('com.legado.reader/launcher_icon');
+        await platform.invokeMethod('changeIcon', {'iconName': v});
+      } catch (e) { AppLog.e('變更啟動圖標失敗: $e', error: e); }
+    }
+    update();
+  }
+
+  // --- 朗讀速率 ---
+  void setSpeechRate(double v) { speechRate = v; save(PreferKey.ttsSpeechRate, v); update(); }
+  void setSpeechPitch(double v) { speechPitch = v; save(PreferKey.speechPitch, v); update(); }
+  void setSpeechVolume(double v) { speechVolume = v; save(PreferKey.speechVolume, v); update(); }
+
+  // --- 閱讀顯示 ---
+  void setHideStatusBar(bool v) { hideStatusBar = v; save(PreferKey.hideStatusBar, v); update(); }
+  void setHideNavigationBar(bool v) { hideNavigationBar = v; save(PreferKey.hideNavigationBar, v); update(); }
+  void setVolumeKeyPage(bool v) { volumeKeyPage = v; save(PreferKey.volumeKeyPage, v); update(); }
+  void setAutoChangeSource(bool v) { autoChangeSource = v; save(PreferKey.autoChangeSource, v); update(); }
+  void setOptimizeRender(bool v) { optimizeRender = v; save(PreferKey.optimizeRender, v); update(); }
 }
 
 

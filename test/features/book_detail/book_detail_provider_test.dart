@@ -86,7 +86,7 @@ void main() {
 
   tearDown(() async => GetIt.instance.reset());
 
-  Future<BookDetailProvider> _makeProvider({
+  Future<BookDetailProvider> makeProvider({
     String url = 'http://book.com',
     List<BookChapter> chapters = const [],
   }) async {
@@ -101,7 +101,7 @@ void main() {
 
   group('BookDetailProvider - 初始狀態', () {
     test('未在書架時 isInBookshelf 為 false', () async {
-      final p = await _makeProvider();
+      final p = await makeProvider();
       expect(p.isInBookshelf, isFalse);
       expect(p.isLoading, isFalse);
     });
@@ -118,7 +118,7 @@ void main() {
       );
       await bookDao.upsert(book);
 
-      final p = await _makeProvider();
+      final p = await makeProvider();
       expect(p.isInBookshelf, isTrue);
     });
   });
@@ -132,7 +132,7 @@ void main() {
         bookUrl: 'http://book.com',
         index: 2,
       );
-      final p = await _makeProvider(chapters: chapters);
+      final p = await makeProvider(chapters: chapters);
 
       p.setSearchQuery('特殊');
       await Future.delayed(const Duration(milliseconds: 350)); // debounce
@@ -141,7 +141,7 @@ void main() {
     });
 
     test('清空 searchQuery 恢復全部章節', () async {
-      final p = await _makeProvider(chapters: _makeChapters(5));
+      final p = await makeProvider(chapters: _makeChapters(5));
 
       p.setSearchQuery('不存在');
       await Future.delayed(const Duration(milliseconds: 350));
@@ -153,7 +153,7 @@ void main() {
     });
 
     test('toggleSort 反轉章節順序', () async {
-      final p = await _makeProvider(chapters: _makeChapters(3));
+      final p = await makeProvider(chapters: _makeChapters(3));
       expect(p.filteredChapters.first.index, 0);
 
       p.toggleSort();
@@ -165,7 +165,7 @@ void main() {
     });
 
     test('totalChapterCount 正確回傳數量', () async {
-      final p = await _makeProvider(chapters: _makeChapters(7));
+      final p = await makeProvider(chapters: _makeChapters(7));
       expect(p.totalChapterCount, 7);
     });
   });

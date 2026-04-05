@@ -24,6 +24,7 @@ class BookDetailProvider extends ChangeNotifier {
   bool _isLoading = true;
   bool _isInBookshelf = false;
   BookSource? _currentSource;
+  BookSource? get currentSource => _currentSource;
 
   Book get book => _book;
   List<BookChapter> get filteredChapters => _displayChapters;

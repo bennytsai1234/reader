@@ -4,13 +4,10 @@ import 'package:legado_reader/core/models/chapter.dart';
 import 'package:legado_reader/core/models/book_source.dart';
 import 'package:legado_reader/core/services/book_source_service.dart';
 import 'package:legado_reader/core/services/audio_play_service.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
 import 'change_chapter_source_sheet.dart';
 import 'widgets/audio/audio_player_main.dart';
 import 'widgets/audio/audio_player_slider.dart';
 import 'widgets/audio/audio_player_utils.dart';
-import 'package:legado_reader/core/di/injection.dart';
 
 class AudioPlayerPage extends StatefulWidget {
   final Book book;
@@ -30,8 +27,8 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
   void initState() { super.initState(); _currentIndex = widget.chapterIndex; _init(); }
 
   Future<void> _init() async {
-    _chapters = await getIt<ChapterDao>().getChapters(widget.book.bookUrl);
-    _source = (await getIt<BookSourceDao>().getAll()).cast<BookSource?>().firstWhere((s) => s?.bookSourceUrl == widget.book.origin, orElse: () => null);
+    _chapters = await BookSourceService().getBookChapters(widget.book.bookUrl);
+    _source = await BookSourceService().getSourceByUrl(widget.book.origin);
     _loadChapter(_currentIndex);
   }
 
