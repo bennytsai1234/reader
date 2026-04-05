@@ -1,6 +1,6 @@
 # Reader Project Roadmap
 
-更新日期：2026-04-02
+更新日期：2026-04-05
 
 這份 roadmap 不是零碎待辦清單，而是專案在 `0.1.6` 之後的優先級約束。原則只有一個：先讓已經存在的核心能力變穩，再決定要不要擴張功能面。
 
@@ -184,7 +184,7 @@ M1 與 M2 的主要工作已完成：
 | 1 | 整理 `settings / cache / storage / export`（M3） | ✅ 完成 |
 | 2 | 收斂 `reader` runtime 邊界（M1 lifecycle refactor） | ✅ 完成 |
 | 3 | `source_manager` 與 `core/engine` 登入 / parser 對齊（M2） | ✅ 完成 |
-| 4 | 整理 `bookshelf / book_detail / search` 的資料流（M4） | **下一主線** |
+| 4 | 整理 `bookshelf / book_detail / search` 的資料流（M4） | ✅ 完成 |
 | 5 | 平台能力與發版流程 | 待定 |
 
 ### M4 目標

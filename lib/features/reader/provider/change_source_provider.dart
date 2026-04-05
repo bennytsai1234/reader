@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:legado_reader/core/models/book.dart';
+import 'package:legado_reader/core/models/book_source.dart';
 import 'package:legado_reader/core/models/search_book.dart';
 import 'package:legado_reader/core/services/book_source_service.dart';
 import 'package:legado_reader/core/database/dao/book_source_dao.dart';
@@ -10,7 +11,7 @@ import 'package:legado_reader/core/di/injection.dart';
 class ChangeSourceProvider extends ChangeNotifier {
   final Book book;
   final BookSourceService service = BookSourceService();
-  final BookSourceDao sourceDao = getIt<BookSourceDao>();
+  final BookSourceDao _sourceDao = getIt<BookSourceDao>();
   final SearchBookDao searchBookDao = getIt<SearchBookDao>();
 
   List<SearchBook> allResults = [];
@@ -27,7 +28,7 @@ class ChangeSourceProvider extends ChangeNotifier {
   }
 
   Future<void> loadGroups() async {
-    final sources = await sourceDao.getEnabled();
+    final sources = await _sourceDao.getEnabled();
     final groupSet = <String>{'全部'};
     for (var s in sources) {
       if (s.bookSourceGroup != null && s.bookSourceGroup!.isNotEmpty) {
@@ -65,7 +66,7 @@ class ChangeSourceProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      var enabledSources = await sourceDao.getEnabled();
+      var enabledSources = await _sourceDao.getEnabled();
       if (selectedGroup != '全部') {
         enabledSources = enabledSources.where((s) => (s.bookSourceGroup ?? '').split(',').map((e) => e.trim()).contains(selectedGroup)).toList();
       }
@@ -94,6 +95,8 @@ class ChangeSourceProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<BookSource?> findSourceByUrl(String url) => _sourceDao.getByUrl(url);
 
   void toggleCheckAuthor() {
     checkAuthor = !checkAuthor;

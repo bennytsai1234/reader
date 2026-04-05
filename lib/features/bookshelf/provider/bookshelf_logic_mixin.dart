@@ -65,7 +65,7 @@ mixin BookshelfLogicMixin on BookshelfProviderBase {
       await chapterDao.deleteByBook(url);
     }
     isBatchMode = false; selectedBookUrls.clear();
-    (this as dynamic).loadBooks();
+    loadBooks();
   }
 
   Future<void> moveSelectedToGroup(int groupId) async {
@@ -77,7 +77,7 @@ mixin BookshelfLogicMixin on BookshelfProviderBase {
       }
     }
     isBatchMode = false; selectedBookUrls.clear();
-    (this as dynamic).loadBooks();
+    loadBooks();
   }
 
   Future<void> batchUpdateGroup(Set<String> urls, int groupId) async {
@@ -89,7 +89,7 @@ mixin BookshelfLogicMixin on BookshelfProviderBase {
       }
     }
     isBatchMode = false; selectedBookUrls.clear();
-    (this as dynamic).loadBooks();
+    loadBooks();
   }
 
   Future<void> reorderGroups(int oldIndex, int newIndex) async {

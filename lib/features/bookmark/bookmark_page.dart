@@ -5,8 +5,6 @@ import 'bookmark_provider.dart';
 import 'package:legado_reader/core/models/bookmark.dart';
 import 'package:legado_reader/features/reader/reader_page.dart';
 import 'package:legado_reader/features/reader/reader_provider.dart';
-import 'package:legado_reader/core/database/dao/book_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
 
 class BookmarkPage extends StatefulWidget {
   const BookmarkPage({super.key});
@@ -139,7 +137,7 @@ class _BookmarkPageState extends State<BookmarkPage> {
   }
 
   Future<void> _jumpToBook(BuildContext context, Bookmark bookmark) async {
-    final book = await getIt<BookDao>().getByUrl(bookmark.bookUrl);
+    final book = await context.read<BookmarkProvider>().lookupBook(bookmark.bookUrl);
     if (!context.mounted) return;
 
     if (book != null) {

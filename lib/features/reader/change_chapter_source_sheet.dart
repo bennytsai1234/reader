@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/book_source.dart';
 import 'package:legado_reader/core/models/search_book.dart';
 import 'provider/change_source_provider.dart';
 import 'widgets/change_source_filter_bar.dart';
@@ -112,10 +111,8 @@ class _ChangeChapterSourceSheetState extends State<ChangeChapterSourceSheet> {
     final messenger = ScaffoldMessenger.of(context);
     final readerProvider = context.read<ReaderProvider>();
 
-    final sources = await provider.sourceDao.getAll();
+    final source = await provider.findSourceByUrl(searchBook.origin);
     if (!context.mounted) return;
-    
-    final source = sources.cast<BookSource?>().firstWhere((s) => s?.bookSourceUrl == searchBook.origin, orElse: () => null);
     if (source == null) {
       return;
     }

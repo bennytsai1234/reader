@@ -12,6 +12,7 @@ class BookshelfProvider extends BookshelfProviderBase
     loadGroups();
   }
 
+  @override
   Future<void> loadBooks() async {
     isLoading = true;
     notifyListeners();

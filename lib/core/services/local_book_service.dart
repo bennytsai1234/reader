@@ -1,12 +1,23 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:legado_reader/core/models/book.dart';
 import 'package:legado_reader/core/models/chapter.dart';
+import 'package:legado_reader/core/local_book/txt_parser.dart';
 import 'package:legado_reader/core/services/epub_service.dart';
+import 'package:legado_reader/core/services/resource_service.dart';
 import 'package:fast_gbk/fast_gbk.dart';
+
+/// 本地書籍匯入結果
+class LocalBookImportResult {
+  final Book book;
+  final List<BookChapter> chapters;
+  const LocalBookImportResult({required this.book, required this.chapters});
+}
 
 /// LocalBookService - 本地書籍內容獲取服務
 class LocalBookService {
@@ -17,6 +28,75 @@ class LocalBookService {
   RandomAccessFile? _txtAccessFile;
   String? _txtAccessFilePath;
   Future<void> _txtReadChain = Future<void>.value();
+
+  /// 解析本地書籍並回傳 Book + chapters（不做持久化）
+  Future<LocalBookImportResult?> importBook(String path) async {
+    final file = File(path);
+    if (!await file.exists()) return null;
+
+    final ext = path.split('.').last.toLowerCase();
+    final bookUrl = 'local://$path';
+
+    if (ext == 'txt') {
+      final result = await compute((File f) async {
+        final parser = TxtParser(f);
+        return await parser.splitChapters();
+      }, file);
+
+      final book = Book(
+        bookUrl: bookUrl,
+        name: p.basenameWithoutExtension(path),
+        author: '本地',
+        origin: 'local',
+        originName: '本地',
+        isInBookshelf: true,
+        type: 0,
+        charset: result.charset,
+      );
+      final chapters = <BookChapter>[
+        for (var i = 0; i < result.chapters.length; i++)
+          BookChapter(
+            url: '$bookUrl#$i',
+            title: result.chapters[i]['title'] ?? '第 $i 章',
+            bookUrl: bookUrl,
+            index: i,
+            start: result.chapters[i]['start'],
+            end: result.chapters[i]['end'],
+          ),
+      ];
+      return LocalBookImportResult(book: book, chapters: chapters);
+    }
+
+    if (ext == 'epub') {
+      final meta = await EpubService().parseMetadata(file);
+      if (meta.coverBytes != null) {
+        await ResourceService().persistMemoryResource('memory://$bookUrl', meta.coverBytes!);
+      }
+      final book = Book(
+        bookUrl: bookUrl,
+        name: meta.title,
+        author: meta.author,
+        origin: 'local',
+        originName: '本地',
+        isInBookshelf: true,
+        type: 1,
+        coverUrl: meta.coverBytes != null ? 'memory://$bookUrl' : null,
+      );
+      final chapters = <BookChapter>[
+        for (var i = 0; i < meta.chapters.length; i++)
+          BookChapter(
+            url: meta.chapters[i]['href'] ?? '',
+            title: meta.chapters[i]['title'] ?? '第 $i 章',
+            bookUrl: bookUrl,
+            index: i,
+          ),
+      ];
+      return LocalBookImportResult(book: book, chapters: chapters);
+    }
+
+    AppLog.d('LocalBookService: 不支援的格式 $ext');
+    return null;
+  }
 
   /// 獲取本地書籍章節內容
   Future<String> getContent(Book book, BookChapter chapter) async {

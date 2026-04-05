@@ -10,6 +10,8 @@ import 'package:legado_reader/core/di/injection.dart';
 
 /// BookshelfProvider 的基礎狀態與 DAO 定義
 abstract class BookshelfProviderBase extends ChangeNotifier {
+  Future<void> loadBooks();
+
   final BookDao bookDao = getIt<BookDao>();
   final BookGroupDao groupDao = getIt<BookGroupDao>();
   final BookSourceDao sourceDao = getIt<BookSourceDao>();

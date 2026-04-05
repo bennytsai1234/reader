@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:legado_reader/core/database/dao/bookmark_dao.dart';
+import 'package:legado_reader/core/database/dao/book_dao.dart';
 import 'package:legado_reader/core/di/injection.dart';
 import 'package:legado_reader/core/models/bookmark.dart';
+import 'package:legado_reader/core/models/book.dart';
 
 class BookmarkProvider extends ChangeNotifier {
   final BookmarkDao _dao = getIt<BookmarkDao>();
+  final BookDao _bookDao = getIt<BookDao>();
 
   List<Bookmark> _bookmarks = [];
   List<Bookmark> get bookmarks => _bookmarks;
@@ -48,5 +51,7 @@ class BookmarkProvider extends ChangeNotifier {
     await _dao.clearAll();
     await loadBookmarks();
   }
+
+  Future<Book?> lookupBook(String bookUrl) => _bookDao.getByUrl(bookUrl);
 }
 

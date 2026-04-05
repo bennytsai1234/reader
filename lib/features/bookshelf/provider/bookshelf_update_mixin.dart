@@ -36,7 +36,7 @@ mixin BookshelfUpdateMixin on BookshelfProviderBase {
 
     await Future.wait(updateTasks);
     updatingCount = 0;
-    (this as dynamic).loadBooks();
+    loadBooks();
     AppEventBus().fire(AppEvent('bookshelfRefreshEnd'));
   }
 
@@ -46,7 +46,7 @@ mixin BookshelfUpdateMixin on BookshelfProviderBase {
       final response = await service.importBookshelf(url);
       if (response.isNotEmpty) {
         await bookDao.upsertAll(response);
-        (this as dynamic).loadBooks();
+        loadBooks();
       }
     } finally { isLoading = false; notifyListeners(); }
   }
