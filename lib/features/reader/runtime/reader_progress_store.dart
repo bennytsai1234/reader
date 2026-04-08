@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:legado_reader/core/models/book.dart';
 import 'package:legado_reader/core/models/chapter.dart';
+import 'package:legado_reader/core/services/app_log_service.dart';
 
 class ReaderProgressStore {
   int _lastSavedCharOffset = -1;
@@ -49,6 +50,14 @@ class ReaderProgressStore {
       title: title,
     );
     _lastSavedCharOffset = charOffset;
-    await write(chapterIndex, title, charOffset);
+    try {
+      await write(chapterIndex, title, charOffset);
+    } catch (e, stack) {
+      AppLog.e(
+        'ReaderProgressStore: persist failed ch=$chapterIndex pos=$charOffset: $e',
+        error: e,
+        stackTrace: stack,
+      );
+    }
   }
 }

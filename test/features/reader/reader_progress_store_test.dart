@@ -49,5 +49,30 @@ void main() {
       expect(savedTitle, 'c1');
       expect(savedOffset, 345);
     });
+
+    test('persistCharOffset 寫入失敗時不拋出例外（並靜默記錄）', () async {
+      final store = ReaderProgressStore();
+      final book = Book(name: 'book', author: 'author', bookUrl: 'url');
+      final chapters = [BookChapter(title: 'c0', index: 0)];
+
+      Future<void> failingWrite(int ci, String title, int charOffset) async {
+        throw Exception('DB write failed');
+      }
+
+      // Must NOT throw — write failure should be caught and logged
+      await expectLater(
+        store.persistCharOffset(
+          write: failingWrite,
+          book: book,
+          chapters: chapters,
+          chapterIndex: 0,
+          charOffset: 100,
+        ),
+        completes,
+      );
+
+      // In-memory state should still be updated (only durable write failed)
+      expect(book.durChapterPos, 100);
+    });
   });
 }
