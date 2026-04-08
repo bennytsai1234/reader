@@ -724,6 +724,7 @@ class ChapterContentManager {
         _paginatedCache.containsKey(index)) {
       return;
     }
+    final capturedConfigVersion = _configVersion;
     final trace = Stopwatch()..start();
     ReaderPerfTrace.mark('chapter $index silent preload start');
 
@@ -743,7 +744,7 @@ class ChapterContentManager {
         _displayTitleCache[index] = result.displayTitle!;
       }
       if (_progressivePaginationEnabled) {
-        await _doPaginateProgressive(index, result.content);
+        await _doPaginateProgressive(index, result.content, capturedConfigVersion);
       } else {
         final pages = await _doPaginate(index, result.content);
         if (_disposed) return;
