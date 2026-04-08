@@ -749,6 +749,13 @@ class ChapterContentManager {
         final pages = await _doPaginate(index, result.content);
         if (_disposed) return;
 
+        if (_configVersion != capturedConfigVersion) {
+          AppLog.d(
+            'ChapterContentManager: Chapter $index silent preload discarded (config changed)',
+          );
+          return;
+        }
+
         if (pages.isNotEmpty) {
           _paginatedCache[index] = pages;
         } else {
@@ -800,6 +807,13 @@ class ChapterContentManager {
       textFullJustify: config.textFullJustify,
     )) {
       if (_disposed) return;
+      if (capturedVersion != null && _configVersion != capturedVersion) {
+        AppLog.d(
+          'ChapterContentManager: Chapter $index progressive pagination aborted mid-stream (config changed)',
+        );
+        _paginatedCache.remove(index);
+        return;
+      }
       latestPages = pages;
       if (pages.isNotEmpty) {
         _paginatedCache[index] = pages;
