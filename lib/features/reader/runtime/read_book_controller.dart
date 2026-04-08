@@ -490,6 +490,7 @@ class ReadBookController extends ReaderProviderBase
           reason: ReaderCommandReason.restore,
           isRestoringJump: false,
         );
+        initialCharOffset = 0; // clear after use
       }
       lifecycle = ReaderLifecycle.ready;
     });
