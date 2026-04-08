@@ -630,7 +630,8 @@ class ChapterContentManager {
     for (final idx in preloadScope) {
       if (!_paginatedCache.containsKey(idx) &&
           !_activeLoadingChapters.contains(idx) &&
-          !_silentLoadingChapters.contains(idx)) {
+          !_silentLoadingChapters.contains(idx) &&
+          !_emptyContentChapters.contains(idx)) {
         candidates.add(idx);
       }
     }
