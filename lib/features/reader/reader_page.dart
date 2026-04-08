@@ -114,8 +114,10 @@ class _ReaderPageState extends State<ReaderPage> {
 
           final pendingJump = p.consumePendingJump();
           if (pendingJump != null) {
-            p.consumePendingSlideJumpReason();
-            _slideCtrl.jumpTo(pendingJump);
+            _slideCtrl.jumpTo(
+              pendingJump,
+              onWillJump: p.consumePendingSlideJumpReason,
+            );
           }
           return Container(
             color: p.currentTheme.backgroundColor,

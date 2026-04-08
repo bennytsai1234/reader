@@ -1,6 +1,7 @@
 import 'package:legado_reader/core/constant/page_anim.dart';
 import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:legado_reader/features/reader/runtime/models/reader_viewport_state.dart';
 
 typedef PendingScrollAction =
     ({
@@ -72,5 +73,33 @@ class ReadViewRuntimeCoordinator {
 
   bool shouldRestoreSlidePage(ReaderProvider provider) {
     return false;
+  }
+
+  ReaderViewportState resolveViewportState(
+    ReaderProvider provider, {
+    required bool hasVisibleData,
+  }) {
+    if (hasVisibleData) {
+      return ReaderViewportState.ready;
+    }
+
+    if (provider.lifecycle == ReaderLifecycle.loading ||
+        provider.viewSize == null ||
+        provider.isLoading) {
+      return const ReaderViewportState.loading();
+    }
+
+    if (provider.chapters.isEmpty) {
+      return const ReaderViewportState.message('暫無章節');
+    }
+
+    final targetChapterIndex = provider.pageTurnMode == PageAnim.scroll
+        ? provider.visibleChapterIndex
+        : provider.currentChapterIndex;
+    if (provider.isKnownEmptyChapter(targetChapterIndex)) {
+      return const ReaderViewportState.message('本章暫無內容');
+    }
+
+    return const ReaderViewportState.message('暫無可顯示頁面');
   }
 }

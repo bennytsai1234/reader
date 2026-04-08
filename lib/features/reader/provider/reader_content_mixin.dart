@@ -10,6 +10,9 @@ import 'package:legado_reader/features/reader/engine/reader_perf_trace.dart';
 import 'package:legado_reader/features/reader/engine/text_page.dart';
 import 'package:legado_reader/features/reader/provider/slide_window.dart';
 import 'package:legado_reader/features/reader/provider/content_callbacks.dart';
+import 'package:legado_reader/features/reader/runtime/reader_content_coordinator.dart';
+import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
+import 'package:legado_reader/features/reader/runtime/reader_position_resolver.dart';
 import 'package:legado_reader/shared/theme/app_theme.dart';
 
 import 'reader_provider_base.dart';
@@ -22,6 +25,8 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   bool get hasContentManager => _contentManager != null;
   bool get isWholeBookPreloadEnabled =>
       hasContentManager && contentManager.wholeBookPreloadEnabled;
+  bool isKnownEmptyChapter(int index) =>
+      hasContentManager && contentManager.isKnownEmptyChapter(index);
 
   StreamSubscription<int>? _chapterReadySub;
   Timer? _deferredWindowWarmupTimer;
@@ -36,6 +41,8 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
 
   SlideWindow _slideWindow = SlideWindow.empty;
   ContentCallbacks _contentCallbacks = ContentCallbacks.empty;
+  final ReaderContentCoordinator _contentCoordinator =
+      const ReaderContentCoordinator();
 
   /// Inject typed callbacks from ReadBookController.
   set contentCallbacks(ContentCallbacks callbacks) => _contentCallbacks = callbacks;
@@ -54,6 +61,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   bool get _isLocalBook => book.origin == 'local';
   bool get _isScrollMode => pageTurnMode == PageAnim.scroll;
   int get _defaultSlideWarmupRadius => _isLocalBook ? 1 : 2;
+  bool get isPaginatingContent => _isPaginating;
 
   void initContentManager() {
     _chapterReadySub?.cancel();
@@ -292,14 +300,17 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       }
       return slidePages.length - 1;
     }
-    final localPageIndex = ChapterPositionResolver.findPageIndexByCharOffset(
-      chapterPagesCache[chapterIndex] ?? const <TextPage>[],
-      charOffset,
+    final target = ReaderPositionResolver.resolveSlideTarget(
+      location: ReaderLocation(
+        chapterIndex: chapterIndex,
+        charOffset: charOffset,
+      ),
+      runtimeChapter: _contentCallbacks.chapterAt?.call(chapterIndex),
+      chapterPages: chapterPagesCache[chapterIndex] ?? const <TextPage>[],
+      slidePages: slidePages,
+      targetChapterIndex: chapterIndex,
     );
-    final globalIndex = slidePages.indexWhere(
-      (page) => page.chapterIndex == chapterIndex && page.index == localPageIndex,
-    );
-    return globalIndex >= 0 ? globalIndex : 0;
+    return target.globalPageIndex;
   }
 
   void _pinSlideTarget({
@@ -513,11 +524,6 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     }
 
     notifyListeners();
-    _contentCallbacks.persistCurrentProgress?.call(
-      chapterIndex: page.chapterIndex,
-      pageIndex: i,
-      reason: ReaderCommandReason.user,
-    );
   }
 
   void nextPage({
@@ -569,7 +575,9 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   }) async {
     final target = currentChapterIndex + 1;
     if (target < chapters.length) {
-      book.durChapterPos = 0;
+      _contentCallbacks.updateSessionLocation?.call(
+        ReaderLocation(chapterIndex: target, charOffset: 0),
+      );
       await loadChapter(target, reason: reason);
     }
   }
@@ -581,7 +589,9 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     final target = currentChapterIndex - 1;
     if (target >= 0) {
       if (!fromEnd) {
-        book.durChapterPos = 0;
+        _contentCallbacks.updateSessionLocation?.call(
+          ReaderLocation(chapterIndex: target, charOffset: 0),
+        );
       }
       await loadChapter(target, fromEnd: fromEnd, reason: reason);
     }
@@ -713,24 +723,33 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   }
 
   int _resolveSlideTargetIndex(TextPage? previousPage) {
-    final pinnedChapterIndex = _pinnedSlideChapterIndex;
-    if (pinnedChapterIndex != null) {
-      final pinnedIndex = _findSlidePageIndexByCharOffset(
-        chapterIndex: pinnedChapterIndex,
-        charOffset: _pinnedSlideCharOffset,
-        fromEnd: _pinnedSlideFromEnd,
-      );
-      if (slidePages.isNotEmpty) {
-        return pinnedIndex;
-      }
-    }
-    if (previousPage != null) {
-      final found = _slideWindow.findByPage(previousPage);
-      if (found >= 0) return found;
-    }
-    return _findSlidePageIndexByCharOffset(
-      chapterIndex: currentChapterIndex,
-      charOffset: book.durChapterPos,
+    final previousMappedIndex =
+        previousPage != null ? _slideWindow.findByPage(previousPage) : null;
+    return _contentCoordinator.resolveSlideTargetIndex(
+      pinnedLocation:
+          _pinnedSlideChapterIndex != null
+              ? ReaderLocation(
+                chapterIndex: _pinnedSlideChapterIndex!,
+                charOffset: _pinnedSlideCharOffset,
+              )
+              : null,
+      pinnedFromEnd: _pinnedSlideFromEnd,
+      previousMappedIndex:
+          previousMappedIndex != null && previousMappedIndex >= 0
+              ? previousMappedIndex
+              : null,
+      currentChapterIndex: currentChapterIndex,
+      persistedCharOffset:
+          _contentCallbacks.currentSessionLocation?.call().charOffset ?? 0,
+      slidePages: slidePages,
+      chapterAt:
+          (chapterIndex) => _contentCallbacks.chapterAt?.call(chapterIndex),
+      pagesForChapter:
+          (chapterIndex) =>
+              (_contentCallbacks.pagesForChapter?.call(chapterIndex)
+                      as List<TextPage>?) ??
+              chapterPagesCache[chapterIndex] ??
+              const <TextPage>[],
     );
   }
 
@@ -801,44 +820,33 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     required bool fromEnd,
     required ReaderCommandReason reason,
   }) {
+    final presentation = _contentCoordinator.resolvePresentation(
+      chapterIndex: chapterIndex,
+      persistedCharOffset:
+          _contentCallbacks.currentSessionLocation?.call().charOffset ?? 0,
+      fromEnd: fromEnd,
+      isScrollMode: _isScrollMode,
+      chapterPages: pages,
+      slidePages: slidePages,
+      runtimeChapter: _contentCallbacks.chapterAt?.call(chapterIndex),
+    );
     if (_isScrollMode) {
-      final targetOffset = fromEnd && pages.isNotEmpty
-          ? ChapterPositionResolver.charOffsetToLocalOffset(
-              pages,
-              ChapterPositionResolver.getCharOffsetForPage(
-                pages,
-                pages.length - 1,
-              ),
-            )
-          : ChapterPositionResolver.charOffsetToLocalOffset(
-              pages,
-              book.durChapterPos,
-            );
+      final target = presentation.scrollTarget!;
       _contentCallbacks.jumpToChapterLocalOffset?.call(
-        chapterIndex: chapterIndex,
-        localOffset: targetOffset,
-        alignment: 0.0,
+        chapterIndex: target.chapterIndex,
+        localOffset: target.localOffset,
+        alignment: target.alignment,
         reason: reason,
       );
       return;
     }
-    final targetCharOffset = fromEnd && pages.isNotEmpty
-        ? ChapterPositionResolver.getCharOffsetForPage(
-            pages,
-            pages.length - 1,
-          )
-        : book.durChapterPos;
     _pinSlideTarget(
       chapterIndex: chapterIndex,
-      charOffset: targetCharOffset,
+      charOffset: presentation.location.charOffset,
       fromEnd: fromEnd,
     );
     _refreshSlidePages();
-    currentPageIndex = _findSlidePageIndexByCharOffset(
-      chapterIndex: chapterIndex,
-      charOffset: targetCharOffset,
-      fromEnd: fromEnd,
-    );
+    currentPageIndex = presentation.slidePageIndex ?? 0;
     _contentCallbacks.jumpToSlidePage?.call(
       currentPageIndex,
       reason: reason,
@@ -867,17 +875,21 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     required bool fromEnd,
   }) {
     const reason = ReaderCommandReason.settingsRepaginate;
+    final pages = chapterPagesCache[targetChapter] ?? const <TextPage>[];
+    final presentation = _contentCoordinator.resolvePresentation(
+      chapterIndex: targetChapter,
+      persistedCharOffset:
+          _contentCallbacks.currentSessionLocation?.call().charOffset ?? 0,
+      fromEnd: fromEnd,
+      isScrollMode: _isScrollMode,
+      chapterPages: pages,
+      slidePages: slidePages,
+      runtimeChapter: _contentCallbacks.chapterAt?.call(targetChapter),
+    );
     if (_isScrollMode) {
-      final pages = chapterPagesCache[targetChapter] ?? const <TextPage>[];
-      final charOffset = fromEnd && pages.isNotEmpty
-          ? ChapterPositionResolver.getCharOffsetForPage(
-              pages,
-              pages.length - 1,
-            )
-          : book.durChapterPos;
       _contentCallbacks.jumpToChapterCharOffset?.call(
         chapterIndex: targetChapter,
-        charOffset: charOffset,
+        charOffset: presentation.location.charOffset,
         reason: reason,
         isRestoringJump: false,
       );
@@ -885,14 +897,10 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     }
     _pinSlideTarget(
       chapterIndex: targetChapter,
-      charOffset: book.durChapterPos,
+      charOffset: presentation.location.charOffset,
       fromEnd: fromEnd,
     );
-    currentPageIndex = _findSlidePageIndexByCharOffset(
-      chapterIndex: targetChapter,
-      charOffset: book.durChapterPos,
-      fromEnd: fromEnd,
-    );
+    currentPageIndex = presentation.slidePageIndex ?? 0;
     _contentCallbacks.jumpToSlidePage?.call(
       currentPageIndex,
       reason: reason,

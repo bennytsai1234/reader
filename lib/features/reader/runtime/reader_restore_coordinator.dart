@@ -24,6 +24,7 @@ class ReaderRestoreCoordinator {
     final chapterIndex = _pendingScrollRestoreChapterIndex;
     final localOffset = _pendingScrollRestoreLocalOffset;
     if (chapterIndex == null || localOffset == null) return null;
+    clear();
     return (chapterIndex: chapterIndex, localOffset: localOffset);
   }
 

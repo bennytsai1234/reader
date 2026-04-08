@@ -14,7 +14,10 @@ class SlidePageController {
 
   /// Schedule a jump to [pageIndex]. Multiple calls before the next frame
   /// coalesce — only the last target is used.
-  void jumpTo(int pageIndex) {
+  void jumpTo(
+    int pageIndex, {
+    VoidCallback? onWillJump,
+  }) {
     _pendingJump = pageIndex;
     if (_scheduled || _disposed) return;
     _scheduled = true;
@@ -29,6 +32,7 @@ class SlidePageController {
         return;
       }
       if (pageController.page?.round() != target) {
+        onWillJump?.call();
         pageController.jumpToPage(target);
       }
     });

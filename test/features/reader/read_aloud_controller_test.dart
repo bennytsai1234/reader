@@ -487,5 +487,105 @@ void main() {
       controller.detach();
       await fakeTts.disposeStreams();
     });
+
+    test('空章節啟動 TTS 會安全回退到 idle', () async {
+      final fakeTts = FakeTtsService();
+      final chapters = <int, ReaderChapter>{
+        0: ReaderChapter(
+          chapter: BookChapter(title: 'Empty', index: 0, url: 'chapter-0'),
+          index: 0,
+          title: 'Empty',
+          pages: const [],
+        ),
+      };
+
+      final controller = ReadAloudController(
+        tts: fakeTts,
+        nextChapter: () async {},
+        prevChapter: ({bool fromEnd = true}) async {},
+        nextPage: () async {},
+        prevPage: () async {},
+        canMoveToNextPage: () => false,
+        canMoveToPrevPage: () => false,
+        requestJumpToPage: (_) {},
+        requestJumpToChapter: ({
+          required int chapterIndex,
+          required double alignment,
+          required double localOffset,
+        }) {},
+        chapterOf: (chapterIndex) => chapters[chapterIndex],
+        currentChapterIndex: () => 0,
+        visibleChapterIndex: () => 0,
+        currentCharOffset: () => 0,
+        visibleCharOffset: () => 0,
+        isScrollMode: () => false,
+        onStateChanged: () {},
+        updateMediaInfo: (_, __) {},
+      );
+
+      controller.attach();
+      controller.toggle();
+      await flushAsync();
+
+      expect(controller.isActive, isFalse);
+      expect(fakeTts.spokenTexts, isEmpty);
+
+      controller.detach();
+      await fakeTts.disposeStreams();
+    });
+
+    test('handoff 到空下一章時會安全回退到 idle', () async {
+      final fakeTts = FakeTtsService();
+      final chapters = <int, ReaderChapter>{
+        0: buildChapter(index: 0, title: 'Chapter 0', paragraphs: ['AAAAABBBBB']),
+        1: ReaderChapter(
+          chapter: BookChapter(title: 'Empty', index: 1, url: 'chapter-1'),
+          index: 1,
+          title: 'Empty',
+          pages: const [],
+        ),
+      };
+      var currentChapterIndex = 0;
+
+      final controller = ReadAloudController(
+        tts: fakeTts,
+        nextChapter: () async {
+          currentChapterIndex = 1;
+        },
+        prevChapter: ({bool fromEnd = true}) async {},
+        nextPage: () async {},
+        prevPage: () async {},
+        canMoveToNextPage: () => false,
+        canMoveToPrevPage: () => false,
+        requestJumpToPage: (_) {},
+        requestJumpToChapter: ({
+          required int chapterIndex,
+          required double alignment,
+          required double localOffset,
+        }) {},
+        chapterOf: (chapterIndex) => chapters[chapterIndex],
+        currentChapterIndex: () => currentChapterIndex,
+        visibleChapterIndex: () => currentChapterIndex,
+        currentCharOffset: () => 0,
+        visibleCharOffset: () => 0,
+        isScrollMode: () => false,
+        onStateChanged: () {},
+        updateMediaInfo: (_, __) {},
+      );
+
+      controller.attach();
+      controller.toggle();
+      await flushAsync();
+
+      await fakeTts.emitAudioEvent('onComplete');
+      await flushAsync();
+
+      expect(controller.isActive, isFalse);
+      expect(controller.ttsStart, -1);
+      expect(controller.ttsEnd, -1);
+
+      controller.detach();
+      await fakeTts.disposeStreams();
+    });
   });
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:legado_reader/core/constant/page_anim.dart';
 import 'package:legado_reader/core/database/dao/book_dao.dart';
 import 'package:legado_reader/core/database/dao/book_source_dao.dart';
 import 'package:legado_reader/core/database/dao/bookmark_dao.dart';
@@ -10,20 +12,33 @@ import 'package:legado_reader/core/models/book.dart';
 import 'package:legado_reader/core/models/book_source.dart';
 import 'package:legado_reader/core/models/chapter.dart';
 import 'package:legado_reader/core/models/replace_rule.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:legado_reader/features/reader/engine/text_page.dart';
 import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
+import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:legado_reader/features/reader/runtime/read_book_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ── Fake DAOs ────────────────────────────────────────────────────────────────
 
 class _FakeBookDao implements BookDao {
+  static final List<({int chapterIndex, String chapterTitle, int pos})>
+  updates = [];
+
   @override
   Future<void> updateProgress(
     String bookUrl,
     int chapterIndex,
     String chapterTitle,
     int pos,
-  ) async {}
+  ) async {
+    updates.add(
+      (
+        chapterIndex: chapterIndex,
+        chapterTitle: chapterTitle,
+        pos: pos,
+      ),
+    );
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -31,7 +46,8 @@ class _FakeBookDao implements BookDao {
 
 class _FakeChapterDao implements ChapterDao {
   @override
-  Future<List<BookChapter>> getChapters(String bookUrl) async => [];
+  Future<List<BookChapter>> getChapters(String bookUrl) async =>
+      _fakeChaptersFromDao;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -98,6 +114,40 @@ Book _makeBook() => Book(
       durChapterPos: 0,
     );
 
+List<BookChapter> _fakeChaptersFromDao = [];
+
+List<TextPage> _buildPages(
+  int chapterIndex,
+  List<int> pageStarts, {
+  String title = 'chapter',
+}) {
+  return List.generate(pageStarts.length, (pageIndex) {
+    final start = pageStarts[pageIndex];
+    final nextStart = pageIndex + 1 < pageStarts.length
+        ? pageStarts[pageIndex + 1]
+        : start + 8;
+    final length = (nextStart - start).clamp(4, 12);
+    return TextPage(
+      index: pageIndex,
+      title: title,
+      chapterIndex: chapterIndex,
+      pageSize: pageStarts.length,
+      lines: [
+        TextLine(
+          text: List.filled(length, 'X').join(),
+          width: 100,
+          height: 20,
+          chapterPosition: start,
+          lineTop: pageIndex * 100,
+          lineBottom: pageIndex * 100 + 40,
+          paragraphNum: pageIndex + 1,
+          isParagraphEnd: true,
+        ),
+      ],
+    );
+  });
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────
 
 void main() {
@@ -108,6 +158,8 @@ void main() {
   });
 
   setUp(() {
+    _fakeChaptersFromDao = [];
+    _FakeBookDao.updates.clear();
     // Mock flutter_tts / audio_service platform channels
     // so TTS calls don't crash in tests
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -163,6 +215,239 @@ void main() {
       final controller = ReadBookController(book: _makeBook());
       controller.dispose();
       expect(() => controller.loadingChapters.isEmpty, returnsNormally);
+    });
+
+    test('slide 模式章首 restore 會定位到目標章第一頁，不會跳回全域第 0 頁', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+        BookChapter(title: 'c1', index: 1, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(
+        book: _makeBook(),
+        chapterIndex: 1,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.slide;
+      controller.chapterPagesCache[0] = _buildPages(0, [0], title: 'c0');
+      controller.chapterPagesCache[1] = _buildPages(1, [0, 8, 16], title: 'c1');
+      controller.slidePages = [
+        ...controller.chapterPagesCache[0]!,
+        ...controller.chapterPagesCache[1]!,
+      ];
+
+      controller.jumpToPosition(
+        chapterIndex: 1,
+        charOffset: 0,
+        isRestoringJump: true,
+      );
+
+      expect(controller.currentPageIndex, 1);
+      expect(controller.consumePendingSlidePageIndex(), 1);
+      controller.dispose();
+    });
+
+    test('slide 模式 charOffset restore 會保留 restore reason 給 page change', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+        BookChapter(title: 'c1', index: 1, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(
+        book: _makeBook(),
+        chapterIndex: 1,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.slide;
+      controller.chapterPagesCache[0] = _buildPages(0, [0], title: 'c0');
+      controller.chapterPagesCache[1] = _buildPages(1, [0, 8, 16], title: 'c1');
+      controller.slidePages = [
+        ...controller.chapterPagesCache[0]!,
+        ...controller.chapterPagesCache[1]!,
+      ];
+
+      controller.jumpToChapterCharOffset(
+        chapterIndex: 1,
+        charOffset: 8,
+        reason: ReaderCommandReason.restore,
+        isRestoringJump: true,
+      );
+
+      expect(controller.currentPageIndex, 2);
+      expect(controller.consumePendingSlidePageIndex(), 2);
+      expect(
+        controller.consumePendingSlideJumpReason(),
+        ReaderCommandReason.restore,
+      );
+      controller.dispose();
+    });
+
+    test('scroll 模式 charOffset repaginate 會暫時抑制 visible progress persist', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.scroll;
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.refreshChapterRuntime(0);
+
+      controller.jumpToChapterCharOffset(
+        chapterIndex: 0,
+        charOffset: 8,
+        reason: ReaderCommandReason.settingsRepaginate,
+      );
+
+      expect(controller.shouldPersistVisiblePosition(), isFalse);
+      controller.dispose();
+    });
+
+    test('slide user page change 只會持久化一次正確進度', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.slide;
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.slidePages = [...controller.chapterPagesCache[0]!];
+      controller.currentChapterIndex = 0;
+
+      controller.handleSlidePageChanged(1);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(_FakeBookDao.updates, hasLength(1));
+      expect(_FakeBookDao.updates.single.chapterIndex, 0);
+      expect(_FakeBookDao.updates.single.pos, 8);
+      controller.dispose();
+    });
+
+    test('slide restore page change 不會被誤持久化成 user progress', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.slide;
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.slidePages = [...controller.chapterPagesCache[0]!];
+      controller.currentChapterIndex = 0;
+
+      controller.jumpToSlidePage(1, reason: ReaderCommandReason.restore);
+      final pending = controller.consumePendingJump();
+      expect(pending, 1);
+      controller.consumePendingSlideJumpReason();
+      controller.handleSlidePageChanged(1);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(_FakeBookDao.updates, isEmpty);
+      controller.dispose();
+    });
+
+    test('slide 切換到 scroll 會保留 charOffset 語意並建立 chapter jump', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.slide;
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.refreshChapterRuntime(0);
+      controller.slidePages = [...controller.chapterPagesCache[0]!];
+      controller.currentPageIndex = 1;
+      controller.currentChapterIndex = 0;
+
+      controller.setPageTurnMode(PageAnim.scroll);
+
+      final pending = controller.consumePendingChapterJump();
+      expect(controller.pageTurnMode, PageAnim.scroll);
+      expect(pending, isNotNull);
+      expect(pending!.chapterIndex, 0);
+      expect(pending.reason, ReaderCommandReason.settingsRepaginate);
+      expect(
+        controller.sessionLocation,
+        const ReaderLocation(chapterIndex: 0, charOffset: 8),
+      );
+      controller.dispose();
+    });
+
+    test('scroll 切換到 slide 會保留 charOffset 語意並建立 slide jump', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.scroll;
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.refreshChapterRuntime(0);
+      controller.visibleChapterIndex = 0;
+      controller.currentChapterIndex = 0;
+      controller.visibleChapterLocalOffset =
+          controller.chapterAt(0)!.localOffsetFromCharOffset(8);
+
+      controller.setPageTurnMode(PageAnim.slide);
+
+      expect(controller.pageTurnMode, PageAnim.slide);
+      expect(controller.currentPageIndex, 1);
+      expect(controller.consumePendingSlidePageIndex(), 1);
+      expect(
+        controller.consumePendingSlideJumpReason(),
+        ReaderCommandReason.settingsRepaginate,
+      );
+      expect(
+        controller.sessionLocation,
+        const ReaderLocation(chapterIndex: 0, charOffset: 8),
+      );
+      controller.dispose();
+    });
+
+    test('auto page 開啟時切換模式會重啟進度計時', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.slide;
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.slidePages = [...controller.chapterPagesCache[0]!];
+      controller.toggleAutoPage();
+      controller.autoPageProgressNotifier.value = 0.7;
+
+      controller.setPageTurnMode(PageAnim.scroll);
+
+      expect(controller.isAutoPaging, isTrue);
+      expect(controller.autoPageProgressNotifier.value, 0.0);
+      controller.stopAutoPage();
+      controller.dispose();
+    });
+
+    test('app pause 前會 flush 目前 slide session progress', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.slide;
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.slidePages = [...controller.chapterPagesCache[0]!];
+      controller.currentPageIndex = 1;
+      controller.currentChapterIndex = 0;
+
+      controller.didChangeAppLifecycleState(AppLifecycleState.paused);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(_FakeBookDao.updates, isNotEmpty);
+      expect(_FakeBookDao.updates.last.chapterIndex, 0);
+      expect(_FakeBookDao.updates.last.pos, 8);
+      expect(controller.durableLocation.charOffset, 8);
+      controller.dispose();
     });
   });
 }

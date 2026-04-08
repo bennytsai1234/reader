@@ -1,4 +1,5 @@
 import 'package:legado_reader/features/reader/runtime/reader_progress_store.dart';
+import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
 
 /// Typed callback interface for methods that [ReaderContentMixin] and
 /// [ReaderProgressMixin] need to call on [ReadBookController] without
@@ -42,6 +43,8 @@ class ContentCallbacks {
     int? pageIndex,
     required dynamic reason,
   })? persistCurrentProgress;
+  final ReaderLocation Function()? currentSessionLocation;
+  final void Function(ReaderLocation location)? updateSessionLocation;
 
   const ContentCallbacks({
     this.refreshChapterRuntime,
@@ -54,6 +57,8 @@ class ContentCallbacks {
     this.progressStore,
     this.shouldPersistVisiblePosition,
     this.persistCurrentProgress,
+    this.currentSessionLocation,
+    this.updateSessionLocation,
   });
 
   static const empty = ContentCallbacks();
@@ -79,5 +84,9 @@ class ContentCallbacks {
         'ContentCallbacks.shouldPersistVisiblePosition is required');
     assert(persistCurrentProgress != null,
         'ContentCallbacks.persistCurrentProgress is required');
+    assert(currentSessionLocation != null,
+        'ContentCallbacks.currentSessionLocation is required');
+    assert(updateSessionLocation != null,
+        'ContentCallbacks.updateSessionLocation is required');
   }
 }

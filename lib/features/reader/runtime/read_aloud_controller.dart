@@ -242,7 +242,10 @@ class ReadAloudController extends ChangeNotifier {
     final targetChapterIndex = startChapterIndex ??
         (isScrollMode() ? visibleChapterIndex() : currentChapterIndex());
     final targetChapter = chapterOf(targetChapterIndex);
-    if (targetChapter == null || targetChapter.isEmpty) return;
+    if (targetChapter == null || targetChapter.isEmpty) {
+      _failCurrentStart(version);
+      return;
+    }
 
     final pages = targetChapter.pages;
     final startCharPos = startLineIndex >= 0
@@ -257,7 +260,10 @@ class ReadAloudController extends ChangeNotifier {
                 : currentCharOffset()));
 
     final data = targetChapter.buildReadAloudData(startCharOffset: startCharPos);
-    if (data == null || data.text.trim().isEmpty) return;
+    if (data == null || data.text.trim().isEmpty) {
+      _failCurrentStart(version);
+      return;
+    }
     if (!_isCurrent(version)) return;
 
     _lastHighlightStart = -1;
@@ -400,6 +406,7 @@ class ReadAloudController extends ChangeNotifier {
         _prefetchNextChapter();
       } else {
         await _start(operationVersion: version);
+        if (_state == ReadAloudState.idle) return;
       }
       notifyController();
     } catch (_) {
@@ -506,5 +513,11 @@ class ReadAloudController extends ChangeNotifier {
         persist(chapterIndex, savedStart);
       }
     }
+  }
+
+  void _failCurrentStart(int version) {
+    if (!_isCurrent(version)) return;
+    _resetState();
+    notifyController();
   }
 }

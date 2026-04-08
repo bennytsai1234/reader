@@ -1,52 +1,42 @@
 import 'dart:async';
 
 import 'package:legado_reader/core/constant/page_anim.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
 import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
 import 'package:legado_reader/features/reader/engine/text_page.dart';
 import 'package:legado_reader/features/reader/runtime/models/reader_chapter.dart';
+import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:legado_reader/features/reader/runtime/reader_progress_store.dart';
-import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
 
 /// 管理閱讀進度的更新與持久化。
 ///
 /// 取代原本 [ReaderProgressMixin] 的 contentCallbacksRef 繞道模式，
 /// 改由建構時注入明確的依賴，讓邏輯可以獨立測試。
 class ReaderProgressCoordinator {
-  final Book Function() _book;
-  final List<BookChapter> Function() _chapters;
   final ReaderChapter? Function(int chapterIndex) _chapterAt;
   final List<TextPage> Function(int chapterIndex) _pagesForChapter;
   final ReaderProgressStore _store;
+  final ReaderLocation Function() _durableLocation;
   final bool Function() _shouldPersistVisiblePosition;
-  final void Function({
-    required int chapterIndex,
-    int? pageIndex,
-    required ReaderCommandReason reason,
-  }) _persistCurrentProgress;
+  final void Function(ReaderLocation location) _updateSessionLocation;
+  final Future<void> Function(ReaderLocation location) _persistLocation;
 
   Timer? scrollSaveTimer;
 
   ReaderProgressCoordinator({
-    required Book Function() book,
-    required List<BookChapter> Function() chapters,
     required ReaderChapter? Function(int) chapterAt,
     required List<TextPage> Function(int) pagesForChapter,
     required ReaderProgressStore store,
+    required ReaderLocation Function() durableLocation,
     required bool Function() shouldPersistVisiblePosition,
-    required void Function({
-      required int chapterIndex,
-      int? pageIndex,
-      required ReaderCommandReason reason,
-    }) persistCurrentProgress,
-  })  : _book = book,
-        _chapters = chapters,
-        _chapterAt = chapterAt,
+    required void Function(ReaderLocation location) updateSessionLocation,
+    required Future<void> Function(ReaderLocation location) persistLocation,
+  })  : _chapterAt = chapterAt,
         _pagesForChapter = pagesForChapter,
         _store = store,
+        _durableLocation = durableLocation,
         _shouldPersistVisiblePosition = shouldPersistVisiblePosition,
-        _persistCurrentProgress = persistCurrentProgress;
+        _updateSessionLocation = updateSessionLocation,
+        _persistLocation = persistLocation;
 
   /// 更新可見章節位置，並在需要時觸發進度持久化（含 debounce）。
   ///
@@ -67,46 +57,32 @@ class ReaderProgressCoordinator {
     if (pageTurnMode != PageAnim.scroll || isLoading) return;
     if (!_shouldPersistVisiblePosition()) return;
 
-    final book = _book();
-    final runtimeChapter = _chapterAt(chapterIndex);
-    final pages = _pagesForChapter(chapterIndex);
-    final currentCharOffset = runtimeChapter != null
-        ? runtimeChapter.charOffsetFromLocalOffset(localOffset)
-        : ChapterPositionResolver.localOffsetToCharOffset(pages, localOffset);
+    final currentLocation = _resolveScrollLocation(
+      chapterIndex: chapterIndex,
+      localOffset: localOffset,
+    );
+    final durableLocation = _durableLocation();
 
-    if (book.durChapterIndex == chapterIndex &&
-        book.durChapterPos == currentCharOffset) {
+    if (durableLocation == currentLocation) {
+      _updateSessionLocation(currentLocation);
       return;
     }
-
-    _store.updateBookProgress(
-      book: book,
-      chapterIndex: chapterIndex,
-      charOffset: currentCharOffset,
-    );
+    _updateSessionLocation(currentLocation);
 
     final crossThreshold = _store.shouldSaveImmediately(
-      currentCharOffset: currentCharOffset,
-      currentChapterIndex: book.durChapterIndex,
-      targetChapterIndex: chapterIndex,
+      currentCharOffset: currentLocation.charOffset,
+      currentChapterIndex: durableLocation.chapterIndex,
+      targetChapterIndex: currentLocation.chapterIndex,
     );
-    updateCurrentChapterIndex(chapterIndex);
+    updateCurrentChapterIndex(currentLocation.chapterIndex);
 
     if (crossThreshold) {
       scrollSaveTimer?.cancel();
-      _persistCurrentProgress(
-        chapterIndex: chapterIndex,
-        pageIndex: currentPageIndex,
-        reason: ReaderCommandReason.userScroll,
-      );
+      unawaited(_persistLocation(currentLocation));
     } else {
       scrollSaveTimer?.cancel();
       scrollSaveTimer = Timer(const Duration(milliseconds: 500), () {
-        _persistCurrentProgress(
-          chapterIndex: chapterIndex,
-          pageIndex: currentPageIndex,
-          reason: ReaderCommandReason.userScroll,
-        );
+        unawaited(_persistLocation(currentLocation));
       });
     }
   }
@@ -118,35 +94,21 @@ class ReaderProgressCoordinator {
     required int pageTurnMode,
     required double visibleChapterLocalOffset,
     required List<TextPage> slidePages,
-    required Future<void> Function(int chapterIndex, String title, int charOffset)
-        write,
   }) {
-    final runtimeChapter = _chapterAt(chapterIndex);
-    final pages = _pagesForChapter(chapterIndex);
-
-    final charOffset = pageTurnMode == PageAnim.scroll
-        ? (runtimeChapter != null
-            ? runtimeChapter.charOffsetFromLocalOffset(visibleChapterLocalOffset)
-            : ChapterPositionResolver.localOffsetToCharOffset(
-                pages,
-                visibleChapterLocalOffset,
-              ))
-        : _resolveSlideCharOffset(
+    final location = pageTurnMode == PageAnim.scroll
+        ? _resolveScrollLocation(
+            chapterIndex: chapterIndex,
+            localOffset: visibleChapterLocalOffset,
+          )
+        : _resolveSlideLocation(
+            chapterIndex: chapterIndex,
             pageIndex: pageIndex,
             slidePages: slidePages,
-            runtimeChapter: runtimeChapter,
-            pages: pages,
           );
 
-    unawaited(
-      _store.persistCharOffset(
-        write: write,
-        book: _book(),
-        chapters: _chapters(),
-        chapterIndex: chapterIndex,
-        charOffset: charOffset,
-      ),
-    );
+    _updateSessionLocation(location);
+
+    unawaited(_persistLocation(location));
   }
 
   /// 更新 scroll mode 的頁面索引（不觸發持久化）。
@@ -172,28 +134,51 @@ class ReaderProgressCoordinator {
     scrollSaveTimer = null;
   }
 
-  int _resolveSlideCharOffset({
+  ReaderLocation _resolveScrollLocation({
+    required int chapterIndex,
+    required double localOffset,
+  }) {
+    final runtimeChapter = _chapterAt(chapterIndex);
+    final pages = _pagesForChapter(chapterIndex);
+    final charOffset = runtimeChapter != null
+        ? runtimeChapter.charOffsetFromLocalOffset(localOffset)
+        : ChapterPositionResolver.localOffsetToCharOffset(pages, localOffset);
+    return ReaderLocation(
+      chapterIndex: chapterIndex,
+      charOffset: charOffset,
+    ).normalized();
+  }
+
+  ReaderLocation _resolveSlideLocation({
+    required int chapterIndex,
     required int pageIndex,
     required List<TextPage> slidePages,
-    required ReaderChapter? runtimeChapter,
-    required List<TextPage> pages,
   }) {
     if (pageIndex >= 0 && pageIndex < slidePages.length) {
       final page = slidePages[pageIndex];
       final runtime = _chapterAt(page.chapterIndex);
       final chapterPages = _pagesForChapter(page.chapterIndex);
-      return runtime != null
+      final charOffset = runtime != null
           ? runtime.charOffsetForPageIndex(page.index)
           : ChapterPositionResolver.getCharOffsetForPage(
               chapterPages, page.index);
+      return ReaderLocation(
+        chapterIndex: page.chapterIndex,
+        charOffset: charOffset,
+      );
     }
-    return runtimeChapter != null
-        ? runtimeChapter.charOffsetForPageIndex(
-            pageIndex.clamp(0, (pages.length - 1).clamp(0, 1 << 20)),
-          )
+    final runtimeChapter = _chapterAt(chapterIndex);
+    final pages = _pagesForChapter(chapterIndex);
+    final safePageIndex = pageIndex.clamp(0, (pages.length - 1).clamp(0, 1 << 20));
+    final charOffset = runtimeChapter != null
+        ? runtimeChapter.charOffsetForPageIndex(safePageIndex)
         : ChapterPositionResolver.getCharOffsetForPage(
             pages,
-            pageIndex.clamp(0, (pages.length - 1).clamp(0, 1 << 20)),
+            safePageIndex,
           );
+    return ReaderLocation(
+      chapterIndex: chapterIndex,
+      charOffset: charOffset,
+    ).normalized();
   }
 }

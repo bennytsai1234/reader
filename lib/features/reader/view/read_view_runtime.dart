@@ -5,6 +5,7 @@ import 'package:legado_reader/core/constant/page_anim.dart';
 import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:legado_reader/features/reader/reader_provider.dart';
 import 'package:legado_reader/features/reader/runtime/read_view_runtime_coordinator.dart';
+import 'package:legado_reader/features/reader/runtime/models/reader_viewport_state.dart';
 import 'package:legado_reader/features/reader/view/delegate/scroll_mode_delegate.dart';
 import 'package:legado_reader/features/reader/view/delegate/page_mode_delegate.dart';
 import 'package:legado_reader/features/reader/view/scroll_auto_page_driver.dart';
@@ -199,20 +200,21 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
         );
 
         if (waitingForFirstContent) {
-          return Container(
-            color: provider.currentTheme.backgroundColor,
-            child: const Center(child: CircularProgressIndicator()),
+          return _buildViewportState(
+            provider,
+            _coordinator.resolveViewportState(
+              provider,
+              hasVisibleData: hasVisibleData,
+            ),
           );
         }
 
-        if (!hasVisibleData && !provider.isLoading) {
-          return Container(
-            color: provider.currentTheme.backgroundColor,
-            child: Center(
-              child: Text(
-                '暫無內容',
-                style: TextStyle(color: provider.currentTheme.textColor.withAlpha(128)),
-              ),
+        if (!hasVisibleData) {
+          return _buildViewportState(
+            provider,
+            _coordinator.resolveViewportState(
+              provider,
+              hasVisibleData: hasVisibleData,
             ),
           );
         }
@@ -278,5 +280,33 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
         provider.resumeAutoPage();
       }
     });
+  }
+
+  Widget _buildViewportState(
+    ReaderProvider provider,
+    ReaderViewportState state,
+  ) {
+    final textStyle = TextStyle(
+      color: provider.currentTheme.textColor.withAlpha(160),
+      fontSize: provider.fontSize,
+    );
+    return Container(
+      color: provider.currentTheme.backgroundColor,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (state.showLoading)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: provider.currentTheme.textColor.withValues(alpha: 0.35),
+              ),
+            ),
+          if (state.message != null) Text(state.message!, style: textStyle),
+        ],
+      ),
+    );
   }
 }

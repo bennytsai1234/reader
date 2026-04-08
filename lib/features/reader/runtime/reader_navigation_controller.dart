@@ -28,7 +28,12 @@ class ReaderNavigationController {
   }
 
   bool beginCharJump(ReaderCommandReason reason) {
-    return _commandGuard.begin(reason);
+    if (!_commandGuard.begin(reason)) return false;
+    _suppressViewportProgressUntil = _suppressionDeadlineFor(
+      reason,
+      isChapter: true,
+    );
+    return true;
   }
 
   bool canPersistProgress(ReaderCommandReason reason) {

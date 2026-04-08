@@ -122,6 +122,11 @@ class ChapterContentManager {
   Set<int> get silentLoadingChapters =>
       Set.unmodifiable(_silentLoadingChapters);
 
+  /// 已知為空內容的章節集合
+  Set<int> get emptyContentChapters => Set.unmodifiable(_emptyContentChapters);
+
+  bool isKnownEmptyChapter(int index) => _emptyContentChapters.contains(index);
+
   /// 是否啟用整本書預載
   bool get wholeBookPreloadEnabled => _wholeBookPreloadEnabled;
 
