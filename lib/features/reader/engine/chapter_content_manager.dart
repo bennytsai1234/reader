@@ -77,6 +77,9 @@ class ChapterContentManager {
   /// 正在載入中的章節（靜默）
   final Set<int> _silentLoadingChapters = {};
 
+  /// 已抓取但內容為空的章節集合（防止無限重試）
+  final Set<int> _emptyContentChapters = {};
+
   /// 正在載入中的章節（主動，外部可查詢顯示 loading UI）
   final Set<int> _activeLoadingChapters = {};
 
@@ -127,6 +130,9 @@ class ChapterContentManager {
   Future<List<TextPage>> getChapterPages(int index) async {
     if (index < 0 || index >= _chapters.length) return [];
     if (_disposed) return [];
+
+    // 已知空內容章節，直接回傳空列表，不重試
+    if (_emptyContentChapters.contains(index)) return [];
 
     // 快取命中
     final cached = _paginatedCache[index];
@@ -455,6 +461,7 @@ class ChapterContentManager {
     _onChapterReadyController.close();
     _preloadQueue.clear();
     _loadCompleters.clear();
+    _emptyContentChapters.clear();
   }
 
   // --- 內部邏輯 ---
@@ -468,6 +475,13 @@ class ChapterContentManager {
     try {
       final result = await _fetchFn(index);
       if (_disposed) return;
+
+      // 空內容攔截：記錄並早期返回，避免無限重試
+      if (result.content.trim().isEmpty) {
+        AppLog.w('ChapterContentManager: Chapter $index returned empty content, marking as empty');
+        _emptyContentChapters.add(index);
+        return;
+      }
 
       _saveContentCache(index, result.content);
       if (result.displayTitle != null && result.displayTitle!.isNotEmpty) {
@@ -705,6 +719,13 @@ class ChapterContentManager {
     try {
       final result = await _fetchFn(index);
       if (_disposed) return;
+
+      // 空內容攔截
+      if (result.content.trim().isEmpty) {
+        AppLog.w('ChapterContentManager: Silent preload chapter $index empty content');
+        _emptyContentChapters.add(index);
+        return;
+      }
 
       _saveContentCache(index, result.content);
       if (result.displayTitle != null && result.displayTitle!.isNotEmpty) {

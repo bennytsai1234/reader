@@ -213,6 +213,27 @@ void main() {
       manager.dispose();
     });
 
+    test('空內容章節只抓取一次，不無限重試', () async {
+      int fetchCount = 0;
+      final manager = ChapterContentManager(
+        fetchFn: (index) async {
+          fetchCount++;
+          return FetchResult(content: ''); // 空內容
+        },
+        chapters: makeChapters(3),
+      );
+      manager.updateConfig(makeConfig());
+
+      final first = await manager.getChapterPages(0);
+      final second = await manager.getChapterPages(0); // 不應再次抓取
+
+      expect(first, isEmpty);
+      expect(second, isEmpty);
+      expect(fetchCount, 1, reason: '空內容應只抓取一次，不重試');
+
+      manager.dispose();
+    });
+
     test('enableWholeBookPreload 會把全書章節排進預載佇列', () async {
       final fetchOrder = <int>[];
       final completers = <int, Completer<FetchResult>>{};
