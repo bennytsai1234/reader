@@ -234,6 +234,38 @@ void main() {
       manager.dispose();
     });
 
+    test('updateConfig 清除快取後，進行中的分頁結果不應覆蓋快取', () async {
+      final fetchStarted = Completer<void>();
+      final fetchCanProceed = Completer<void>();
+
+      final manager = ChapterContentManager(
+        fetchFn: (index) async {
+          fetchStarted.complete(); // signal: fetch has started
+          await fetchCanProceed.future; // wait for test to call updateConfig
+          return FetchResult(content: 'content-$index');
+        },
+        chapters: makeChapters(3),
+      );
+      manager.updateConfig(makeConfig());
+
+      // Trigger loading (don't await)
+      final fetchFuture = manager.getChapterPages(0);
+
+      // Wait for fetch to start, then change config while fetch is in progress
+      await fetchStarted.future;
+      manager.updateConfig(makeConfig()); // version bump + cache clear
+
+      // Allow fetch to complete
+      fetchCanProceed.complete();
+      await fetchFuture;
+
+      // Result from old config should NOT be in cache after updateConfig cleared it
+      expect(manager.getCachedPages(0), isNull,
+          reason: 'updateConfig 後快取應被清除，進行中的舊分頁結果不應寫回');
+
+      manager.dispose();
+    });
+
     test('enableWholeBookPreload 會把全書章節排進預載佇列', () async {
       final fetchOrder = <int>[];
       final completers = <int, Completer<FetchResult>>{};

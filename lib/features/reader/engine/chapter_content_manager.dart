@@ -90,6 +90,9 @@ class ChapterContentManager {
   /// 當前分頁設定
   PaginationConfig? _config;
 
+  /// 當前分頁設定版本，每次 updateConfig 遞增，用於丟棄過期的分頁結果
+  int _configVersion = 0;
+
   /// 是否已 dispose
   bool _disposed = false;
 
@@ -213,6 +216,7 @@ class ChapterContentManager {
   /// 更新分頁設定並清除分頁快取（保留內容快取）
   void updateConfig(PaginationConfig config) {
     _config = config;
+    _configVersion++;       // invalidate in-flight paginations
     _paginatedCache.clear();
   }
 
@@ -467,6 +471,7 @@ class ChapterContentManager {
   // --- 內部邏輯 ---
 
   Future<void> _fetchAndPaginate(int index) async {
+    final capturedConfigVersion = _configVersion;
     final completer = Completer<void>();
     _loadCompleters[index] = completer;
     final trace = Stopwatch()..start();
@@ -488,11 +493,16 @@ class ChapterContentManager {
         _displayTitleCache[index] = result.displayTitle!;
       }
       if (_progressivePaginationEnabled) {
-        await _doPaginateProgressive(index, result.content);
+        await _doPaginateProgressive(index, result.content, capturedConfigVersion);
       } else {
         final pages = await _doPaginate(index, result.content);
         if (_disposed) return;
 
+        // 版本驗證：若分頁設定在抓取期間被更新，丟棄此次結果
+        if (_configVersion != capturedConfigVersion) {
+          AppLog.d('ChapterContentManager: Chapter $index pagination discarded (config changed)');
+          return;
+        }
         if (pages.isNotEmpty) {
           _paginatedCache[index] = pages;
         } else {
@@ -763,7 +773,7 @@ class ChapterContentManager {
     }
   }
 
-  Future<void> _doPaginateProgressive(int index, String content) async {
+  Future<void> _doPaginateProgressive(int index, String content, [int? capturedVersion]) async {
     final config = _config;
     if (config == null ||
         config.viewSize.width <= 0 ||
@@ -805,6 +815,12 @@ class ChapterContentManager {
       'paginate chapter $index progressive done '
       '(pages: ${latestPages.length}, total: ${progressiveTrace.elapsedMilliseconds}ms)',
     );
+
+    if (capturedVersion != null && _configVersion != capturedVersion) {
+      AppLog.d('ChapterContentManager: Chapter $index progressive pagination discarded (config changed)');
+      _paginatedCache.remove(index);
+      return;
+    }
 
     if (latestPages.isEmpty) {
       _paginatedCache.remove(index);
