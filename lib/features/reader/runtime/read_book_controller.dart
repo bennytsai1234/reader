@@ -614,6 +614,7 @@ class ReadBookController extends ReaderProviderBase
         pagesForChapter(targetLocation.chapterIndex).isNotEmpty) {
       _applyModeSwitchWithCachedContent(targetLocation);
       if (isAutoPaging) {
+        autoPageProgressNotifier.value = 0.0;
         setAutoPageSpeed(autoPageSpeed);
       }
       return;
@@ -621,6 +622,7 @@ class ReadBookController extends ReaderProviderBase
 
     notifyListeners();
     if (isAutoPaging) {
+      autoPageProgressNotifier.value = 0.0;
       setAutoPageSpeed(autoPageSpeed);
     }
     unawaited(

@@ -517,7 +517,7 @@ class ReadAloudController extends ChangeNotifier {
 
   void _failCurrentStart(int version) {
     if (!_isCurrent(version)) return;
-    _resetState();
+    _resetState(stopPlayback: true);
     notifyController();
   }
 }
