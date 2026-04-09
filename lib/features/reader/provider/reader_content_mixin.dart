@@ -41,6 +41,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
 
   SlideWindow _slideWindow = SlideWindow.empty;
   ContentCallbacks _contentCallbacks = ContentCallbacks.empty;
+  int? _pendingRecenterChapterIndex;
   final ReaderContentCoordinator _contentCoordinator =
       const ReaderContentCoordinator();
 
@@ -63,6 +64,33 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
   int get _defaultSlideWarmupRadius => _isLocalBook ? 1 : 2;
   bool get isPaginatingContent => _isPaginating;
 
+  bool get hasPendingSlideRecenter => _pendingRecenterChapterIndex != null;
+
+  /// Rebuild the slide window centered on the deferred chapter and reset
+  /// the page controller. Called from [reader_page.dart] after the page
+  /// scroll animation has fully settled.
+  void applyPendingSlideRecenter() {
+    final chapterIndex = _pendingRecenterChapterIndex;
+    if (chapterIndex == null) return;
+    _pendingRecenterChapterIndex = null;
+
+    final currentPage =
+        currentPageIndex >= 0 && currentPageIndex < slidePages.length
+            ? slidePages[currentPageIndex]
+            : null;
+    final result = SlideWindow.build(
+      centerChapterIndex: chapterIndex,
+      currentPage: currentPage,
+      cache: chapterPagesCache,
+      totalChapters: chapters.length,
+    );
+    _slideWindow = result.window;
+    slidePages = result.window.flatPages;
+    currentPageIndex = result.mappedIndex.clamp(0, slidePages.length - 1);
+    requestControllerReset(currentPageIndex);
+    notifyListeners();
+  }
+
   void initContentManager() {
     _chapterReadySub?.cancel();
     _deferredWindowWarmupTimer?.cancel();
@@ -72,6 +100,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     chapterPagesCache.clear();
     slidePages = [];
     _slideWindow = SlideWindow.empty;
+    _pendingRecenterChapterIndex = null;
     _chapterContentLoader = ReaderChapterContentLoader(
       book: book,
       chapterDao: chapterDao,
@@ -165,6 +194,8 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     ReaderCommandReason reason = ReaderCommandReason.chapterChange,
   }) async {
     if (index < 0 || index >= chapters.length || !hasContentManager) return;
+    // An explicit chapter navigation supersedes any pending recenter.
+    _pendingRecenterChapterIndex = null;
     updatePaginationConfig();
     currentChapterIndex = index;
     visibleChapterIndex = index;
@@ -500,23 +531,16 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     currentChapterIndex = newChapterIndex;
 
     if (needsRecenter) {
-      // Atomic: build new window + remap index in one step
-      final currentPage = slidePages[i];
-      final result = SlideWindow.build(
-        centerChapterIndex: newChapterIndex,
-        currentPage: currentPage,
-        cache: chapterPagesCache,
-        totalChapters: chapters.length,
-      );
-      _slideWindow = result.window;
-      slidePages = result.window.flatPages;
-      currentPageIndex = result.mappedIndex.clamp(0, slidePages.length - 1);
+      // Do NOT rebuild slidePages or reset the controller here. Flutter's
+      // PageView fires onPageChanged at the scroll midpoint (50%), while the
+      // animation is still playing. Rebuilding the window now would swap out
+      // the page list mid-animation, causing wrong content to show for the
+      // remaining 50% of the slide. Instead, store the target and let
+      // reader_page.dart call applyPendingSlideRecenter() once the scroll
+      // has fully settled — at which point the reset is visually invisible.
+      _pendingRecenterChapterIndex = newChapterIndex;
 
-      // Use controller reset instead of requestJumpToPage to avoid the
-      // one-frame glitch where new data is rendered at the old position.
-      requestControllerReset(currentPageIndex);
-
-      // Preload the new neighbor chapter
+      // Begin preloading the new neighbor chapter in the background.
       _preloadSlideNeighbors(newChapterIndex, preloadRadius: _defaultSlideWarmupRadius);
     } else {
       // Same chapter, just refresh without recentering
@@ -612,6 +636,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     chapterPagesCache.clear();
     slidePages = [];
     _slideWindow = SlideWindow.empty;
+    _pendingRecenterChapterIndex = null;
     _contentManager?.dispose();
     _contentManager = null;
     _chapterContentLoader = null;
@@ -676,7 +701,13 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       }
     }
     if (!_isScrollMode) {
-      _refreshSlidePages();
+      // Skip the slide page rebuild if a recenter is pending. Rebuilding now
+      // would update slidePages while the transition animation is still
+      // playing, causing wrong content to appear. The pending recenter will
+      // apply a full rebuild once the scroll settles.
+      if (_pendingRecenterChapterIndex == null) {
+        _refreshSlidePages();
+      }
       if (!isDisposed) notifyListeners();
     } else if (pages != null && pages.isNotEmpty) {
       if (!isDisposed) notifyListeners();

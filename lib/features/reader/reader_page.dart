@@ -38,7 +38,7 @@ class _ReaderPageState extends State<ReaderPage> {
   final GlobalKey<ScaffoldState> _key = GlobalKey<ScaffoldState>();
   late SlidePageController _slideCtrl;
   int _controllerGeneration = 0;
-  int _deferredResetVersion = 0;
+  bool _recenterPollScheduled = false;
 
   @override
   void initState() {
@@ -65,21 +65,30 @@ class _ReaderPageState extends State<ReaderPage> {
     _controllerGeneration++;
   }
 
-  /// Defer [_resetController] until the page scroll animation finishes.
-  ///
-  /// [PageView.onPageChanged] fires at the scroll midpoint, mid-animation.
-  /// Resetting the controller then would abort the animation and visually jump.
-  /// We poll [isScrollingNotifier] each frame and reset only once idle.
-  void _scheduleDeferredReset(int target, int version) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _deferredResetVersion != version) return;
-      if (_pageCtrl.hasClients &&
-          _pageCtrl.position.isScrollingNotifier.value) {
-        _scheduleDeferredReset(target, version);
-      } else {
-        setState(() => _resetController(target));
-      }
-    });
+  /// Ensure a single recenter poll is in flight. Deduplicated so multiple
+  /// [Consumer] rebuilds while [hasPendingSlideRecenter] is true don't stack
+  /// up redundant callbacks.
+  void _ensureRecenterPoll(ReaderProvider p) {
+    if (_recenterPollScheduled) return;
+    _recenterPollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _pollRecenter(p));
+  }
+
+  /// Poll each frame until the page scroll animation has settled, then
+  /// apply the deferred slide window recenter atomically.
+  void _pollRecenter(ReaderProvider p) {
+    _recenterPollScheduled = false;
+    if (!mounted || !p.hasPendingSlideRecenter) return;
+    if (_pageCtrl.hasClients &&
+        _pageCtrl.position.isScrollingNotifier.value) {
+      // Still animating — retry next frame.
+      _recenterPollScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _pollRecenter(p));
+    } else {
+      // Scroll settled — rebuild window + reset controller atomically.
+      // This triggers notifyListeners → Consumer rebuild → consumeControllerReset.
+      p.applyPendingSlideRecenter();
+    }
   }
 
   void _handleTap(Offset pos, Size size, ReaderProvider p) {
@@ -125,17 +134,17 @@ class _ReaderPageState extends State<ReaderPage> {
         builder: (context, p, _) {
           // Controller reset: recreate PageController at the correct page
           // to avoid the one-frame glitch during chapter recentering.
-          // Defer if the page animation is still in progress to avoid
-          // aborting the slide animation mid-way (Bug: jump halfway through).
+          // This is only called AFTER the scroll has settled (via
+          // applyPendingSlideRecenter), so no animation is in progress here.
           final resetTarget = p.consumeControllerReset();
           if (resetTarget != null) {
-            _deferredResetVersion++;
-            if (_pageCtrl.hasClients &&
-                _pageCtrl.position.isScrollingNotifier.value) {
-              _scheduleDeferredReset(resetTarget, _deferredResetVersion);
-            } else {
-              _resetController(resetTarget);
-            }
+            _resetController(resetTarget);
+          }
+
+          // If a slide window recenter is pending (chapter just changed
+          // mid-animation), poll until the scroll settles then apply it.
+          if (p.hasPendingSlideRecenter) {
+            _ensureRecenterPoll(p);
           }
 
           final pendingJump = p.consumePendingJump();
