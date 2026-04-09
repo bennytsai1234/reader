@@ -38,6 +38,7 @@ class _ReaderPageState extends State<ReaderPage> {
   final GlobalKey<ScaffoldState> _key = GlobalKey<ScaffoldState>();
   late SlidePageController _slideCtrl;
   int _controllerGeneration = 0;
+  int _deferredResetVersion = 0;
 
   @override
   void initState() {
@@ -62,6 +63,23 @@ class _ReaderPageState extends State<ReaderPage> {
     _pageCtrl = PageController(initialPage: initialPage);
     _slideCtrl = SlidePageController(_pageCtrl);
     _controllerGeneration++;
+  }
+
+  /// Defer [_resetController] until the page scroll animation finishes.
+  ///
+  /// [PageView.onPageChanged] fires at the scroll midpoint, mid-animation.
+  /// Resetting the controller then would abort the animation and visually jump.
+  /// We poll [isScrollingNotifier] each frame and reset only once idle.
+  void _scheduleDeferredReset(int target, int version) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _deferredResetVersion != version) return;
+      if (_pageCtrl.hasClients &&
+          _pageCtrl.position.isScrollingNotifier.value) {
+        _scheduleDeferredReset(target, version);
+      } else {
+        setState(() => _resetController(target));
+      }
+    });
   }
 
   void _handleTap(Offset pos, Size size, ReaderProvider p) {
@@ -107,9 +125,17 @@ class _ReaderPageState extends State<ReaderPage> {
         builder: (context, p, _) {
           // Controller reset: recreate PageController at the correct page
           // to avoid the one-frame glitch during chapter recentering.
+          // Defer if the page animation is still in progress to avoid
+          // aborting the slide animation mid-way (Bug: jump halfway through).
           final resetTarget = p.consumeControllerReset();
           if (resetTarget != null) {
-            _resetController(resetTarget);
+            _deferredResetVersion++;
+            if (_pageCtrl.hasClients &&
+                _pageCtrl.position.isScrollingNotifier.value) {
+              _scheduleDeferredReset(resetTarget, _deferredResetVersion);
+            } else {
+              _resetController(resetTarget);
+            }
           }
 
           final pendingJump = p.consumePendingJump();

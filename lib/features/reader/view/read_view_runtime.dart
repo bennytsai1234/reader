@@ -92,6 +92,13 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       vsync: this,
     );
     _fadeAnimation = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeIn);
+    // If the provider is already ready (e.g., ReadViewRuntime was recreated
+    // due to a controller reset), skip the fade-in reveal to avoid a flash
+    // on the next notifyListeners call.
+    if (widget.provider.isReady) {
+      _contentRevealed = true;
+      _fadeCtrl.value = 1.0;
+    }
     widget.provider.addListener(_onProviderStateChanged);
     _itemPositionsListener.itemPositions.addListener(_handleItemPositionsChanged);
   }
