@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../source_manager_provider.dart';
 import 'package:legado_reader/core/models/book_source_part.dart';
 
+/// 書源列表項 — 對標 legado item_book_source
+/// 始終顯示 checkbox，點擊 checkbox 切換選取，點擊行本身編輯。
 class SourceItemTile extends StatelessWidget {
   final BookSourcePart source;
   final SourceManagerProvider provider;
@@ -24,33 +26,40 @@ class SourceItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 只有在手動排序且非批量模式下才顯示拖拽手柄
-    final bool canDrag = provider.sortMode == 0 && !provider.isBatchMode && !provider.groupByDomain;
+    final bool canDrag = provider.sortMode == 0 && !provider.groupByDomain;
 
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
       child: Container(
-        color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : null,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        color: isSelected ? Theme.of(context).primaryColor.withValues(alpha: 0.08) : null,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
           children: [
+            // 拖拽手柄 (手動排序時)
             if (canDrag && index != null)
               ReorderableDragStartListener(
                 index: index!,
                 child: const Padding(
-                  padding: EdgeInsets.only(right: 12),
+                  padding: EdgeInsets.only(right: 4),
                   child: Icon(Icons.drag_handle, size: 20, color: Colors.grey),
                 ),
               ),
-            if (provider.isBatchMode)
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
+
+            // Checkbox — 始終顯示 (對標 legado cbBookSource)
+            GestureDetector(
+              onTap: () => provider.toggleSelect(source.bookSourceUrl),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
                 child: Icon(
-                  isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                  color: isSelected ? Colors.blue : Colors.grey,
+                  isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                  size: 22,
+                  color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey,
                 ),
               ),
+            ),
+
+            // 名稱 + URL + 標籤
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,8 +68,8 @@ class SourceItemTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          source.bookSourceName,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          _displayNameGroup(),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -69,28 +78,44 @@ class SourceItemTile extends StatelessWidget {
                         _buildResponseTimeTag(source.respondTime),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
                     source.bookSourceUrl,
                     style: const TextStyle(fontSize: 11, color: Colors.grey),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   _buildTags(),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Switch(
-              value: source.enabled,
-              onChanged: onEnabledChanged,
-              activeThumbColor: Colors.blue,
+
+            const SizedBox(width: 4),
+
+            // 啟用 Switch (對標 legado swtEnabled)
+            SizedBox(
+              width: 44,
+              child: Switch(
+                value: source.enabled,
+                onChanged: onEnabledChanged,
+                activeThumbColor: Colors.blue,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// 對標 legado getDisPlayNameGroup: 名稱 [分組]
+  String _displayNameGroup() {
+    final group = source.bookSourceGroup;
+    if (group != null && group.isNotEmpty) {
+      return '${source.bookSourceName} [$group]';
+    }
+    return source.bookSourceName;
   }
 
   Widget _buildResponseTimeTag(int ms) {

@@ -37,25 +37,22 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     return Consumer<SourceManagerProvider>(builder: (context, provider, child) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(provider.isBatchMode ? '已選擇 ${provider.selectedUrls.length} 項' : '書源管理'),
-          actions: provider.isBatchMode ? [
-            IconButton(icon: const Icon(Icons.select_all), tooltip: '全選', onPressed: provider.selectAll),
-            IconButton(icon: const Icon(Icons.close), tooltip: '退出多選', onPressed: provider.toggleBatchMode),
-          ] : [
+          title: const Text('書源管理'),
+          actions: [
             SourceManagerMenus.buildSortMenu(context, provider),
             SourceManagerMenus.buildGroupMenu(context, provider),
-            SourceManagerMenus.buildAddMenu(context, provider, 
-              onImportUrl: () => _showImportDialog(context, true), onImportFile: () => _importFromFile(context), 
-              onImportClipboard: () => _importFromClipboard(context), onScanQr: () => _scanQrCode(context, provider), 
-              onExplore: () => nav.push(MaterialPageRoute(builder: (_) => const ExploreSourcesPage())), 
-              onManageGroups: () => nav.push(MaterialPageRoute(builder: (_) => const SourceGroupManagePage())), 
+            SourceManagerMenus.buildAddMenu(context, provider,
+              onImportUrl: () => _showImportDialog(context, true), onImportFile: () => _importFromFile(context),
+              onImportClipboard: () => _importFromClipboard(context), onScanQr: () => _scanQrCode(context, provider),
+              onExplore: () => nav.push(MaterialPageRoute(builder: (_) => const ExploreSourcesPage())),
+              onManageGroups: () => nav.push(MaterialPageRoute(builder: (_) => const SourceGroupManagePage())),
               onNewSource: () => nav.push(MaterialPageRoute(builder: (_) => const SourceEditorPage()))),
             SourceManagerMenus.buildMoreMenu(context, provider, onClearInvalid: (p) => SourceManagerDialogs.confirmClearInvalid(context, p)),
           ],
         ),
         body: Column(children: [
           if (provider.checkService.isChecking) SourceCheckStatusBar(provider: provider, onTap: () => SourceManagerDialogs.showCheckLog(context, provider)),
-          if (!provider.isBatchMode) Padding(
+          Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: TextField(
               controller: _searchController,
@@ -72,27 +69,32 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
               onChanged: provider.setSearchQuery,
             ),
           ),
-          if (!provider.isBatchMode) SourceFilterBar(provider: provider),
+          SourceFilterBar(provider: provider),
           Expanded(child: _buildMainContent(provider)),
         ]),
-        bottomNavigationBar: provider.isBatchMode ? SourceBatchToolbar(provider: provider, onGroup: () => SourceManagerDialogs.showBatchGroup(context, provider),
+        // 始終顯示 SelectActionBar (對標 legado)
+        bottomNavigationBar: SelectActionBar(
+          provider: provider,
+          onEnable: () => provider.batchSetEnabled(true),
+          onDisable: () => provider.batchSetEnabled(false),
+          onAddGroup: () => _showAddGroupDialog(context, provider),
+          onRemoveGroup: () => _showRemoveGroupDialog(context, provider),
+          onMoveToTop: () => provider.moveSelectedToTop(),
+          onMoveToBottom: () => provider.moveSelectedToBottom(),
           onExport: () async {
             final messenger = ScaffoldMessenger.of(context);
             await provider.exportSelected();
             if (!mounted) return;
             messenger.showSnackBar(const SnackBar(content: Text('已複製至剪貼簿')));
           },
-          onDelete: () async {
-            final messenger = ScaffoldMessenger.of(context);
-            await provider.deleteSelected();
-            if (!mounted) return;
-            messenger.showSnackBar(const SnackBar(content: Text('已刪除選定書源')));
+          onShare: () => provider.shareSelectedSources(),
+          onCheckSource: () {
+            _showCheckSourceDialog(context, provider);
           },
-          onEnable: () => provider.batchSetEnabled(true),
-          onDisable: () => provider.batchSetEnabled(false),
-          onMoveToTop: () => provider.moveSelectedToTop(),
-          onMoveToBottom: () => provider.moveSelectedToBottom(),
-        ) : null,
+          onDelete: () {
+            _confirmDeleteSelected(context, provider);
+          },
+        ),
       );
     });
   }
@@ -107,7 +109,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     }
 
     // 只有在手動排序 (0) 模式下才允許拖拽
-    final bool canReorder = p.sortMode == 0 && !p.isBatchMode;
+    final bool canReorder = p.sortMode == 0;
 
     if (canReorder) {
       return ReorderableListView.builder(
@@ -159,22 +161,16 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       source: s,
       provider: p,
       index: index,
-      isSelected: p.selectedUrls.contains(s.bookSourceUrl), 
+      isSelected: p.selectedUrls.contains(s.bookSourceUrl),
       onTap: () async {
         final nav = Navigator.of(context);
-        if (p.isBatchMode) {
-          p.toggleSelect(s.bookSourceUrl);
-        } else {
-          final full = await p.getFullSource(s.bookSourceUrl);
-          if (full != null && mounted) {
-            nav.push(MaterialPageRoute(builder: (_) => SourceEditorPage(source: full)));
-          }
+        final full = await p.getFullSource(s.bookSourceUrl);
+        if (full != null && mounted) {
+          nav.push(MaterialPageRoute(builder: (_) => SourceEditorPage(source: full)));
         }
-      }, 
+      },
       onLongPress: () {
-        if (!p.isBatchMode) {
-          _showSourceMenu(context, p, s);
-        }
+        _showSourceMenu(context, p, s);
       },
       onEnabledChanged: (v) => p.toggleEnabled(s),
     );
@@ -183,16 +179,16 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
   void _showSourceMenu(BuildContext context, SourceManagerProvider p, BookSourcePart s) {
     final nav = Navigator.of(context);
     showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      ListTile(leading: const Icon(Icons.bug_report), title: const Text('調試書源'), onTap: () async { 
-        Navigator.pop(ctx); 
+      ListTile(leading: const Icon(Icons.bug_report), title: const Text('調試書源'), onTap: () async {
+        Navigator.pop(ctx);
         final full = await p.getFullSource(s.bookSourceUrl);
-        if (full != null && context.mounted) SourceManagerDialogs.showDebugInput(context, full); 
+        if (full != null && context.mounted) SourceManagerDialogs.showDebugInput(context, full);
       }),
-      ListTile(leading: const Icon(Icons.edit), title: const Text('編輯書源'), onTap: () async { 
-        Navigator.pop(ctx); 
+      ListTile(leading: const Icon(Icons.edit), title: const Text('編輯書源'), onTap: () async {
+        Navigator.pop(ctx);
         final full = await p.getFullSource(s.bookSourceUrl);
         if (full != null && mounted) {
-          nav.push(MaterialPageRoute(builder: (_) => SourceEditorPage(source: full))); 
+          nav.push(MaterialPageRoute(builder: (_) => SourceEditorPage(source: full)));
         }
       }),
       ListTile(leading: const Icon(Icons.vertical_align_top), title: const Text('移至頂部'), onTap: () async {
@@ -205,6 +201,118 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       }),
       ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: const Text('刪除書源', style: TextStyle(color: Colors.red)), onTap: () { Navigator.pop(ctx); p.deleteSource(s); }),
     ])));
+  }
+
+  /// 確認刪除選中書源 (對標 legado onClickSelectBarMainAction)
+  void _confirmDeleteSelected(BuildContext context, SourceManagerProvider p) {
+    final count = p.selectedUrls.length;
+    if (count == 0) return;
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('確認刪除'),
+      content: Text('確定要刪除選中的 $count 個書源嗎？'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(ctx);
+            final messenger = ScaffoldMessenger.of(context);
+            await p.deleteSelected();
+            if (!mounted) return;
+            messenger.showSnackBar(SnackBar(content: Text('已刪除 $count 個書源')));
+          },
+          child: const Text('確定刪除', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ));
+  }
+
+  /// 校驗選中書源 — 輸入關鍵字後開始 (對標 legado checkSource)
+  void _showCheckSourceDialog(BuildContext context, SourceManagerProvider p) {
+    final count = p.selectedUrls.length;
+    if (count == 0) return;
+    final ctrl = TextEditingController(text: '我的');
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: Text('校驗選中書源 ($count)'),
+      content: TextField(
+        controller: ctrl,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: '搜尋關鍵字'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(ctx);
+            p.checkSelectedSources();
+          },
+          child: const Text('開始校驗'),
+        ),
+      ],
+    ));
+  }
+
+  /// 加入分組 (對標 legado selectionAddToGroups)
+  void _showAddGroupDialog(BuildContext context, SourceManagerProvider p) {
+    final ctrl = TextEditingController();
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('加入分組'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(controller: ctrl, decoration: const InputDecoration(hintText: '分組名稱')),
+          const SizedBox(height: 12),
+          SizedBox(height: 150, width: double.maxFinite, child: ListView.builder(
+            itemCount: p.allGroups.length,
+            itemBuilder: (ctx2, i) {
+              final g = p.allGroups[i];
+              return ListTile(title: Text(g), dense: true, onTap: () => ctrl.text = g);
+            },
+          )),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+        ElevatedButton(onPressed: () {
+          final text = ctrl.text.trim();
+          if (text.isNotEmpty) {
+            p.selectionAddToGroups(p.selectedUrls, text);
+          }
+          Navigator.pop(ctx);
+        }, child: const Text('確定')),
+      ],
+    ));
+  }
+
+  /// 移出分組 (對標 legado selectionRemoveFromGroups)
+  void _showRemoveGroupDialog(BuildContext context, SourceManagerProvider p) {
+    final ctrl = TextEditingController();
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('移出分組'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(controller: ctrl, decoration: const InputDecoration(hintText: '分組名稱')),
+          const SizedBox(height: 12),
+          SizedBox(height: 150, width: double.maxFinite, child: ListView.builder(
+            itemCount: p.allGroups.length,
+            itemBuilder: (ctx2, i) {
+              final g = p.allGroups[i];
+              return ListTile(title: Text(g), dense: true, onTap: () => ctrl.text = g);
+            },
+          )),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+        ElevatedButton(onPressed: () {
+          final text = ctrl.text.trim();
+          if (text.isNotEmpty) {
+            p.selectionRemoveFromGroups(p.selectedUrls, text);
+          }
+          Navigator.pop(ctx);
+        }, child: const Text('確定')),
+      ],
+    ));
   }
 
   Future<void> _importWithPreview(BuildContext context, String jsonStr) async {

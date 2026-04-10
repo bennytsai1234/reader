@@ -92,8 +92,6 @@ class SourceManagerProvider with ChangeNotifier {
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
-  bool _isBatchMode = false;
-  bool get isBatchMode => _isBatchMode;
   final Set<String> _selectedUrls = {};
   Set<String> get selectedUrls => _selectedUrls;
   List<String> _allGroups = [];
@@ -150,12 +148,6 @@ class SourceManagerProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleBatchMode() {
-    _isBatchMode = !_isBatchMode;
-    if (!_isBatchMode) _selectedUrls.clear();
-    notifyListeners();
-  }
-
   void toggleSelect(String url) {
     if (_selectedUrls.contains(url)) {
       _selectedUrls.remove(url);
@@ -171,6 +163,15 @@ class SourceManagerProvider with ChangeNotifier {
     } else {
       _selectedUrls.addAll(sources.map((s) => s.bookSourceUrl));
     }
+    notifyListeners();
+  }
+
+  /// 反選 (對標 legado revertSelection)
+  void revertSelection() {
+    final allUrls = sources.map((s) => s.bookSourceUrl).toSet();
+    final newSelection = allUrls.difference(_selectedUrls);
+    _selectedUrls.clear();
+    _selectedUrls.addAll(newSelection);
     notifyListeners();
   }
 
@@ -194,7 +195,6 @@ class SourceManagerProvider with ChangeNotifier {
     if (_selectedUrls.isNotEmpty) {
       await _dao.deleteByUrls(_selectedUrls.toList());
     }
-    _isBatchMode = false;
     _selectedUrls.clear();
     await loadSources();
   }
@@ -207,8 +207,6 @@ class SourceManagerProvider with ChangeNotifier {
         await _dao.upsert(s);
       }
     }
-    _isBatchMode = false;
-    _selectedUrls.clear();
     await loadSources();
   }
 
@@ -220,8 +218,6 @@ class SourceManagerProvider with ChangeNotifier {
     final rest = all.where((s) => !_selectedUrls.contains(s.bookSourceUrl)).toList();
     final reordered = [...selected, ...rest];
     await _dao.updateCustomOrder(reordered);
-    _isBatchMode = false;
-    _selectedUrls.clear();
     await loadSources();
   }
 
@@ -233,8 +229,6 @@ class SourceManagerProvider with ChangeNotifier {
     final rest = all.where((s) => !_selectedUrls.contains(s.bookSourceUrl)).toList();
     final reordered = [...rest, ...selected];
     await _dao.updateCustomOrder(reordered);
-    _isBatchMode = false;
-    _selectedUrls.clear();
     await loadSources();
   }
 
@@ -342,10 +336,7 @@ class SourceManagerProvider with ChangeNotifier {
 
   Future<void> checkSelectedSources() async {
     if (_selectedUrls.isEmpty) return;
-    await checkService.check(_selectedUrls.toList());
-    _isBatchMode = false;
-    _selectedUrls.clear();
-    await loadSources();
+    checkService.check(_selectedUrls.toList()).then((_) => loadSources());
   }
 
   List<String> get groups => _allGroups;
