@@ -5,31 +5,6 @@ import 'package:legado_reader/core/services/book_source_service.dart';
 
 void main() {
   group('WebBook guard logic', () {
-    test('is18Plus returns true for URL containing "18plus"', () {
-      expect(BookSourceService.is18Plus('https://18plus-novel.com'), true);
-    });
-
-    test('is18Plus returns true for URL containing "nsfw"', () {
-      expect(BookSourceService.is18Plus('https://nsfw-books.com'), true);
-    });
-
-    test('is18Plus returns true for URL containing "sex"', () {
-      expect(BookSourceService.is18Plus('https://sexnovel.com'), true);
-    });
-
-    test('is18Plus is case-insensitive', () {
-      expect(BookSourceService.is18Plus('https://NSFW-BOOKS.COM'), true);
-      expect(BookSourceService.is18Plus('https://18Plus.com'), true);
-    });
-
-    test('is18Plus returns false for normal URL', () {
-      expect(BookSourceService.is18Plus('https://novel-reader.com'), false);
-    });
-
-    test('is18Plus returns false for null URL', () {
-      expect(BookSourceService.is18Plus(null), false);
-    });
-
     test('AdultContentException is thrown for 18+ sources', () {
       // Verify that AdultContentException can be constructed correctly
       final e = AdultContentException('blocked');

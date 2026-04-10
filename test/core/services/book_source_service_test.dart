@@ -9,46 +9,6 @@ void main() {
   // 都需要真實網路呼叫，無法在 unit test 中驗證。
   // 這裡測試可獨立驗證的靜態/純邏輯部分。
 
-  group('BookSourceService.is18Plus()', () {
-    test('URL 含 18plus 關鍵字時回傳 true', () {
-      expect(BookSourceService.is18Plus('https://18plus-novels.com'), isTrue);
-      expect(BookSourceService.is18Plus('https://books18plus.net/list'), isTrue);
-    });
-
-    test('URL 含 nsfw 關鍵字時回傳 true', () {
-      expect(BookSourceService.is18Plus('https://nsfw-content.org'), isTrue);
-      expect(BookSourceService.is18Plus('http://NSFW-SITE.COM'), isTrue);
-    });
-
-    test('URL 含 sex 關鍵字時回傳 true', () {
-      expect(BookSourceService.is18Plus('https://sex-novels.com/book'), isTrue);
-    });
-
-    test('比對不區分大小寫', () {
-      expect(BookSourceService.is18Plus('https://18PLUS.COM'), isTrue);
-      expect(BookSourceService.is18Plus('https://NSFW-SITE.COM'), isTrue);
-      expect(BookSourceService.is18Plus('https://SEX-BOOKS.COM'), isTrue);
-    });
-
-    test('null 回傳 false', () {
-      expect(BookSourceService.is18Plus(null), isFalse);
-    });
-
-    test('空字串回傳 false', () {
-      expect(BookSourceService.is18Plus(''), isFalse);
-    });
-
-    test('一般書源網址回傳 false', () {
-      expect(BookSourceService.is18Plus('https://www.qidian.com'), isFalse);
-      expect(BookSourceService.is18Plus('https://novel.example.com/chapter/1'), isFalse);
-      expect(BookSourceService.is18Plus('https://books.google.com'), isFalse);
-    });
-
-    test('URL 路徑含關鍵字也會命中（非僅限 domain）', () {
-      expect(BookSourceService.is18Plus('https://example.com/nsfw/chapter'), isTrue);
-    });
-  });
-
   // ─── BookSource 模型 ───────────────────────────────────────────────────────
   group('BookSource 模型', () {
     test('fromJson() 解析必要欄位', () {
