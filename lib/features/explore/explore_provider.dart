@@ -1,202 +1,205 @@
 import 'dart:async';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:legado_reader/core/database/dao/book_source_dao.dart';
 import 'package:legado_reader/core/di/injection.dart';
 import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/search_book.dart';
-import 'package:legado_reader/core/engine/web_book/web_book_service.dart';
+import 'package:legado_reader/core/models/source/explore_kind.dart';
 import 'package:legado_reader/core/engine/explore_url_parser.dart';
 import 'package:legado_reader/core/services/app_log_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+/// ExploreProvider - 發現主頁面的狀態管理
+/// (對標 Android ExploreFragment + ExploreAdapter + ExploreViewModel)
+///
+/// 管理「書源列表 → 展開分類標籤」的互動。
 class ExploreProvider extends ChangeNotifier {
   final BookSourceDao _sourceDao = getIt<BookSourceDao>();
-  Timer? _debounceTimer;
-  CancelToken? _cancelToken;
 
-  List<BookSource> _sources = [];
-  BookSource? _selectedSource;
+  // --- 書源列表 ---
+  List<BookSource> _allSources = [];
+  List<BookSource> _filteredSources = [];
+  String _searchQuery = '';
 
-  List<ExploreKind> _allKinds = [];
+  // --- 展開狀態 (同一時間只展開一個書源) ---
+  int _expandedIndex = -1;
+  List<ExploreKind> _expandedKinds = [];
+  bool _isLoadingKinds = false;
+
+  // --- 分組 ---
   List<String> _groups = [];
   String? _selectedGroup;
-  ExploreKind? _selectedKind;
 
-  List<SearchBook> _books = [];
-  int _page = 1;
-  bool _isLoading = false;
-  bool _hasMore = true;
-  String? _errorMessage;
+  // --- ExploreKind 快取 (對標 Android exploreKindsMap) ---
+  final Map<String, List<ExploreKind>> _kindsCache = {};
 
-  List<BookSource> get sources => _sources;
-  BookSource? get selectedSource => _selectedSource;
+  // --- Getters ---
+  List<BookSource> get sources => _filteredSources;
   List<String> get groups => _groups;
   String? get selectedGroup => _selectedGroup;
-  List<ExploreKind> get filteredKinds => _selectedGroup == null
-      ? _allKinds.where((k) => k.group == null).toList()
-      : _allKinds.where((k) => k.group == _selectedGroup).toList();
-  ExploreKind? get selectedKind => _selectedKind;
-  List<SearchBook> get books => _books;
-  bool get isLoading => _isLoading;
-  String? get errorMessage => _errorMessage;
+  int get expandedIndex => _expandedIndex;
+  List<ExploreKind> get expandedKinds => _expandedKinds;
+  bool get isLoadingKinds => _isLoadingKinds;
+  String get searchQuery => _searchQuery;
+  bool get isEmpty => _filteredSources.isEmpty;
 
   ExploreProvider() {
     _loadSources();
   }
 
+  /// 載入所有啟用探索的書源
   Future<void> _loadSources() async {
     final allEnabled = await _sourceDao.getEnabled();
-    // 只顯示啟用了探索功能且有 exploreUrl 的書源
-    _sources = allEnabled.where((s) => s.enabledExplore && s.hasExploreUrl).toList();
-    if (_sources.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      final lastSourceUrl = prefs.getString('explore_last_source');
-      final restored = _sources.where((s) => s.bookSourceUrl == lastSourceUrl).firstOrNull;
-      setSource(restored ?? _sources.first);
+    _allSources = allEnabled
+        .where((s) => s.enabledExplore && s.hasExploreUrl)
+        .toList()
+      ..sort((a, b) => a.customOrder.compareTo(b.customOrder));
+
+    // 提取分組
+    final groupSet = <String>{};
+    for (final s in _allSources) {
+      if (s.bookSourceGroup != null && s.bookSourceGroup!.isNotEmpty) {
+        for (final g in s.bookSourceGroup!.split(RegExp(r'[,，]'))) {
+          final trimmed = g.trim();
+          if (trimmed.isNotEmpty) groupSet.add(trimmed);
+        }
+      }
     }
+    _groups = groupSet.toList()..sort();
+
+    _applyFilter();
     notifyListeners();
   }
 
-  void setSource(BookSource? source) {
-    _selectedSource = source;
-    if (source == null) {
-      _allKinds = [];
-      _groups = [];
+  /// 搜索過濾 (對標 Android SearchView onQueryTextChange)
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    _expandedIndex = -1;
+    _expandedKinds = [];
+    _applyFilter();
+    notifyListeners();
+  }
+
+  /// 分組過濾 (對標 Android groupsMenu)
+  void setGroupFilter(String? group) {
+    if (_selectedGroup == group) {
       _selectedGroup = null;
-      _selectedKind = null;
-      _books = [];
+    } else {
+      _selectedGroup = group;
+    }
+    _searchQuery = '';
+    _expandedIndex = -1;
+    _expandedKinds = [];
+    _applyFilter();
+    notifyListeners();
+  }
+
+  /// 應用過濾邏輯
+  void _applyFilter() {
+    if (_selectedGroup != null) {
+      // 按分組過濾 (對標 Android flowGroupExplore)
+      _filteredSources = _allSources.where((s) {
+        if (s.bookSourceGroup == null) return false;
+        final groups = s.bookSourceGroup!.split(RegExp(r'[,，]')).map((e) => e.trim());
+        return groups.contains(_selectedGroup);
+      }).toList();
+    } else if (_searchQuery.isNotEmpty) {
+      // 按關鍵字過濾 (對標 Android flowExplore(key))
+      final key = _searchQuery.toLowerCase();
+      _filteredSources = _allSources.where((s) {
+        return s.bookSourceName.toLowerCase().contains(key) ||
+            (s.bookSourceGroup?.toLowerCase().contains(key) ?? false);
+      }).toList();
+    } else {
+      _filteredSources = List.from(_allSources);
+    }
+  }
+
+  /// 展開/收合書源 (對標 Android ExploreAdapter llTitle.setOnClickListener)
+  Future<void> toggleExpand(int index) async {
+    if (_expandedIndex == index) {
+      // 收合
+      _expandedIndex = -1;
+      _expandedKinds = [];
       notifyListeners();
       return;
     }
-    _allKinds = ExploreUrlParser.parse(source.exploreUrl, source: source);
 
-    // 提取所有唯一分組
-    final groupSet = _allKinds.where((k) => k.group != null).map((k) => k.group!).toSet();
-    _groups = groupSet.toList()..sort();
-
-    // 嘗試恢復上次選擇的分類
-    _restoreKindSelection();
-
-    // 持久化選擇
-    _saveSelection();
-
-    // debounce 網路請求
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-      refreshExplore();
-    });
-  }
-
-  Future<void> _restoreKindSelection() async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastGroup = prefs.getString('explore_last_group');
-    final lastKindTitle = prefs.getString('explore_last_kind');
-
-    if (lastGroup != null && _groups.contains(lastGroup)) {
-      _selectedGroup = lastGroup;
-    } else {
-      _selectedGroup = _groups.isNotEmpty ? _groups.first : null;
-    }
-
-    final kinds = filteredKinds;
-    final restoredKind = lastKindTitle != null
-        ? kinds.where((k) => k.title == lastKindTitle).firstOrNull
-        : null;
-    _selectedKind = restoredKind ?? (kinds.isNotEmpty ? kinds.first : null);
-    notifyListeners();
-  }
-
-  Future<void> _saveSelection() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_selectedSource != null) {
-      await prefs.setString('explore_last_source', _selectedSource!.bookSourceUrl);
-    }
-    if (_selectedGroup != null) {
-      await prefs.setString('explore_last_group', _selectedGroup!);
-    }
-    if (_selectedKind != null) {
-      await prefs.setString('explore_last_kind', _selectedKind!.title);
-    }
-  }
-
-  void setGroup(String group) {
-    _selectedGroup = group;
-    final firstFiltered = filteredKinds;
-    _selectedKind = firstFiltered.isNotEmpty ? firstFiltered.first : null;
-    _saveSelection();
-    refreshExplore();
-  }
-
-  void setKind(ExploreKind kind) {
-    _selectedKind = kind;
-    _saveSelection();
-    refreshExplore();
-  }
-
-  @override
-  void dispose() {
-    _debounceTimer?.cancel();
-    _cancelToken?.cancel('ExploreProvider disposed');
-    super.dispose();
-  }
-
-  Future<void> refreshExplore() async {
-    if (_selectedSource == null || _selectedKind == null) return;
-    _cancelToken?.cancel('new explore request');
-    _page = 1;
-    _books = [];
-    _hasMore = true;
-    _loadData();
-  }
-
-  Future<void> loadMore() async {
-    if (!_hasMore || _isLoading) return;
-    _page++;
-    _loadData();
-  }
-
-  bool get hasMore => _hasMore;
-
-  Future<void> refresh() => refreshExplore();
-
-  void clearError() {
-    _errorMessage = null;
-    notifyListeners();
-  }
-
-  Future<void> _loadData() async {
-    _isLoading = true;
-    _errorMessage = null;
+    _expandedIndex = index;
+    _expandedKinds = [];
+    _isLoadingKinds = true;
     notifyListeners();
 
-    _cancelToken = CancelToken();
+    final source = _filteredSources[index];
+    await _loadKindsForSource(source);
+  }
+
+  /// 為書源載入分類標籤 (帶快取，對標 Android exploreKinds())
+  Future<void> _loadKindsForSource(BookSource source) async {
+    final cacheKey = source.bookSourceUrl;
+
+    if (_kindsCache.containsKey(cacheKey)) {
+      _expandedKinds = _kindsCache[cacheKey]!;
+      _isLoadingKinds = false;
+      notifyListeners();
+      return;
+    }
 
     try {
-      // TODO: pass _cancelToken to WebBook.exploreBookAwait once it supports cancelToken parameter
-      final results = await WebBook.exploreBookAwait(
-        _selectedSource!,
-        _selectedKind!.url,
-        page: _page,
-      );
-      if (_cancelToken?.isCancelled ?? false) return;
-      if (results.isEmpty) {
-        _hasMore = false;
-      } else {
-        _books.addAll(results);
+      final kinds = ExploreUrlParser.parse(source.exploreUrl, source: source);
+      _kindsCache[cacheKey] = kinds;
+      // 確認展開狀態仍然有效（用戶可能已經點擊了其他書源）
+      if (_expandedIndex >= 0 && _expandedIndex < _filteredSources.length &&
+          _filteredSources[_expandedIndex].bookSourceUrl == source.bookSourceUrl) {
+        _expandedKinds = kinds;
       }
-    } on DioException catch (e) {
-      if (e.type == DioExceptionType.cancel) return;
-      AppLog.e('探索失敗', error: e);
-      _errorMessage = '載入失敗：$e';
-      if (_page > 1) _page--;
     } catch (e) {
-      AppLog.e('探索失敗', error: e);
-      _errorMessage = '載入失敗：$e';
-      if (_page > 1) _page--;
+      AppLog.e('載入探索分類失敗', error: e);
+      _expandedKinds = [ExploreKind(title: 'ERROR:${e.toString()}', url: e.toString())];
     } finally {
-      _isLoading = false;
+      _isLoadingKinds = false;
       notifyListeners();
     }
+  }
+
+  /// 刷新分類快取 (對標 Android menu_refresh / clearExploreKindsCache)
+  Future<void> refreshKindsCache(BookSource source) async {
+    _kindsCache.remove(source.bookSourceUrl);
+    if (_expandedIndex >= 0 && _expandedIndex < _filteredSources.length &&
+        _filteredSources[_expandedIndex].bookSourceUrl == source.bookSourceUrl) {
+      _isLoadingKinds = true;
+      _expandedKinds = [];
+      notifyListeners();
+      await _loadKindsForSource(source);
+    }
+  }
+
+  /// 置頂書源 (對標 Android ExploreViewModel.topSource)
+  Future<void> topSource(BookSource source) async {
+    final minOrder = _allSources.isEmpty ? 0 : _allSources.map((s) => s.customOrder).reduce((a, b) => a < b ? a : b);
+    source.customOrder = minOrder - 1;
+    await _sourceDao.upsert(source);
+    await _loadSources();
+  }
+
+  /// 刪除書源 (對標 Android ExploreViewModel.deleteSource)
+  Future<void> deleteSource(BookSource source) async {
+    await _sourceDao.deleteByUrl(source.bookSourceUrl);
+    _kindsCache.remove(source.bookSourceUrl);
+    await _loadSources();
+  }
+
+  /// 重新載入所有書源
+  Future<void> refresh() async {
+    _expandedIndex = -1;
+    _expandedKinds = [];
+    await _loadSources();
+  }
+
+  /// 收合所有展開的書源 (對標 Android compressExplore)
+  bool compressExplore() {
+    if (_expandedIndex < 0) return false;
+    _expandedIndex = -1;
+    _expandedKinds = [];
+    notifyListeners();
+    return true;
   }
 }
