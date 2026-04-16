@@ -8,7 +8,6 @@ import 'package:inkpage_reader/features/reader/runtime/read_view_runtime_coordin
 import 'package:inkpage_reader/features/reader/runtime/models/reader_viewport_state.dart';
 import 'package:inkpage_reader/features/reader/view/delegate/scroll_mode_delegate.dart';
 import 'package:inkpage_reader/features/reader/view/delegate/page_mode_delegate.dart';
-import 'package:inkpage_reader/features/reader/view/scroll_auto_page_driver.dart';
 import 'package:inkpage_reader/features/reader/view/scroll_execution_adapter.dart';
 import 'package:inkpage_reader/features/reader/view/scroll_restore_runner.dart';
 import 'package:inkpage_reader/features/reader/view/scroll_runtime_executor.dart';

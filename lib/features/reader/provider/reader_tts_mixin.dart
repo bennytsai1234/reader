@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:inkpage_reader/core/services/tts_service.dart';
 import 'package:inkpage_reader/features/reader/runtime/read_aloud_controller.dart';
@@ -6,7 +5,6 @@ import 'package:inkpage_reader/features/reader/runtime/reader_tts_follow_coordin
 import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
-import 'package:inkpage_reader/core/constant/page_anim.dart';
 
 import 'reader_provider_base.dart';
 import 'reader_settings_mixin.dart';

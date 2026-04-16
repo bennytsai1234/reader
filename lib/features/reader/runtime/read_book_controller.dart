@@ -26,11 +26,9 @@ import 'package:inkpage_reader/features/reader/runtime/reader_position_resolver.
 import 'package:inkpage_reader/features/reader/runtime/reader_progress_store.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_restore_coordinator.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_scroll_visibility_coordinator.dart';
-import 'package:inkpage_reader/features/reader/runtime/reader_tts_follow_coordinator.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_session_state.dart';
 import 'package:inkpage_reader/shared/theme/app_theme.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:inkpage_reader/features/reader/provider/reader_tts_mixin.dart';
 
@@ -728,6 +726,7 @@ class ReadBookController extends ReaderProviderBase
     return currentChapterIndex;
   }
 
+  @override
   TTSService get tts => TTSService();
 
   double backgroundBlur = 0.0;
@@ -932,11 +931,6 @@ class ReadBookController extends ReaderProviderBase
       chapterPos: _resolveCurrentCharOffset(),
       bookText: content ?? '',
     );
-  }
-
-  void _runWithAutoPageStopped(VoidCallback action) {
-    if (isAutoPaging) stopAutoPage();
-    action();
   }
 
   void _persistSetting(String key, dynamic value) {

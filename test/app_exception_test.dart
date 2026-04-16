@@ -72,16 +72,27 @@ void main() {
       expect(e.url, isNull);
     });
 
-    test('ParsingException carries ruleName', () {
-      final e = ParsingException('parse error', ruleName: 'ruleSearch');
+    test('ParsingException carries rule details', () {
+      final e = ParsingException(
+        'parse error',
+        rule: 'ruleSearch',
+        mode: 'xpath',
+        url: 'https://example.com',
+      );
       expect(e, isA<AppException>());
       expect(e.message, 'parse error');
-      expect(e.ruleName, 'ruleSearch');
+      expect(e.rule, 'ruleSearch');
+      expect(e.mode, 'xpath');
+      expect(e.url, 'https://example.com');
+      expect(e.toString(), contains('[xpath] parse error'));
+      expect(e.toString(), contains('規則: ruleSearch'));
     });
 
-    test('ParsingException ruleName defaults to null', () {
+    test('ParsingException fields default to null', () {
       final e = ParsingException('parse error');
-      expect(e.ruleName, isNull);
+      expect(e.rule, isNull);
+      expect(e.mode, isNull);
+      expect(e.url, isNull);
     });
 
     test('LoginCheckException carries sourceUrl', () {
