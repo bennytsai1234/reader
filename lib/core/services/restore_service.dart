@@ -1,27 +1,27 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:legado_reader/core/database/dao/book_dao.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/database/dao/replace_rule_dao.dart';
-import 'package:legado_reader/core/database/dao/book_group_dao.dart';
-import 'package:legado_reader/core/database/dao/bookmark_dao.dart';
-import 'package:legado_reader/core/database/dao/read_record_dao.dart';
-import 'package:legado_reader/core/database/dao/dict_rule_dao.dart';
-import 'package:legado_reader/core/database/dao/http_tts_dao.dart';
-import 'package:legado_reader/core/database/dao/txt_toc_rule_dao.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/dict_rule.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/replace_rule.dart';
-import 'package:legado_reader/core/models/bookmark.dart';
-import 'package:legado_reader/core/models/read_record.dart';
-import 'package:legado_reader/core/models/book_group.dart';
-import 'package:legado_reader/core/models/http_tts.dart';
-import 'package:legado_reader/core/models/txt_toc_rule.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/database/dao/book_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_group_dao.dart';
+import 'package:inkpage_reader/core/database/dao/bookmark_dao.dart';
+import 'package:inkpage_reader/core/database/dao/read_record_dao.dart';
+import 'package:inkpage_reader/core/database/dao/dict_rule_dao.dart';
+import 'package:inkpage_reader/core/database/dao/http_tts_dao.dart';
+import 'package:inkpage_reader/core/database/dao/txt_toc_rule_dao.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/dict_rule.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/replace_rule.dart';
+import 'package:inkpage_reader/core/models/bookmark.dart';
+import 'package:inkpage_reader/core/models/read_record.dart';
+import 'package:inkpage_reader/core/models/book_group.dart';
+import 'package:inkpage_reader/core/models/http_tts.dart';
+import 'package:inkpage_reader/core/models/txt_toc_rule.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 
 /// RestoreService - 統一恢復調度器
 /// (原 Android help/storage/Restore.kt)

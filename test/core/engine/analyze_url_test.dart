@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/engine/analyze_url.dart';
+import 'package:inkpage_reader/core/engine/analyze_url.dart';
 import '../../test_helper.dart';
 
 void main() {

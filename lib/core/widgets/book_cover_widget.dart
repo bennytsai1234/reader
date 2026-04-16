@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:legado_reader/core/services/resource_service.dart';
+import 'package:inkpage_reader/core/services/resource_service.dart';
 
 class BookCoverWidget extends StatelessWidget {
   final String? coverUrl;

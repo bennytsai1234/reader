@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:legado_reader/core/models/source_subscription.dart';
-import 'package:legado_reader/core/database/dao/source_subscription_dao.dart';
-import 'package:legado_reader/core/services/source_update_service.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/source_subscription.dart';
+import 'package:inkpage_reader/core/database/dao/source_subscription_dao.dart';
+import 'package:inkpage_reader/core/services/source_update_service.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 
 class SourceSubscriptionProvider extends ChangeNotifier {
   final SourceSubscriptionDao _dao = getIt<SourceSubscriptionDao>();

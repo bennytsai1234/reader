@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
-import 'package:legado_reader/core/database/dao/book_dao.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/models/search_book.dart';
-import 'package:legado_reader/features/book_detail/book_detail_provider.dart';
+import 'package:inkpage_reader/core/database/dao/book_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/features/book_detail/book_detail_provider.dart';
 
 // ---------------------------------------------------------------------------
 // Fake DAOs

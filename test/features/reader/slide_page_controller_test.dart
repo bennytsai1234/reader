@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/features/reader/view/slide_page_controller.dart';
+import 'package:inkpage_reader/features/reader/view/slide_page_controller.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

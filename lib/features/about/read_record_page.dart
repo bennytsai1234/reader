@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/features/read_record/read_record_provider.dart';
+import 'package:inkpage_reader/features/read_record/read_record_provider.dart';
 
 class ReadRecordPage extends StatelessWidget {
   const ReadRecordPage({super.key});

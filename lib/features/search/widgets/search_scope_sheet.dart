@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
 import '../models/search_scope.dart';
 
 /// SearchScopeSheet - 搜尋範圍選擇底部彈窗

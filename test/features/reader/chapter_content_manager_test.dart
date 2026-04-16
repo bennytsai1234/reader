@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/features/reader/engine/chapter_content_manager.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_content_manager.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

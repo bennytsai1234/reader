@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:legado_reader/core/services/cache_manager.dart';
-import 'package:legado_reader/core/services/cookie_store.dart';
+import 'package:inkpage_reader/core/services/cache_manager.dart';
+import 'package:inkpage_reader/core/services/cookie_store.dart';
 
 /// BaseSource - 資源來源基礎介面
 /// (原 Android data/entities/BaseSource.kt)

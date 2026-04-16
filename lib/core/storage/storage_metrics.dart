@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 
 class StorageMetrics {
   static String formatBytes(int bytes) {

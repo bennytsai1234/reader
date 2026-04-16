@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../source_manager_provider.dart';
-import 'package:legado_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
 import '../source_debug_page.dart';
 
 class SourceManagerDialogs {

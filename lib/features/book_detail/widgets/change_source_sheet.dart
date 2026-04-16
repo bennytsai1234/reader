@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/features/search/search_provider.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/features/search/search_provider.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
 import '../book_detail_provider.dart';
 
 class ChangeSourceSheet extends StatelessWidget {

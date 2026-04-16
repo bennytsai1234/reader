@@ -2,14 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/local_book/txt_parser.dart';
-import 'package:legado_reader/core/services/epub_service.dart';
-import 'package:legado_reader/core/services/resource_service.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/local_book/txt_parser.dart';
+import 'package:inkpage_reader/core/services/epub_service.dart';
+import 'package:inkpage_reader/core/services/resource_service.dart';
 import 'package:fast_gbk/fast_gbk.dart';
 
 /// 本地書籍匯入結果

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/features/settings/settings_provider.dart';
-import 'package:legado_reader/features/bookshelf/bookshelf_page.dart';
-import 'package:legado_reader/features/explore/explore_page.dart';
-import 'package:legado_reader/features/settings/settings_page.dart';
-import 'package:legado_reader/features/bookshelf/bookshelf_provider.dart';
+import 'package:inkpage_reader/features/settings/settings_provider.dart';
+import 'package:inkpage_reader/features/bookshelf/bookshelf_page.dart';
+import 'package:inkpage_reader/features/explore/explore_page.dart';
+import 'package:inkpage_reader/features/settings/settings_page.dart';
+import 'package:inkpage_reader/features/bookshelf/bookshelf_provider.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});

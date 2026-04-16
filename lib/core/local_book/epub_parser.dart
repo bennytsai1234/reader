@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:epubx/epubx.dart';
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 
 /// EpubParser - 解析 EPUB 格式書籍
 /// (原 Android model/localBook/EpubFile.kt)

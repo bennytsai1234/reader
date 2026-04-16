@@ -1,4 +1,4 @@
-import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 
 enum ReaderSessionPhase {
   bootstrapping,

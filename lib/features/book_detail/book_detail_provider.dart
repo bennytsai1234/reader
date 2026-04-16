@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
-import 'package:legado_reader/core/database/dao/book_dao.dart';
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/search_book.dart';
-import 'package:legado_reader/core/services/book_source_service.dart';
-import 'package:legado_reader/core/engine/app_event_bus.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/database/dao/book_dao.dart';
+import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/services/book_source_service.dart';
+import 'package:inkpage_reader/core/engine/app_event_bus.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 
 class BookDetailProvider extends ChangeNotifier {
   final BookDao _bookDao = getIt<BookDao>();

@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_session_state.dart';
-import 'package:legado_reader/features/reader/runtime/reader_progress_store.dart';
-import 'package:legado_reader/features/reader/runtime/reader_session_coordinator.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_session_state.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_progress_store.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_session_coordinator.dart';
 
 void main() {
   group('ReaderSessionCoordinator', () {

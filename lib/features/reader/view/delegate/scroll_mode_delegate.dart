@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
-import 'package:legado_reader/features/reader/engine/page_view_widget.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/page_view_widget.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import 'page_mode_delegate.dart';

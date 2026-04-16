@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/widgets/book_cover_widget.dart';
-import 'package:legado_reader/features/bookshelf/bookshelf_provider.dart';
-import 'package:legado_reader/features/reader/reader_page.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
-import 'package:legado_reader/features/search/search_page.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/widgets/book_cover_widget.dart';
+import 'package:inkpage_reader/features/bookshelf/bookshelf_provider.dart';
+import 'package:inkpage_reader/features/reader/reader_page.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/search/search_page.dart';
 
-import 'package:legado_reader/features/settings/settings_page.dart';
-import 'package:legado_reader/features/reader/audio_player_page.dart';
+import 'package:inkpage_reader/features/settings/settings_page.dart';
+import 'package:inkpage_reader/features/reader/audio_player_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'widgets/group_select_dialog.dart';
 

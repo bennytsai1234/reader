@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/services/tts_service.dart';
-import 'package:legado_reader/features/reader/engine/text_page.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_chapter.dart';
-import 'package:legado_reader/features/reader/runtime/read_aloud_controller.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/services/tts_service.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
+import 'package:inkpage_reader/features/reader/runtime/read_aloud_controller.dart';
 
 class FakeTtsService extends ChangeNotifier implements TTSService {
   final StreamController<String> _audioEvents =

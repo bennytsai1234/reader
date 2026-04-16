@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/services/chinese_utils.dart';
+import 'package:inkpage_reader/core/services/chinese_utils.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

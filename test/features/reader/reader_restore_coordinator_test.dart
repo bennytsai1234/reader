@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/features/reader/runtime/reader_restore_coordinator.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_restore_coordinator.dart';
 
 void main() {
   group('ReaderRestoreCoordinator', () {

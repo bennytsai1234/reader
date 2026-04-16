@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
-import 'package:legado_reader/core/database/dao/search_history_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/services/rule_big_data_service.dart';
-import 'package:legado_reader/core/storage/app_storage_paths.dart';
-import 'package:legado_reader/core/storage/storage_metrics.dart';
+import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/database/dao/search_history_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/services/rule_big_data_service.dart';
+import 'package:inkpage_reader/core/storage/app_storage_paths.dart';
+import 'package:inkpage_reader/core/storage/storage_metrics.dart';
 
 class StorageEntry {
   const StorageEntry({

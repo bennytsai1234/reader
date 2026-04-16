@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 
 class ScrollExecutionAdapter {
   final Map<String, GlobalKey> pageKeys;

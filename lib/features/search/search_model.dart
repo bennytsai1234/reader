@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/search_book.dart';
-import 'package:legado_reader/core/engine/web_book/web_book_service.dart';
-import 'package:legado_reader/core/database/dao/search_book_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/engine/web_book/web_book_service.dart';
+import 'package:inkpage_reader/core/database/dao/search_book_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:pool/pool.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models/search_scope.dart';

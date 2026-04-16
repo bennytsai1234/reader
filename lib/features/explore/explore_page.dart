@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'explore_provider.dart';
 import 'explore_show_page.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/source/explore_kind.dart';
-import 'package:legado_reader/features/source_manager/source_editor_page.dart';
-import 'package:legado_reader/features/search/search_page.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/source/explore_kind.dart';
+import 'package:inkpage_reader/features/source_manager/source_editor_page.dart';
+import 'package:inkpage_reader/features/search/search_page.dart';
 
 /// ExplorePage - 發現主頁面
 /// (對標 Android ExploreFragment + ExploreAdapter)

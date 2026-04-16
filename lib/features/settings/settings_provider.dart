@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:legado_reader/core/config/app_config.dart';
-import 'package:legado_reader/core/constant/prefer_key.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/config/app_config.dart';
+import 'package:inkpage_reader/core/constant/prefer_key.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'provider/settings_base.dart';
 
 export 'provider/settings_base.dart';

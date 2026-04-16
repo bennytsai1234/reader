@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'bookshelf_provider_base.dart';
-import 'package:legado_reader/core/models/book_group.dart';
-import 'package:legado_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book_group.dart';
+import 'package:inkpage_reader/core/models/book.dart';
 
 /// BookshelfProvider 的 UI 狀態與分組邏輯擴展
 mixin BookshelfLogicMixin on BookshelfProviderBase {

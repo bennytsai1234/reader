@@ -1,5 +1,5 @@
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/services/event_bus.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/services/event_bus.dart';
 import 'bookshelf_provider_base.dart';
 
 /// BookshelfProvider 的更新與網絡同步邏輯擴展

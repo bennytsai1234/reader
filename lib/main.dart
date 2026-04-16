@@ -36,7 +36,7 @@ void callbackDispatcher() {
 }
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
-const String kAppDisplayName = '保安專用閱讀器';
+const String kAppDisplayName = '墨頁';
 
 void main() {
   runZonedGuarded(() async {

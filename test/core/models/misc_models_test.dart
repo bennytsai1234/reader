@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/models/book_source_part.dart';
-import 'package:legado_reader/core/models/rule_sub.dart';
+import 'package:inkpage_reader/core/models/book_source_part.dart';
+import 'package:inkpage_reader/core/models/rule_sub.dart';
 
 void main() {
   group('Miscellaneous Models Tests', () {

@@ -1,5 +1,5 @@
-import 'package:legado_reader/features/reader/runtime/reader_progress_store.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_progress_store.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 
 /// Typed callback interface for methods that [ReaderContentMixin] and
 /// [ReaderProgressMixin] need to call on [ReadBookController] without

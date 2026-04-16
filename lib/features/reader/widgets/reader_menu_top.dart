@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
-import 'package:legado_reader/features/reader/change_chapter_source_sheet.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/change_chapter_source_sheet.dart';
 
 class ReaderMenuTop extends StatelessWidget {
   final ReaderProvider provider;

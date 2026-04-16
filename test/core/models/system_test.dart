@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/models/cookie.dart';
-import 'package:legado_reader/core/models/search_keyword.dart';
-import 'package:legado_reader/core/models/server.dart';
-import 'package:legado_reader/core/models/keyboard_assist.dart';
-import 'package:legado_reader/core/models/cache.dart';
+import 'package:inkpage_reader/core/models/cookie.dart';
+import 'package:inkpage_reader/core/models/search_keyword.dart';
+import 'package:inkpage_reader/core/models/server.dart';
+import 'package:inkpage_reader/core/models/keyboard_assist.dart';
+import 'package:inkpage_reader/core/models/cache.dart';
 import 'dart:convert';
 
 void main() {

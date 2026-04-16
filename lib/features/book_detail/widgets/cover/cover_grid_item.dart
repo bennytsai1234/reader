@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
 import '../../book_detail_provider.dart';
 
 class CoverGridItem extends StatelessWidget {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:legado_reader/core/services/crash_handler.dart';
+import 'package:inkpage_reader/core/services/crash_handler.dart';
 
 class CrashLogPage extends StatefulWidget {
   const CrashLogPage({super.key});

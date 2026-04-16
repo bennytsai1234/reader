@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
-import 'package:legado_reader/features/reader/runtime/reader_command_guard.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_command_guard.dart';
 
 void main() {
   group('ReaderCommandGuard', () {

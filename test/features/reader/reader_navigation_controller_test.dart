@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/constant/page_anim.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/features/reader/engine/text_page.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_chapter.dart';
-import 'package:legado_reader/features/reader/runtime/reader_navigation_controller.dart';
-import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
+import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_navigation_controller.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
 
 void main() {
   ReaderChapter makeChapter() {

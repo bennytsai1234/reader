@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'association_base.dart';
-import 'package:legado_reader/features/source_manager/source_manager_provider.dart';
-import 'package:legado_reader/features/replace_rule/replace_rule_provider.dart';
-import 'package:legado_reader/features/bookshelf/bookshelf_provider.dart';
-import 'package:legado_reader/features/settings/http_tts_provider.dart';
-import 'package:legado_reader/core/models/http_tts.dart';
+import 'package:inkpage_reader/features/source_manager/source_manager_provider.dart';
+import 'package:inkpage_reader/features/replace_rule/replace_rule_provider.dart';
+import 'package:inkpage_reader/features/bookshelf/bookshelf_provider.dart';
+import 'package:inkpage_reader/features/settings/http_tts_provider.dart';
+import 'package:inkpage_reader/core/models/http_tts.dart';
 
 /// AssociationHandlerService 的對話框與 UI 邏輯擴展
 mixin AssociationDialogHelper on AssociationBase {

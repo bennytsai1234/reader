@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/core/models/http_tts.dart';
+import 'package:inkpage_reader/core/models/http_tts.dart';
 import 'http_tts_provider.dart';
 
 class HttpTtsManagerPage extends StatelessWidget {

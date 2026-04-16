@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
 import 'source_debug_page.dart';
 import 'views/source_edit_basic.dart';
 import 'views/source_edit_search.dart';
@@ -8,7 +8,7 @@ import 'views/source_edit_book_info.dart';
 import 'views/source_edit_toc.dart';
 import 'views/source_edit_content.dart';
 import 'views/source_edit_review.dart';
-import 'package:legado_reader/core/services/book_source_service.dart';
+import 'package:inkpage_reader/core/services/book_source_service.dart';
 
 class SourceEditorPage extends StatefulWidget {
   final BookSource? source;

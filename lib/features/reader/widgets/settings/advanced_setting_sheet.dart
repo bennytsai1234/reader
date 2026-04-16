@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 
 class AdvancedSettingSheet extends StatelessWidget {
   const AdvancedSettingSheet({super.key});

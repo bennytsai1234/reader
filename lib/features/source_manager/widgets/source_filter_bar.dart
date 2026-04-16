@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/features/source_manager/source_manager_provider.dart';
+import 'package:inkpage_reader/features/source_manager/source_manager_provider.dart';
 
 class SourceFilterBar extends StatelessWidget {
   final SourceManagerProvider provider;

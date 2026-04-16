@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/services/export_book_service.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/services/export_book_service.dart';
 import 'cache_manager_provider.dart';
 
 class CacheManagerPage extends StatelessWidget {

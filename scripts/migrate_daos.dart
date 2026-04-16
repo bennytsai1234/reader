@@ -23,13 +23,13 @@ void main() async {
 
     if (changed) {
       // 3. Ensure injection import
-      if (!content.contains('package:legado_reader/core/di/injection.dart')) {
-        content = "import 'package:legado_reader/core/di/injection.dart';\n$content";
+      if (!content.contains('package:inkpage_reader/core/di/injection.dart')) {
+        content = "import 'package:inkpage_reader/core/di/injection.dart';\n$content";
       }
 
       // 4. Ensure IsarService import if used
-      if (content.contains('IsarService') && !content.contains('package:legado_reader/core/database/isar_service.dart')) {
-        content = "import 'package:legado_reader/core/database/isar_service.dart';\n$content";
+      if (content.contains('IsarService') && !content.contains('package:inkpage_reader/core/database/isar_service.dart')) {
+        content = "import 'package:inkpage_reader/core/database/isar_service.dart';\n$content";
       }
 
       await file.writeAsString(content);

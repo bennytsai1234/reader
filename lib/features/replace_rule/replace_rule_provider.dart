@@ -1,10 +1,10 @@
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:legado_reader/core/database/dao/replace_rule_dao.dart';
-import 'package:legado_reader/core/models/replace_rule.dart';
+import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
+import 'package:inkpage_reader/core/models/replace_rule.dart';
 
 class ReplaceRuleProvider extends ChangeNotifier {
   final ReplaceRuleDao _dao = getIt<ReplaceRuleDao>();

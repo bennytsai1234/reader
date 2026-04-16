@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/book.dart';
 
 void main() {
   group('真實數據解析測試', () {

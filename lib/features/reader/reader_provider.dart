@@ -1,6 +1,6 @@
-import 'package:legado_reader/features/reader/runtime/read_book_controller.dart';
+import 'package:inkpage_reader/features/reader/runtime/read_book_controller.dart';
 
-export 'package:legado_reader/features/reader/runtime/read_book_controller.dart';
+export 'package:inkpage_reader/features/reader/runtime/read_book_controller.dart';
 
 class ReaderProvider extends ReadBookController {
   ReaderProvider({

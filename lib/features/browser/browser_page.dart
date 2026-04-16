@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
-import 'package:legado_reader/core/services/source_verification_service.dart';
-import 'package:legado_reader/features/association/association_handler_service.dart';
+import 'package:inkpage_reader/core/services/source_verification_service.dart';
+import 'package:inkpage_reader/features/association/association_handler_service.dart';
 import 'browser_params.dart';
 import 'browser_provider.dart';
 

@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'package:legado_reader/core/base/base_provider.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/services/source_debug_service.dart';
+import 'package:inkpage_reader/core/base/base_provider.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/services/source_debug_service.dart';
 
 class SourceDebugProvider extends BaseProvider {
   final BookSource source;

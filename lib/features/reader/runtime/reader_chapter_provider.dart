@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/engine/reader/content_processor.dart' as engine;
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/book/book_content.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/features/reader/engine/chapter_provider.dart';
-import 'package:legado_reader/features/reader/engine/text_page.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_chapter.dart';
+import 'package:inkpage_reader/core/engine/reader/content_processor.dart' as engine;
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book/book_content.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_provider.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
 
 class ReaderChapterProvider {
   const ReaderChapterProvider();

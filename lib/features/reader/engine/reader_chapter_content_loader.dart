@@ -1,20 +1,20 @@
 import 'dart:async';
 
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
-import 'package:legado_reader/core/database/dao/replace_rule_dao.dart';
-import 'package:legado_reader/core/engine/reader/chinese_text_converter.dart';
-import 'package:legado_reader/core/engine/reader/content_processor.dart'
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
+import 'package:inkpage_reader/core/engine/reader/chinese_text_converter.dart';
+import 'package:inkpage_reader/core/engine/reader/content_processor.dart'
     as engine;
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/book/book_content.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/models/replace_rule.dart';
-import 'package:legado_reader/core/services/book_source_service.dart';
-import 'package:legado_reader/core/services/local_book_service.dart';
-import 'package:legado_reader/features/reader/engine/chapter_content_manager.dart';
-import 'package:legado_reader/features/reader/engine/reader_perf_trace.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book/book_content.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/models/replace_rule.dart';
+import 'package:inkpage_reader/core/services/book_source_service.dart';
+import 'package:inkpage_reader/core/services/local_book_service.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_content_manager.dart';
+import 'package:inkpage_reader/features/reader/engine/reader_perf_trace.dart';
 
 class ReaderChapterContentLoader {
   ReaderChapterContentLoader({

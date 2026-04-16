@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
 
 void main() {
   // ─── BookSourceService 純函式 ──────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import 'dart:ui' show VoidCallback;
-import 'package:legado_reader/core/config/app_config.dart';
-import 'package:legado_reader/core/constant/prefer_key.dart';
-import 'package:legado_reader/core/services/tts_service.dart';
+import 'package:inkpage_reader/core/config/app_config.dart';
+import 'package:inkpage_reader/core/constant/prefer_key.dart';
+import 'package:inkpage_reader/core/services/tts_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'reader_provider_base.dart';
 

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/exception/app_exception.dart';
+import 'package:inkpage_reader/core/exception/app_exception.dart';
 
 void main() {
   group('AppException hierarchy', () {

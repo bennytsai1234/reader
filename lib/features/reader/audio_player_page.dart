@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/services/book_source_service.dart';
-import 'package:legado_reader/core/services/audio_play_service.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/services/book_source_service.dart';
+import 'package:inkpage_reader/core/services/audio_play_service.dart';
 import 'change_chapter_source_sheet.dart';
 import 'widgets/audio/audio_player_main.dart';
 import 'widgets/audio/audio_player_slider.dart';

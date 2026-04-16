@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/utils/lru_map.dart';
+import 'package:inkpage_reader/core/utils/lru_map.dart';
 
 void main() {
   group('LruMap', () {

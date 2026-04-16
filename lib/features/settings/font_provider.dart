@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
-import 'package:legado_reader/core/storage/app_storage_paths.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/storage/app_storage_paths.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 

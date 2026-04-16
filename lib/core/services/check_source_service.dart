@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/source/book_source_logic.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/source/book_source_logic.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
 import 'book_source_service.dart';
 import 'event_bus.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 
 /// CheckSourceService - 書源校驗服務
 /// (原 Android service/CheckSourceService.kt)

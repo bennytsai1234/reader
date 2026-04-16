@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:intl/intl.dart';
 import 'book_source_service.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/utils/html_formatter.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/utils/html_formatter.dart';
 
 class DebugLog {
   final int state; // 1: info, 10: search, 20: detail, 30: toc, 40: content, 1000: success, -1: error

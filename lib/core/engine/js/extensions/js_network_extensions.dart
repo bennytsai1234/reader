@@ -1,14 +1,14 @@
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:dio/dio.dart';
 import 'package:archive/archive.dart';
 import 'package:intl/intl.dart';
 import '../js_extensions.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/engine/analyze_url.dart';
-import 'package:legado_reader/core/services/http_client.dart';
-import 'package:legado_reader/core/services/backstage_webview.dart';
-import 'package:legado_reader/core/services/source_verification_service.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/engine/analyze_url.dart';
+import 'package:inkpage_reader/core/services/http_client.dart';
+import 'package:inkpage_reader/core/services/backstage_webview.dart';
+import 'package:inkpage_reader/core/services/source_verification_service.dart';
 
 /// 網路/WebView/I/O 相關 `java.*` 方法的 Dart 側 handler
 ///

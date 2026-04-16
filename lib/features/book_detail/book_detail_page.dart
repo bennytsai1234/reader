@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:legado_reader/features/book_detail/book_detail_provider.dart';
-import 'package:legado_reader/features/book_detail/change_cover_sheet.dart';
-import 'package:legado_reader/core/models/search_book.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/services/export_book_service.dart';
-import 'package:legado_reader/features/source_manager/source_editor_page.dart';
-import 'package:legado_reader/features/source_manager/source_debug_page.dart';
-import 'package:legado_reader/features/reader/reader_page.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/book_detail/book_detail_provider.dart';
+import 'package:inkpage_reader/features/book_detail/change_cover_sheet.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/services/export_book_service.dart';
+import 'package:inkpage_reader/features/source_manager/source_editor_page.dart';
+import 'package:inkpage_reader/features/source_manager/source_debug_page.dart';
+import 'package:inkpage_reader/features/reader/reader_page.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 
 import 'widgets/book_info_header.dart';
 import 'widgets/book_info_intro.dart';

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:legado_reader/core/constant/prefer_key.dart';
+import 'package:inkpage_reader/core/constant/prefer_key.dart';
 
 mixin SettingsSyncBackupMixin on ChangeNotifier {
   late SharedPreferences prefs;

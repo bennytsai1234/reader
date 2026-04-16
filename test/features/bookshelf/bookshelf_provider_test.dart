@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
-import 'package:legado_reader/core/database/dao/book_dao.dart';
-import 'package:legado_reader/core/database/dao/book_group_dao.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/book_group.dart';
-import 'package:legado_reader/features/bookshelf/bookshelf_provider.dart';
+import 'package:inkpage_reader/core/database/dao/book_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_group_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book_group.dart';
+import 'package:inkpage_reader/features/bookshelf/bookshelf_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ---------------------------------------------------------------------------

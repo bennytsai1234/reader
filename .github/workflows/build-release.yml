@@ -138,13 +138,13 @@ jobs:
           mkdir -p build/ios/ipa/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/Runner.app
           cd build/ios/ipa
-          zip -r 保安專用閱讀器-ios-unsigned.ipa Payload
+          zip -r inkpage-ios-unsigned.ipa Payload
 
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-unsigned-ipa
-          path: build/ios/ipa/保安專用閱讀器-ios-unsigned.ipa
+          path: build/ios/ipa/inkpage-ios-unsigned.ipa
 
   publish-release:
     name: Publish GitHub Release
@@ -187,7 +187,7 @@ jobs:
         with:
           files: |
             dist/app-release.apk
-            dist/保安專用閱讀器-ios-unsigned.ipa
+            dist/inkpage-ios-unsigned.ipa
           body_path: ${{ steps.notes.outputs.notes_file }}
 
       - name: Publish GitHub release (auto notes)
@@ -196,5 +196,5 @@ jobs:
         with:
           files: |
             dist/app-release.apk
-            dist/保安專用閱讀器-ios-unsigned.ipa
+            dist/inkpage-ios-unsigned.ipa
           generate_release_notes: true

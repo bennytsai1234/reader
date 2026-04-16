@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'replace_rule_provider.dart';
-import 'package:legado_reader/core/models/replace_rule.dart';
+import 'package:inkpage_reader/core/models/replace_rule.dart';
 import 'replace_rule_edit_page.dart';
 
 class ReplaceRulePage extends StatelessWidget {

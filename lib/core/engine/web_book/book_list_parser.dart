@@ -1,11 +1,11 @@
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/search_book.dart';
-import 'package:legado_reader/core/engine/analyze_rule.dart';
-import 'package:legado_reader/core/engine/book/book_help.dart';
-import 'package:legado_reader/core/engine/web_book/book_info_parser.dart';
-import 'package:legado_reader/core/utils/string_utils.dart';
-import 'package:legado_reader/core/utils/html_formatter.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/engine/analyze_rule.dart';
+import 'package:inkpage_reader/core/engine/book/book_help.dart';
+import 'package:inkpage_reader/core/engine/web_book/book_info_parser.dart';
+import 'package:inkpage_reader/core/utils/string_utils.dart';
+import 'package:inkpage_reader/core/utils/html_formatter.dart';
 
 class BookListParser {
   static Future<List<SearchBook>> parse({

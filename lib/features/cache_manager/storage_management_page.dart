@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/storage/storage_metrics.dart';
+import 'package:inkpage_reader/core/storage/storage_metrics.dart';
 import 'package:provider/provider.dart';
 
 import 'storage_management_provider.dart';

@@ -1,21 +1,21 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:synchronized/synchronized.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/database/dao/txt_toc_rule_dao.dart';
-import 'package:legado_reader/core/database/dao/http_tts_dao.dart';
-import 'package:legado_reader/core/database/dao/dict_rule_dao.dart';
-import 'package:legado_reader/core/database/dao/search_history_dao.dart';
-import 'package:legado_reader/core/database/dao/cache_dao.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/txt_toc_rule.dart';
-import 'package:legado_reader/core/models/http_tts.dart';
-import 'package:legado_reader/core/models/dict_rule.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/database/dao/txt_toc_rule_dao.dart';
+import 'package:inkpage_reader/core/database/dao/http_tts_dao.dart';
+import 'package:inkpage_reader/core/database/dao/dict_rule_dao.dart';
+import 'package:inkpage_reader/core/database/dao/search_history_dao.dart';
+import 'package:inkpage_reader/core/database/dao/cache_dao.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/txt_toc_rule.dart';
+import 'package:inkpage_reader/core/models/http_tts.dart';
+import 'package:inkpage_reader/core/models/dict_rule.dart';
 import 'chinese_utils.dart';
-import 'package:legado_reader/shared/theme/app_theme.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/shared/theme/app_theme.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 
 /// DefaultData - 預設資料初始化
 /// (原 Android help/DefaultData.kt)

@@ -1,7 +1,7 @@
-import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
-import 'package:legado_reader/features/reader/engine/text_page.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_chapter.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 
 class ReaderPositionResolver {
   const ReaderPositionResolver._();

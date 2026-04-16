@@ -1,4 +1,4 @@
-import 'package:legado_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 
 /// A segment within the slide window, representing one chapter's pages.
 class SlideSegment {

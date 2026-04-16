@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/core/constant/page_anim.dart';
 
 void main() {
   group('PageAnim 常數', () {

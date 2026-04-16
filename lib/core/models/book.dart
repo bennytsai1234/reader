@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:legado_reader/core/models/rule_data_interface.dart';
+import 'package:inkpage_reader/core/models/rule_data_interface.dart';
 import 'book/book_base.dart';
 import 'book/book_serialization.dart';
 

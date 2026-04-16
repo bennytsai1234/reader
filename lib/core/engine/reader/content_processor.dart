@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/models/replace_rule.dart';
-import 'package:legado_reader/core/models/book/book_content.dart';
-import 'package:legado_reader/core/constant/app_pattern.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/models/replace_rule.dart';
+import 'package:inkpage_reader/core/models/book/book_content.dart';
+import 'package:inkpage_reader/core/constant/app_pattern.dart';
 
 /// ContentProcessor - 閱讀器正文處理引擎 (對標 Android ContentProcessor.kt)
 class ContentProcessor {

@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'package:legado_reader/core/database/dao/book_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/database/dao/book_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 import 'return_data.dart';
 
 class BookController {

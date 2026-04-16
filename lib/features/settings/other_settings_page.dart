@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/features/cache_manager/storage_management_page.dart';
+import 'package:inkpage_reader/features/cache_manager/storage_management_page.dart';
 import 'package:provider/provider.dart';
 import 'settings_provider.dart';
 import 'widgets/settings_group_interface.dart';

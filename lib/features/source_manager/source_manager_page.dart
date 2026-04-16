@@ -8,7 +8,7 @@ import 'source_editor_page.dart';
 import 'qr_scan_page.dart';
 import 'explore_sources_page.dart';
 import 'source_group_manage_page.dart';
-import 'package:legado_reader/core/models/book_source_part.dart';
+import 'package:inkpage_reader/core/models/book_source_part.dart';
 import 'widgets/import_preview_dialog.dart';
 import 'widgets/source_item_tile.dart';
 import 'widgets/source_filter_bar.dart';

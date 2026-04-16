@@ -1,6 +1,6 @@
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/engine/analyze_rule.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/engine/analyze_rule.dart';
 
 class BookInfoParser {
   static Future<Book> parse({

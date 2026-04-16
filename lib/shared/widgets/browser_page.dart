@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../core/services/cookie_store.dart';
 import 'base_scaffold.dart';

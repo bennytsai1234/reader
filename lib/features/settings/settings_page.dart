@@ -3,16 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'settings_provider.dart';
 
-import 'package:legado_reader/features/source_manager/source_manager_page.dart';
-import 'package:legado_reader/features/replace_rule/replace_rule_page.dart';
-import 'package:legado_reader/features/dict/dict_rule_page.dart';
-import 'package:legado_reader/features/read_record/read_record_page.dart';
-import 'package:legado_reader/features/bookmark/bookmark_page.dart';
-import 'package:legado_reader/features/txt_toc_rule/txt_toc_rule_page.dart';
+import 'package:inkpage_reader/features/source_manager/source_manager_page.dart';
+import 'package:inkpage_reader/features/replace_rule/replace_rule_page.dart';
+import 'package:inkpage_reader/features/dict/dict_rule_page.dart';
+import 'package:inkpage_reader/features/read_record/read_record_page.dart';
+import 'package:inkpage_reader/features/bookmark/bookmark_page.dart';
+import 'package:inkpage_reader/features/txt_toc_rule/txt_toc_rule_page.dart';
 import 'backup_settings_page.dart';
 import 'theme_settings_page.dart';
 import 'other_settings_page.dart';
-import 'package:legado_reader/features/about/about_page.dart';
+import 'package:inkpage_reader/features/about/about_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});

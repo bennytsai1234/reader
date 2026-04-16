@@ -1,7 +1,7 @@
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/storage/app_storage_paths.dart';
+import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/storage/app_storage_paths.dart';
 import 'package:share_plus/share_plus.dart';
 
 class ExportBookService {

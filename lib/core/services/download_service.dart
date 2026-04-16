@@ -1,4 +1,4 @@
-import 'package:legado_reader/core/models/download_task.dart';
+import 'package:inkpage_reader/core/models/download_task.dart';
 import 'download/download_base.dart';
 import 'download/download_scheduler.dart';
 import 'download/download_executor.dart';

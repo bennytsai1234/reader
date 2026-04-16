@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/local_book/txt_parser.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/services/local_book_service.dart';
+import 'package:inkpage_reader/core/local_book/txt_parser.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/services/local_book_service.dart';
 
 void main() {
   test('Local TXT Parsing and Reading Test', () async {

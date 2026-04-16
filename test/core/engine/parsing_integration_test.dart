@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/engine/analyze_rule.dart';
-import 'package:legado_reader/core/engine/analyze_url.dart';
-import 'package:legado_reader/core/models/rule_data_interface.dart';
+import 'package:inkpage_reader/core/engine/analyze_rule.dart';
+import 'package:inkpage_reader/core/engine/analyze_url.dart';
+import 'package:inkpage_reader/core/models/rule_data_interface.dart';
 import 'dart:convert';
 import '../../test_helper.dart';
 

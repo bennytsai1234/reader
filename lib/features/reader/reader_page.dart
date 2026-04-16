@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'reader_provider.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/features/settings/settings_page.dart';
-import 'package:legado_reader/features/replace_rule/replace_rule_page.dart';
-import 'package:legado_reader/features/search/search_page.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/features/settings/settings_page.dart';
+import 'package:inkpage_reader/features/replace_rule/replace_rule_page.dart';
+import 'package:inkpage_reader/features/search/search_page.dart';
 import 'widgets/reader/reader_top_menu.dart';
 import 'widgets/reader/reader_bottom_menu.dart';
 import 'widgets/reader_brightness_bar.dart';
@@ -16,8 +16,8 @@ import 'widgets/reader_settings_sheets.dart';
 import 'view/read_view_runtime.dart';
 import 'tts_dialog.dart';
 import 'auto_read_dialog.dart';
-import 'package:legado_reader/core/constant/page_anim.dart';
-import 'package:legado_reader/features/reader/view/slide_page_controller.dart';
+import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/features/reader/view/slide_page_controller.dart';
 
 class ReaderPage extends StatefulWidget {
   final Book book;

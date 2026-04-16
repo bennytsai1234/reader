@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:legado_reader/features/bookshelf/bookshelf_provider.dart';
-import 'package:legado_reader/core/models/book_group.dart';
+import 'package:inkpage_reader/features/bookshelf/bookshelf_provider.dart';
+import 'package:inkpage_reader/core/models/book_group.dart';
 
 class GroupManagePage extends StatefulWidget {
   const GroupManagePage({super.key});

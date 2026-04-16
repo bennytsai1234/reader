@@ -1,7 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 import 'text_page.dart';
 
 /// PageViewWidget - 核心內容繪製組件

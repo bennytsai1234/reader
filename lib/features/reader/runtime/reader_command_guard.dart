@@ -1,4 +1,4 @@
-import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
 
 class ReaderCommandGuard {
   ReaderCommandReason? _activeReason;

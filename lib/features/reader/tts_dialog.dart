@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'reader_provider.dart';
-import 'package:legado_reader/core/services/tts_service.dart';
+import 'package:inkpage_reader/core/services/tts_service.dart';
 
 class TtsDialog extends StatelessWidget {
   const TtsDialog({super.key});

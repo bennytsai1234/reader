@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/core/models/dict_rule.dart';
+import 'package:inkpage_reader/core/models/dict_rule.dart';
 import 'dict_provider.dart';
 
 class DictRulePage extends StatefulWidget {

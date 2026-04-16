@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'bookmark_provider.dart';
-import 'package:legado_reader/core/models/bookmark.dart';
-import 'package:legado_reader/features/reader/reader_page.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/core/models/bookmark.dart';
+import 'package:inkpage_reader/features/reader/reader_page.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 
 class BookmarkPage extends StatefulWidget {
   const BookmarkPage({super.key});

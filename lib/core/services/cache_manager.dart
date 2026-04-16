@@ -1,10 +1,10 @@
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 import 'dart:io';
 import 'dart:collection';
 import 'package:path/path.dart' as p;
-import 'package:legado_reader/core/database/dao/cache_dao.dart';
-import 'package:legado_reader/core/models/cache.dart';
-import 'package:legado_reader/core/storage/app_storage_paths.dart';
+import 'package:inkpage_reader/core/database/dao/cache_dao.dart';
+import 'package:inkpage_reader/core/models/cache.dart';
+import 'package:inkpage_reader/core/storage/app_storage_paths.dart';
 
 /// LruMemoryCache - 簡易 LRU 記憶體快取
 /// (原 Android LruCache) (String, Any)

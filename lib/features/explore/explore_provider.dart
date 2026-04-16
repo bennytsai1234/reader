@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/source/explore_kind.dart';
-import 'package:legado_reader/core/engine/explore_url_parser.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/source/explore_kind.dart';
+import 'package:inkpage_reader/core/engine/explore_url_parser.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 
 /// ExploreProvider - 發現主頁面的狀態管理
 /// (對標 Android ExploreFragment + ExploreAdapter + ExploreViewModel)

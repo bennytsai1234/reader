@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'download_base.dart';
 import 'download_scheduler.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/models/download_task.dart';
-import 'package:legado_reader/core/engine/app_event_bus.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/models/download_task.dart';
+import 'package:inkpage_reader/core/engine/app_event_bus.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 
 /// DownloadService 的任務執行邏輯擴展
 mixin DownloadExecutor on DownloadBase, DownloadScheduler {

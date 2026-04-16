@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'analyze_rule_base.dart';
 import '../js/js_engine.dart';
-import 'package:legado_reader/core/services/cookie_store.dart';
-import 'package:legado_reader/core/services/cache_manager.dart';
-import 'package:legado_reader/core/services/http_client.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/utils/ttf_parser.dart';
+import 'package:inkpage_reader/core/services/cookie_store.dart';
+import 'package:inkpage_reader/core/services/cache_manager.dart';
+import 'package:inkpage_reader/core/services/http_client.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/utils/ttf_parser.dart';
 
 /// AnalyzeRule 的腳本執行與異步擴展 (原 Android AnalyzeRule.kt & JsExtensions.kt)
 extension AnalyzeRuleScript on AnalyzeRuleBase {

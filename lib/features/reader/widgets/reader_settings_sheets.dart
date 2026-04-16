@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 import 'settings/interface_setting_sheet.dart';
 import 'settings/advanced_setting_sheet.dart';
 

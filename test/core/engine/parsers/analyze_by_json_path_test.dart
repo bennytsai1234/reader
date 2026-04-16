@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/engine/parsers/analyze_by_json_path.dart';
+import 'package:inkpage_reader/core/engine/parsers/analyze_by_json_path.dart';
 
 void main() {
   group('AnalyzeByJsonPath Tests', () {

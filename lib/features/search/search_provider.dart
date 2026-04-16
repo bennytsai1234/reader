@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/database/dao/search_keyword_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/search_book.dart';
-import 'package:legado_reader/core/models/search_keyword.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/database/dao/search_keyword_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/models/search_keyword.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models/search_scope.dart';
 import 'search_model.dart';

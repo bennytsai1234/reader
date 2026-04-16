@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'package:legado_reader/core/services/app_log_service.dart';
-import 'package:legado_reader/core/engine/analyze_rule.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/source/explore_kind.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/engine/analyze_rule.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/source/explore_kind.dart';
 
 /// ExploreUrlParser - 發現規則解析器 (對標 Android BookSource.getExploreKinds)
 class ExploreUrlParser {

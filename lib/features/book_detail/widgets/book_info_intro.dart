@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book.dart';
 
 class BookInfoIntro extends StatelessWidget {
   final Book book;

@@ -2,10 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
 
-import 'package:legado_reader/core/services/book_source_service.dart';
+import 'package:inkpage_reader/core/services/book_source_service.dart';
 import 'widgets/manga/manga_image_view.dart';
 import 'widgets/manga/manga_top_bar.dart';
 import 'widgets/manga/manga_bottom_controls.dart';

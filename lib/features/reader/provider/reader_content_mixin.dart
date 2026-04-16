@@ -1,19 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
-import 'package:legado_reader/core/constant/page_anim.dart';
-import 'package:legado_reader/features/reader/engine/chapter_content_manager.dart';
-import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
-import 'package:legado_reader/features/reader/engine/reader_chapter_content_loader.dart';
-import 'package:legado_reader/features/reader/engine/reader_perf_trace.dart';
-import 'package:legado_reader/features/reader/engine/text_page.dart';
-import 'package:legado_reader/features/reader/provider/slide_window.dart';
-import 'package:legado_reader/features/reader/provider/content_callbacks.dart';
-import 'package:legado_reader/features/reader/runtime/reader_content_coordinator.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
-import 'package:legado_reader/features/reader/runtime/reader_position_resolver.dart';
-import 'package:legado_reader/shared/theme/app_theme.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_content_manager.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/reader_chapter_content_loader.dart';
+import 'package:inkpage_reader/features/reader/engine/reader_perf_trace.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/provider/slide_window.dart';
+import 'package:inkpage_reader/features/reader/provider/content_callbacks.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_content_coordinator.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_position_resolver.dart';
+import 'package:inkpage_reader/shared/theme/app_theme.dart';
 
 import 'reader_provider_base.dart';
 import 'reader_settings_mixin.dart';

@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:legado_reader/core/services/network_service.dart';
+import 'package:inkpage_reader/core/services/network_service.dart';
 
 /// HttpHelper - 網路請求門面 (對標 Android HttpHelper.kt)
 class HttpHelper {

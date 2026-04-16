@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/local_book/epub_parser.dart';
+import 'package:inkpage_reader/core/local_book/epub_parser.dart';
 
 // XML 特殊字元轉義，防止書名/作者直接插入 XML 時破壞結構
 String _escapeXml(String s) => s

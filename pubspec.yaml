@@ -1,5 +1,5 @@
-name: legado_reader
-description: "An iOS novel reader inspired by Legado"
+name: inkpage_reader
+description: "墨頁 Inkpage - a Flutter novel reader inspired by Legado"
 publish_to: 'none'
 version: 0.2.1+16
 

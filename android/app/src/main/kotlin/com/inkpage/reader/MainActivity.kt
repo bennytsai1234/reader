@@ -1,4 +1,4 @@
-package com.legado.legado_reader
+package com.inkpage.reader
 
 import android.content.ComponentName
 import android.content.pm.PackageManager
@@ -8,7 +8,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceActivity() {
-    private val CHANNEL = "com.legado.reader/launcher_icon"
+    private val CHANNEL = "com.inkpage.reader/launcher_icon"
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

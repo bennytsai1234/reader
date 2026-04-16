@@ -5,7 +5,7 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:synchronized/synchronized.dart';
-import 'package:legado_reader/core/network/interceptors/app_interceptor.dart';
+import 'package:inkpage_reader/core/network/interceptors/app_interceptor.dart';
 
 /// NetworkService - 專業網路伺服 (具備反爬蟲對應能力)
 /// 封裝全域 Dio 實例並支持 Cookie 持久化與書源併發控制

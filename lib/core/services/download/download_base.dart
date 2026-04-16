@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/models/download_task.dart';
-import 'package:legado_reader/core/database/dao/book_dao.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
-import 'package:legado_reader/core/database/dao/download_dao.dart';
+import 'package:inkpage_reader/core/models/download_task.dart';
+import 'package:inkpage_reader/core/database/dao/book_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/database/dao/download_dao.dart';
 import '../book_source_service.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 
 /// DownloadService 的基礎狀態與 DAO 定義
 abstract class DownloadBase extends ChangeNotifier {

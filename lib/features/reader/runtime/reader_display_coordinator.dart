@@ -1,8 +1,8 @@
-import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
-import 'package:legado_reader/features/reader/engine/text_page.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_chapter.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
-import 'package:legado_reader/features/reader/runtime/reader_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_position_resolver.dart';
 
 class ReaderDisplayInstruction {
   final ReaderLocation location;

@@ -1,7 +1,7 @@
 import 'package:flutter/scheduler.dart';
-import 'package:legado_reader/core/constant/page_anim.dart';
-import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 
 class ScrollAutoPageDriver {
   ScrollAutoPageDriver({

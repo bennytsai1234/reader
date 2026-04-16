@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
 import '../book.dart';
 
 /// Book 業務邏輯擴展

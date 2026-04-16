@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
-import 'package:legado_reader/core/constant/app_pattern.dart';
-import 'package:legado_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/constant/app_pattern.dart';
+import 'package:inkpage_reader/core/models/book.dart';
 
 /// BookHelp - 輔助書籍處理工具 (對標 Android help/book/BookHelp.kt)
 class BookHelp {

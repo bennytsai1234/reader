@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:legado_reader/core/services/update_service.dart';
+import 'package:inkpage_reader/core/services/update_service.dart';
 import 'app_log_page.dart';
 import 'crash_log_page.dart';
 import 'read_record_page.dart';
@@ -59,7 +59,7 @@ class _AboutPageState extends State<AboutPage> {
             subtitle: '查看第三方庫協議',
             onTap: () => showLicensePage(
               context: context,
-              applicationName: '保安專用閱讀器',
+              applicationName: '墨頁 Inkpage',
               applicationVersion: '$_version ($_buildNumber)',
             ),
           ),
@@ -119,7 +119,7 @@ class _AboutPageState extends State<AboutPage> {
             child: Icon(Icons.library_books_rounded, size: 48, color: Theme.of(context).colorScheme.primary),
           ),
           const SizedBox(height: 16),
-          const Text('保安專用閱讀器', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text('墨頁 Inkpage', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           Text('v$_version', style: const TextStyle(color: Colors.grey, fontSize: 14)),
         ],

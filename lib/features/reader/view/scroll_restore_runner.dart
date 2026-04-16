@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 
 class ScrollRestoreRunner {
   const ScrollRestoreRunner();

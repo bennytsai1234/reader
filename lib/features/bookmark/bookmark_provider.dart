@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/database/dao/bookmark_dao.dart';
-import 'package:legado_reader/core/database/dao/book_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/models/bookmark.dart';
-import 'package:legado_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/database/dao/bookmark_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/bookmark.dart';
+import 'package:inkpage_reader/core/models/book.dart';
 
 class BookmarkProvider extends ChangeNotifier {
   final BookmarkDao _dao = getIt<BookmarkDao>();

@@ -1,9 +1,9 @@
-import 'package:legado_reader/core/base/base_provider.dart';
-import 'package:legado_reader/core/engine/analyze_url.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/services/cookie_store.dart';
+import 'package:inkpage_reader/core/base/base_provider.dart';
+import 'package:inkpage_reader/core/engine/analyze_url.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/services/cookie_store.dart';
 import 'browser_params.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 
 class BrowserProvider extends BaseProvider {
   final BrowserParams params;

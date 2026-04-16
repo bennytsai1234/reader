@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/engine/js/async_js_rewriter.dart';
+import 'package:inkpage_reader/core/engine/js/async_js_rewriter.dart';
 
 void main() {
   group('AsyncJsRewriter.rewrite', () {

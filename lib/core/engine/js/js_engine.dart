@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_js/flutter_js.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'async_js_rewriter.dart';
 import 'js_extensions.dart';
 import 'js_rule_async_wrapper.dart';

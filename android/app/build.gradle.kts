@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.legado.legado_reader"
+    namespace = "com.inkpage.reader"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.legado.legado_reader"
+        applicationId = "com.inkpage.reader"
         minSdk = 24
         targetSdk = 36
         versionCode = flutter.versionCode

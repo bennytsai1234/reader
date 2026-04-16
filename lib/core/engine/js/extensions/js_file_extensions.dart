@@ -4,11 +4,11 @@ import 'package:path/path.dart' as p;
 import 'package:archive/archive.dart';
 import 'package:fast_gbk/fast_gbk.dart';
 import 'dart:convert';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import '../js_extensions_base.dart';
 import '../js_encode_utils.dart';
-import 'package:legado_reader/core/services/http_client.dart';
-import 'package:legado_reader/core/services/encoding_detect.dart';
+import 'package:inkpage_reader/core/services/http_client.dart';
+import 'package:inkpage_reader/core/services/encoding_detect.dart';
 
 /// JsExtensions 的文件 IO 與壓縮處理擴展
 ///

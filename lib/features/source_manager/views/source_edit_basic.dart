@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
 
 class SourceEditBasic extends StatelessWidget {
   final BookSource source;

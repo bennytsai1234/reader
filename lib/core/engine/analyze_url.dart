@@ -1,17 +1,17 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:dio/dio.dart';
 import 'package:fast_gbk/fast_gbk.dart';
-import 'package:legado_reader/core/models/base_source.dart';
-import 'package:legado_reader/core/engine/analyze_rule.dart';
-import 'package:legado_reader/core/services/http_client.dart';
-import 'package:legado_reader/core/services/rate_limiter.dart';
-import 'package:legado_reader/core/services/encoding_detect.dart';
-import 'package:legado_reader/core/services/cookie_store.dart';
-import 'package:legado_reader/core/engine/web_book/headless_webview_service.dart';
-import 'package:legado_reader/core/network/str_response.dart';
+import 'package:inkpage_reader/core/models/base_source.dart';
+import 'package:inkpage_reader/core/engine/analyze_rule.dart';
+import 'package:inkpage_reader/core/services/http_client.dart';
+import 'package:inkpage_reader/core/services/rate_limiter.dart';
+import 'package:inkpage_reader/core/services/encoding_detect.dart';
+import 'package:inkpage_reader/core/services/cookie_store.dart';
+import 'package:inkpage_reader/core/engine/web_book/headless_webview_service.dart';
+import 'package:inkpage_reader/core/network/str_response.dart';
 
 /// AnalyzeUrl - URL 規則解析與請求建構 (原 Android AnalyzeUrl.kt)
 class AnalyzeUrl {

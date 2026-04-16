@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/constant/page_anim.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_location.dart';
-import 'package:legado_reader/features/reader/runtime/reader_progress_coordinator.dart';
-import 'package:legado_reader/features/reader/runtime/reader_progress_store.dart';
+import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_progress_coordinator.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_progress_store.dart';
 
 Book _makeBook() => Book(
       bookUrl: 'http://test.com/book',

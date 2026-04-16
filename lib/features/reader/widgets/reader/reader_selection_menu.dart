@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../reader_provider.dart';
-import 'package:legado_reader/features/search/search_page.dart';
+import 'package:inkpage_reader/features/search/search_page.dart';
 
 /// ReaderSelectionMenu - 閱讀器自定義文字選中選單 (對標 Android popup_action_menu.xml)
 class ReaderSelectionMenu extends StatelessWidget {

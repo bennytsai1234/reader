@@ -1,6 +1,6 @@
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/database/dao/cookie_dao.dart';
-import 'package:legado_reader/core/models/cookie.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/database/dao/cookie_dao.dart';
+import 'package:inkpage_reader/core/models/cookie.dart';
 
 /// CookieStore - Cookie 管理服務
 /// (原 Android help/http/CookieStore.kt)

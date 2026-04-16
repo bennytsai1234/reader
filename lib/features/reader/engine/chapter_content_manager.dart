@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'text_page.dart';
 import 'chapter_provider.dart';
 import 'reader_perf_trace.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 
 /// 分頁設定值物件，傳遞給 ChapterProvider.paginate()
 class PaginationConfig {

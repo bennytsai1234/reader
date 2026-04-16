@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/database/dao/source_subscription_dao.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/source_subscription.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/utils/logger.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/database/dao/source_subscription_dao.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/source_subscription.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/utils/logger.dart';
 
 class SourceUpdateService {
   final BookSourceDao _sourceDao = getIt<BookSourceDao>();

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:legado_reader/core/services/network_service.dart';
+import 'package:inkpage_reader/core/services/network_service.dart';
 
 /// HttpClient - 全域 HTTP 客戶端 (專業升級版)
 /// 整合 NetworkService 以支援持久化 Cookie 與反爬蟲攔截

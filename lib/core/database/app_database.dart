@@ -138,7 +138,7 @@ class AppDatabase extends _$AppDatabase {
 
   static Future<String> getDatabasePath() async {
     final appSupportDir = await getApplicationSupportDirectory();
-    return p.join(appSupportDir.path, 'databases', 'legado_reader.db');
+    return p.join(appSupportDir.path, 'databases', 'inkpage_reader.db');
   }
 }
 
@@ -149,7 +149,7 @@ LazyDatabase _openConnection() {
     if (!dbDir.existsSync()) {
       dbDir.createSync(recursive: true);
     }
-    final file = File(p.join(dbDir.path, 'legado_reader.db'));
+    final file = File(p.join(dbDir.path, 'inkpage_reader.db'));
     return NativeDatabase.createInBackground(file);
   });
 }

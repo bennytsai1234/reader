@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/models/read_record.dart';
-import 'package:legado_reader/core/database/dao/read_record_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/read_record.dart';
+import 'package:inkpage_reader/core/database/dao/read_record_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 
 class ReadRecordProvider extends ChangeNotifier {
   final ReadRecordDao _dao = getIt<ReadRecordDao>();

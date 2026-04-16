@@ -1,104 +1,74 @@
-# Reader Architecture (Current)
+# 閱讀器架構（現況）
 
-更新日期：2026-04-02
+更新日期：2026-04-16
 
-本文只描述目前 `lib/features/reader` 已經落地的閱讀器架構，不再沿用舊版 mixin 時代或早期對照稿的說法。
+本文只描述 `lib/features/reader` 目前已落地的閱讀器架構，不沿用舊版 mixin 時代或早期對照稿的說法。
 
 ## 一句話結論
 
-目前閱讀器已經形成一個以 `ReadBookController` 為中心的 runtime 內核：
+閱讀器已形成以 `ReadBookController` 為中心的 runtime 內核：
 
-- 核心層：navigation、restore、progress、chapter runtime
-- 協調層：content lifecycle、read aloud、auto page、visible tracking
-- 視圖層：scroll / slide delegate、scroll execution、restore execution
+- **核心層**：navigation、restore、progress、session、chapter runtime
+- **協調層**：content lifecycle、read aloud、auto page、visible tracking
+- **視圖層**：scroll / slide delegate、scroll execution、restore execution
 
-雖然 `ReaderContentMixin`、`ReaderProgressMixin`、`ReaderSettingsMixin`、`ReaderAutoPageMixin` 仍存在，但真正的控制權已大幅回收到 controller、coordinator 與 store。
+`ReaderContentMixin` / `ReaderSettingsMixin` / `ReaderAutoPageMixin` 仍是 mixin 鏈的一部分，但真正的控制權已回收到 controller、coordinator 與 store。
 
 ## 主控與真源
 
-主控在 `lib/features/reader/runtime/read_book_controller.dart`。
+主控：`lib/features/reader/runtime/read_book_controller.dart`。
 
-它負責：
+職責：
 
-- 閱讀生命週期：`loading -> restoring -> ready`
+- 閱讀生命週期（`loading → ready`）
 - 目前閱讀位置與可見位置
 - 章節 runtime 快取
 - 對外 jump / persist / TTS 命令入口
 
-目前閱讀進度的持久化真源仍是 `Book` 上的：
+閱讀進度持久化真源仍是 `Book` 上的：
 
 - `book.durChapterIndex`
 - `book.durChapterPos`
 
 `pageIndex` 與 `localOffset` 只是 runtime / display 投影，最後都要收斂回章內 char offset。
 
-## 已拆出的子域
+## Mixin 鏈
 
-`ReadBookController` 內部已把幾塊高耦合責任拆成子域物件：
+```
+ReaderProviderBase
+  → ReaderSettingsMixin
+  → ReaderContentMixin
+  → ReaderAutoPageMixin
+  → ReadBookController (with WidgetsBindingObserver)
+```
 
-- `reader_navigation_controller.dart`
-  管 jump reason、command guard、page change reason 與 auto-page step 決策
-- `reader_restore_coordinator.dart`
-  管 pending restore token / target 的建立、消費與清除
-- `reader_progress_store.dart`
-  管 durable progress 回寫與 `book.durChapter*` 同步
-- `reader_scroll_visibility_coordinator.dart`
-  管 scroll visible chapter 去重、補載與 preload 中心判定
-- `reader_tts_follow_coordinator.dart`
-  管 TTS follow safe-zone 與 follow target 決策
+`ReaderProviderBase` 提供 `batchUpdate` 與 `notifyListeners` override。
+
+## Coordinator 子域
+
+`ReadBookController` 內部拆出的子域物件：
+
+- `ReaderNavigationController` — jump reason、command guard、page change reason、auto-page step 決策
+- `ReaderRestoreCoordinator` — pending restore token / target 建立、消費、清除
+- `ReaderProgressStore` — durable progress 回寫與 `book.durChapter*` 同步
+- `ReaderProgressCoordinator` — 閱讀進度更新（含 debounce）
+- `ReaderScrollVisibilityCoordinator` — scroll visible chapter 去重、補載、preload 中心判定
+- `ReaderTtsFollowCoordinator` — TTS follow safe-zone、follow target 決策
+- `ReaderSessionCoordinator` — session 狀態（`ReaderSessionState`）與 lifecycle 協調
+- `ReaderDisplayCoordinator` — 顯示資訊投影
+- `ReaderContentCoordinator` — 內容載入協調
+- `ReadViewRuntimeCoordinator` — view runtime 橋接
 
 這代表 restore、save、visible preload、TTS follow 已不再主要由 view 層自行判斷。
 
-## 內容生命週期
+## 章節 Runtime
 
-內容鏈主入口仍由 `ReaderContentMixin` 提供，但語義已經轉成「讓 controller 觸發 manager 與 runtime 流程」。
+核心物件：`lib/features/reader/runtime/models/reader_chapter.dart` 的 `ReaderChapter`。
 
-主流程大致是：
+承擔整個章內定位語義：
 
-1. `ReadBookController._init()`
-2. `initContentManager()`
-3. `loadChapterWithPreloadRadius(...)`
-4. `ChapterContentManager.ensureChapterReady(...)`
-5. `_fetchChapterData(...)`
-6. `ContentProcessor.process(...)`
-7. `ChapterProvider.paginate(...)` 或 progressive paginate
-8. 更新 `chapterPagesCache`
-9. `refreshChapterRuntime(index)`
-
-內容來源仍分三路：
-
-- 本地書：`LocalBookService`
-- 網路書：`BookSourceService`
-- 快取：`ChapterDao` + cache manager
-
-## `ChapterContentManager` 的角色
-
-`chapter_content_manager.dart` 現在不是單純的 queue 管理器，而是章節生命週期服務。
-
-它實際承擔：
-
-- 正文抓取協調
-- 主動載入與靜默預載去重
-- 分頁快取與 progressive paginate
-- preload queue / priority
-- 視窗外內容驅逐
-
-目前比較有語意的外部 API 是：
-
-- `ensureChapterReady(...)`
-- `warmChaptersAround(...)`
-- `repaginateVisibleWindow(...)`
-- `prioritize(...)`
-- `evictOutside(...)`
-
-## `ReaderChapter` 的地位
-
-`lib/features/reader/runtime/models/reader_chapter.dart` 是整個閱讀器最關鍵的 runtime 物件。
-
-它現在承擔的不只是 page 容器，而是整個章內定位語義，包括：
-
-- `charOffset <-> localOffset`
-- `charOffset <-> pageIndex`
+- `charOffset ↔ localOffset`
+- `charOffset ↔ pageIndex`
 - highlight range
 - restore target
 - scroll anchor
@@ -106,150 +76,159 @@
 - paragraph / line query
 - read aloud data 組裝
 
-這件事很重要，因為 restore、scroll follow、TTS、auto page 開始共用同一套章內語義，而不是各自掃 page 做定位。
+restore、scroll follow、TTS、auto-page 共用同一套章內語義，而不是各自掃 page 做定位。
+
+## 內容生命週期
+
+`ChapterContentManager`（`engine/chapter_content_manager.dart`）是章節生命週期服務，實際承擔：
+
+- 正文抓取協調
+- 主動載入與靜默預載去重
+- 分頁快取與 progressive paginate
+- preload queue / priority
+- 視窗內外驅逐
+
+主要外部 API：
+
+- `ensureChapterReady(...)`
+- `warmChaptersAround(...)`
+- `repaginateVisibleWindow(...)`
+- `prioritize(...)`
+- `evictOutside(...)`
+
+內容來源三路：
+
+- 本地書：`LocalBookService`
+- 網路書：`BookSourceService`（含 charset 偵測）
+- 快取：`ChapterDao` + cache manager
+
+典型主流程：
+
+```
+ReadBookController._init()
+  → initContentManager()
+  → loadChapterWithPreloadRadius()
+  → ChapterContentManager.ensureChapterReady()
+  → _fetchChapterData()
+  → ContentProcessor.process()
+  → ChapterProvider.paginate() 或 progressive paginate
+  → 更新 chapterPagesCache
+  → refreshChapterRuntime(index)
+```
 
 ## Restore 與 Progress
 
-`ReaderProgressMixin` 仍存在，但定位已下降為轉譯與接線層。現在它主要做三件事：
+`ReaderContentMixin` / `ReaderProgressCoordinator` 是轉譯與接線層：
 
 - 把 visible scroll position 轉成 char offset
 - 把 restore target 轉成 jump 語意
 - 把保存動作導回 `ReaderProgressStore`
 
-目前 restore 鏈是：
+Restore 鏈：
 
-- target 狀態：`ReaderRestoreCoordinator`
-- jump 語意：`ReaderNavigationController`
-- 章內定位：`ReaderChapter.resolveRestoreTarget(...)`
-- scroll retry：`ScrollRestoreRunner`
-- 完成切換：`ReadBookController.completeRestoreTransition()`
-
-這套鏈條相較早期版本已明顯清楚得多。
+```
+Target 狀態      ReaderRestoreCoordinator
+  ↓
+Jump 語意        ReaderNavigationController
+  ↓
+章內定位          ReaderChapter.resolveRestoreTarget()
+  ↓
+Scroll retry     ScrollRestoreRunner
+  ↓
+完成切換          ReadBookController.completeRestoreTransition()
+```
 
 ## View Runtime 與 Delegate
 
-外層視圖主入口在 `lib/features/reader/view/read_view_runtime.dart`。
+外層視圖主入口：`lib/features/reader/view/read_view_runtime.dart`。
 
-它目前主要負責：
+職責：
 
-- 接收 controller/provider 狀態
-- 建立 scroll 或 slide delegate
+- 接收 controller / provider 狀態
+- 建立 scroll / slide delegate
 - 執行 restore / jump / TTS follow
 - 接收 raw visible positions
 - 啟動 scroll auto-page ticker
 
-相關細節已拆出到：
+細節拆出：
 
-- `scroll_execution_adapter.dart`
-  負責 scroll pixel、ensureVisible、anchor 執行
-- `scroll_restore_runner.dart`
-  負責 scroll restore retry、reload 與完成判定
-- `delegate/scroll_mode_delegate.dart`
-  負責 scroll 模式渲染
-- `delegate/slide_mode_delegate.dart`
-  負責 slide 模式渲染
+- `scroll_execution_adapter.dart` — scroll pixel、ensureVisible、anchor 執行
+- `scroll_restore_runner.dart` — scroll restore retry、reload、完成判定
+- `scroll_runtime_executor.dart` — scroll runtime 指令執行
+- `scroll_auto_page_driver.dart` — scroll 自動翻頁驅動
+- `delegate/page_mode_delegate.dart` — 平移翻頁模式（`PageAnim.slide`）
+- `delegate/scroll_mode_delegate.dart` — 捲動模式（`PageAnim.scroll`）
+- `slide_page_controller.dart` — 平移模式底層的 `PageView` 管理器（用 `SlideWindow`/`SlideSegment`，`PageController(initialPage:)` 重建替代延遲 jumpToPage）
+
+使用者可選的翻頁模式僅兩種：**平移**與**捲動**。`PageAnim` 類別另保留 `simulation` / `none` 常數僅作為 Legado 設定匯入相容性，不對應實際實作。
 
 ## Read Aloud / TTS
 
-`read_aloud_controller.dart` 是朗讀流程主控。
-
-它目前負責：
+`read_aloud_controller.dart` — 朗讀主控，負責：
 
 - 建立 read aloud session
 - TTS offset map
-- 朗讀進度到章內 offset 的映射
+- 朗讀進度到章內 offset 映射
 - highlight 同步
 - next / prev page 或章節跳轉
 - 預抓下一章朗讀資料
 
-它已經大量依賴 `ReaderChapter` 來完成：
+大量依賴 `ReaderChapter` 來取 highlight 範圍、page start offset、scroll anchor、read aloud data。
 
-- highlight 範圍
-- page start offset
-- scroll anchor
-- read aloud data 組裝
-
-底層播放仍由 `lib/core/services/tts_service.dart` 提供。
+底層播放由 `lib/core/services/tts_service.dart` 提供，`TTSService` 為全域單例，在 `main()` 初始化，與 `audio_service` 整合提供系統通知欄控制。
 
 ## Auto Page
 
-`ReaderAutoPageMixin` 仍負責啟停與速度控制，但核心 timer / state 已交給 `reader_auto_page_coordinator.dart`。
-
-目前差異是：
+`ReaderAutoPageMixin` 負責啟停與速度控制，核心 timer / state 交給 `reader_auto_page_coordinator.dart`。
 
 - `slide` 模式偏 page-based
 - `scroll` 模式仍由 `ReadViewRuntime` ticker 驅動
-- 下一步 target 則由 `ReaderNavigationController.evaluateScrollAutoPageStep(...)` 決定
+- 下一步 target 由 `ReaderNavigationController.evaluateScrollAutoPageStep()` 決定
 
-也就是說，auto page 的決策已較集中，但 scroll 模式的執行仍帶有 view 層責任。
+## 優點
 
-## 目前架構的優點
-
-- 核心狀態真源比過去清楚
-- 章內語義開始統一
+- 核心狀態真源清楚
+- 章內語義統一
 - restore / progress / TTS / visible tracking 不再四散
-- 已有實質 runtime 測試保護主流程
+- 有實質 runtime 測試保護主流程
 
-## 2026-04-02 Lifecycle Refactor 落地總結
+## 仍存在的限制
 
-以下項目已在 lifecycle refactor 中完成：
-
-- `ReaderLifecycle` 簡化為 `loading → ready → disposed`（移除 `restoring`）
-- `batchUpdate` 與 `notifyListeners` override 加入 `ReaderProviderBase`
-- `SlideWindow` / `SlideSegment` 取代舊的 flat page merge
-- `ContentCallbacks` 消滅所有 `(this as dynamic)` cast
-- `SlidePageController` 封裝 PageView jump dedup/debounce
-- Slide mode Bug 1 修復：`_handleChapterReady` slide 分支補 `notifyListeners`
-- Slide mode Bug 2 修復：`consumeControllerReset` 機制，重建 `PageController(initialPage:)` 替代延遲 `jumpToPage`
-
-## 目前仍存在的限制
-
-- mixin 時代遺留介面尚未完全退出（`ReaderContentMixin`、`ReaderProgressMixin` 仍有部分歷史責任）
+- mixin 時代遺留介面尚未完全退出
 - scroll 模式的 auto-page ticker 仍在 `ReadViewRuntime` 層
 - `ChapterContentManager.targetWindow` 尚未完全收回內部細節
-- `ReadBookController / ReadAloudController` full integration test 仍可補深
+- `ReadBookController` 本身仍偏大
 
-## 測試現況
+## 測試保護
 
-目前已經有一批直接保護閱讀器 runtime 的測試，包括：
+目前覆蓋閱讀器 runtime 的測試（`test/features/reader/`）：
 
-- `chapter_content_manager_test.dart`
-- `chapter_content_manager_lifecycle_test.dart`
-- `reader_command_guard_test.dart`
+- `read_book_controller_test.dart`
+- `read_aloud_controller_test.dart`
+- `read_view_runtime_coordinator_test.dart`
 - `reader_navigation_controller_test.dart`
+- `reader_command_guard_test.dart`
 - `reader_restore_coordinator_test.dart`
+- `reader_progress_coordinator_test.dart`
 - `reader_progress_store_test.dart`
+- `reader_position_resolver_test.dart`
+- `reader_session_coordinator_test.dart`
+- `reader_display_coordinator_test.dart`
 - `reader_scroll_visibility_coordinator_test.dart`
 - `reader_tts_follow_coordinator_test.dart`
 - `reader_runtime_flow_test.dart`
 - `reader_chapter_runtime_test.dart`
+- `chapter_content_manager_test.dart`
+- `chapter_content_manager_lifecycle_test.dart`
 - `chapter_position_resolver_test.dart`
 - `chapter_provider_test.dart`
+- `slide_page_controller_test.dart`
+- `text_page_test.dart`
+- `text_page_serialization_test.dart`
+- `page_anim_test.dart`
 
-這代表目前閱讀器已經可以透過測試而不是純手測來維持演進。
-- `restore ready`
-- `tts speak`
-- `tts prefetched next chapter`
-- `tts chapter handoff nextChapter`
-- `tts handoff speak`
-- content fetch / process / paginate
+這代表目前閱讀器可以透過測試而非純手測來維持演進。
 
-目前已具備初步的性能定位能力，但還不是完整 telemetry。
+## 總結
 
-## 13. 仍未完全解決的點
-
-目前仍需要持續優化的，不是「主鏈不存在」，而是以下幾點：
-
-- `ReadBookController` 仍然偏大
-- `ReaderContentMixin` / `ReaderProgressMixin` 仍有部分歷史責任
-- `ReadViewRuntime` 還保留 scroll auto-page ticker 與部分 orchestration
-- `ChapterContentManager.targetWindow` 仍未完全退回內部細節
-- `ReadBookController / ReadAloudController` 的 full integration test 仍可再補深
-
-## 14. 總結
-
-目前閱讀器模組的真實狀態是：
-
-它已經從「多個 mixin + widget 邏輯拼裝」進化成「有 controller 內核、有 chapter runtime、有 coordinator/store、有 lifecycle-oriented content manager」的閱讀 runtime。
-
-這是目前整個專案裡最接近穩定內核的一塊。
+閱讀器從「多個 mixin + widget 邏輯拼裝」進化成「有 controller 內核、有 chapter runtime、有 coordinator/store、有 lifecycle-oriented content manager」的閱讀 runtime。這是目前整個專案裡最接近穩定內核的一塊。

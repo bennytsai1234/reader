@@ -7,8 +7,8 @@ import 'extensions/js_file_extensions.dart';
 import 'extensions/js_font_extensions.dart';
 import 'extensions/js_java_object.dart';
 import 'js_encode_utils.dart';
-import 'package:legado_reader/core/services/http_client.dart';
-import 'package:legado_reader/core/services/cookie_store.dart';
+import 'package:inkpage_reader/core/services/http_client.dart';
+import 'package:inkpage_reader/core/services/cookie_store.dart';
 
 export 'js_extensions_base.dart';
 export 'extensions/js_network_extensions.dart';

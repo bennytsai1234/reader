@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/services/tts_service.dart';
-import 'package:legado_reader/features/reader/engine/reader_perf_trace.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_chapter.dart';
+import 'package:inkpage_reader/core/services/tts_service.dart';
+import 'package:inkpage_reader/features/reader/engine/reader_perf_trace.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
 
 enum ReadAloudState { idle, speaking, paused, transitioning }
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/models/search_book.dart';
-import 'package:legado_reader/core/widgets/book_cover_widget.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/widgets/book_cover_widget.dart';
 import '../../book_detail/book_detail_page.dart';
 
 class SearchResultItem extends StatefulWidget {

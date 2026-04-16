@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/engine/rule_analyzer.dart';
+import 'package:inkpage_reader/core/engine/rule_analyzer.dart';
 
 void main() {
   group('RuleAnalyzer Tests', () {

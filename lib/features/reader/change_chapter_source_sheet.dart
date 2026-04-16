@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
 import 'provider/change_source_provider.dart';
 import 'widgets/change_source_filter_bar.dart';
 import 'widgets/change_source_item.dart';

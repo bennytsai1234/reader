@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/engine/parsers/analyze_by_regex.dart';
+import 'package:inkpage_reader/core/engine/parsers/analyze_by_regex.dart';
 
 void main() {
   group('AnalyzeByRegex Tests', () {

@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/chapter.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 
 class ReaderProgressStore {
   int _lastSavedCharOffset = -1;

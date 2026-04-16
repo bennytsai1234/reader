@@ -1,7 +1,7 @@
-import 'package:legado_reader/core/constant/page_anim.dart';
-import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_viewport_state.dart';
+import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_viewport_state.dart';
 
 typedef PendingScrollAction =
     ({

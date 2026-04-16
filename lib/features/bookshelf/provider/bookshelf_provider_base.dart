@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/database/dao/book_dao.dart';
-import 'package:legado_reader/core/database/dao/book_group_dao.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/database/dao/chapter_dao.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/book_group.dart';
-import 'package:legado_reader/core/services/book_source_service.dart';
-import 'package:legado_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/database/dao/book_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_group_dao.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book_group.dart';
+import 'package:inkpage_reader/core/services/book_source_service.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 
 /// BookshelfProvider 的基礎狀態與 DAO 定義
 abstract class BookshelfProviderBase extends ChangeNotifier {

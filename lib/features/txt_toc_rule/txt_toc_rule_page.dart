@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'txt_toc_rule_provider.dart';
-import 'package:legado_reader/core/models/txt_toc_rule.dart';
+import 'package:inkpage_reader/core/models/txt_toc_rule.dart';
 
 class TxtTocRulePage extends StatelessWidget {
   const TxtTocRulePage({super.key});

@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
-import 'package:legado_reader/features/reader/engine/chapter_position_resolver.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
-import 'package:legado_reader/features/reader/view/scroll_execution_adapter.dart';
-import 'package:legado_reader/features/reader/view/scroll_restore_runner.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/view/scroll_execution_adapter.dart';
+import 'package:inkpage_reader/features/reader/view/scroll_restore_runner.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class ScrollRuntimeExecutor {

@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:legado_reader/core/database/dao/book_source_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/models/book_source_part.dart';
-import 'package:legado_reader/core/storage/app_storage_paths.dart';
-import 'package:legado_reader/core/services/network_service.dart';
-import 'package:legado_reader/core/services/check_source_service.dart';
+import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/book_source_part.dart';
+import 'package:inkpage_reader/core/storage/app_storage_paths.dart';
+import 'package:inkpage_reader/core/services/network_service.dart';
+import 'package:inkpage_reader/core/services/check_source_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'widgets/import_preview_dialog.dart';
 

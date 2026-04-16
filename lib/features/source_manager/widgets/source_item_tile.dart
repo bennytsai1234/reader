@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../source_manager_provider.dart';
-import 'package:legado_reader/core/models/book_source_part.dart';
+import 'package:inkpage_reader/core/models/book_source_part.dart';
 
 /// 書源列表項 — 對標 legado item_book_source
 /// 始終顯示 checkbox，點擊 checkbox 切換選取，點擊行本身編輯。

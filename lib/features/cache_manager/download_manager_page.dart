@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/core/services/download_service.dart';
-import 'package:legado_reader/core/models/download_task.dart';
+import 'package:inkpage_reader/core/services/download_service.dart';
+import 'package:inkpage_reader/core/models/download_task.dart';
 
 /// DownloadManagerPage - 全域下載管理頁面
 /// (原 Android ui/book/cache/CacheActivity.kt)

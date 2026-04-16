@@ -4,7 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'source_manager_provider.dart';
-import 'package:legado_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
 
 class ExploreSourcesPage extends StatefulWidget {
   const ExploreSourcesPage({super.key});

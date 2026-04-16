@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:legado_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book.dart';
 import '../book_detail_provider.dart';
 
 class BookInfoHeader extends StatelessWidget {

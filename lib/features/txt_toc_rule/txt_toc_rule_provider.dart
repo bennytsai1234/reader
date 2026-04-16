@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/database/dao/txt_toc_rule_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/models/txt_toc_rule.dart';
+import 'package:inkpage_reader/core/database/dao/txt_toc_rule_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/txt_toc_rule.dart';
 
 class TxtTocRuleProvider extends ChangeNotifier {
   final TxtTocRuleDao _dao = getIt<TxtTocRuleDao>();

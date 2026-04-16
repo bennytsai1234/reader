@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/engine/analyze_rule.dart';
-import 'package:legado_reader/core/engine/analyze_url.dart';
-import 'package:legado_reader/core/engine/web_book/chapter_list_parser.dart';
-import 'package:legado_reader/core/engine/web_book/content_parser.dart';
-import 'package:legado_reader/core/engine/web_book/book_info_parser.dart';
-import 'package:legado_reader/core/engine/web_book/book_list_parser.dart';
-import 'package:legado_reader/core/models/book.dart';
-import 'package:legado_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/engine/analyze_rule.dart';
+import 'package:inkpage_reader/core/engine/analyze_url.dart';
+import 'package:inkpage_reader/core/engine/web_book/chapter_list_parser.dart';
+import 'package:inkpage_reader/core/engine/web_book/content_parser.dart';
+import 'package:inkpage_reader/core/engine/web_book/book_info_parser.dart';
+import 'package:inkpage_reader/core/engine/web_book/book_list_parser.dart';
+import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
 import '../../test_helper.dart';
 
 void main() {

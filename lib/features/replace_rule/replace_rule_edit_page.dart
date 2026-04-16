@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/models/replace_rule.dart';
+import 'package:inkpage_reader/core/models/replace_rule.dart';
 import 'widgets/replace_edit_form.dart';
 import 'widgets/replace_edit_options.dart';
 import 'widgets/replace_edit_test_panel.dart';

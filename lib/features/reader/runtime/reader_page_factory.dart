@@ -1,4 +1,4 @@
-import 'package:legado_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 
 import 'models/reader_chapter.dart';
 

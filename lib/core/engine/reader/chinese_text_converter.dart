@@ -1,4 +1,4 @@
-import 'package:legado_reader/core/services/chinese_utils.dart';
+import 'package:inkpage_reader/core/services/chinese_utils.dart';
 
 class ChineseTextConverter {
   const ChineseTextConverter();

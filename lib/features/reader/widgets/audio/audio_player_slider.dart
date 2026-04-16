@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/services/audio_play_service.dart';
+import 'package:inkpage_reader/core/services/audio_play_service.dart';
 import 'audio_player_utils.dart';
 
 class AudioPlayerSlider extends StatelessWidget {

@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:legado_reader/features/settings/settings_provider.dart';
-import 'package:legado_reader/core/services/default_data.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/features/settings/settings_provider.dart';
+import 'package:inkpage_reader/core/services/default_data.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'main_page.dart';
 import '../../main.dart';
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:legado_reader/features/reader/engine/page_view_widget.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/engine/page_view_widget.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 
 class PageModeDelegate {
   const PageModeDelegate();

@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/models/book_group.dart';
-import 'package:legado_reader/core/models/bookmark.dart';
-import 'package:legado_reader/core/models/book_progress.dart';
-import 'package:legado_reader/core/models/read_record.dart';
+import 'package:inkpage_reader/core/models/book_group.dart';
+import 'package:inkpage_reader/core/models/bookmark.dart';
+import 'package:inkpage_reader/core/models/book_progress.dart';
+import 'package:inkpage_reader/core/models/read_record.dart';
 
 void main() {
   group('Book Management Models Tests', () {

@@ -8,6 +8,6 @@ class AppConfig {
   static bool replaceEnableDefault = true;
 
   /// 閱讀器翻頁動畫預設（對應 ReaderSettingsMixin.pageTurnMode）
-  /// 0 = 封面翻頁, 1 = 仿真翻頁, 2 = 滑動, 3 = 滾動
+  /// 0 = 滑動, 1 = 滾動
   static int readerPageAnim = 0;
 }

@@ -2,10 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:legado_reader/core/models/book_source.dart';
-import 'package:legado_reader/core/services/cookie_store.dart';
-import 'package:legado_reader/core/engine/js/js_engine.dart';
-import 'package:legado_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/services/cookie_store.dart';
+import 'package:inkpage_reader/core/engine/js/js_engine.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'dynamic_form_builder.dart';
 
 class SourceLoginPage extends StatefulWidget {

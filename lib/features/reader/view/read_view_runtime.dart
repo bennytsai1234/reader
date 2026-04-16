@@ -1,17 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:legado_reader/core/constant/page_anim.dart';
-import 'package:legado_reader/features/reader/provider/reader_provider_base.dart';
-import 'package:legado_reader/features/reader/reader_provider.dart';
-import 'package:legado_reader/features/reader/runtime/read_view_runtime_coordinator.dart';
-import 'package:legado_reader/features/reader/runtime/models/reader_viewport_state.dart';
-import 'package:legado_reader/features/reader/view/delegate/scroll_mode_delegate.dart';
-import 'package:legado_reader/features/reader/view/delegate/page_mode_delegate.dart';
-import 'package:legado_reader/features/reader/view/scroll_auto_page_driver.dart';
-import 'package:legado_reader/features/reader/view/scroll_execution_adapter.dart';
-import 'package:legado_reader/features/reader/view/scroll_restore_runner.dart';
-import 'package:legado_reader/features/reader/view/scroll_runtime_executor.dart';
+import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/runtime/read_view_runtime_coordinator.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_viewport_state.dart';
+import 'package:inkpage_reader/features/reader/view/delegate/scroll_mode_delegate.dart';
+import 'package:inkpage_reader/features/reader/view/delegate/page_mode_delegate.dart';
+import 'package:inkpage_reader/features/reader/view/scroll_auto_page_driver.dart';
+import 'package:inkpage_reader/features/reader/view/scroll_execution_adapter.dart';
+import 'package:inkpage_reader/features/reader/view/scroll_restore_runner.dart';
+import 'package:inkpage_reader/features/reader/view/scroll_runtime_executor.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class ReadViewRuntime extends StatefulWidget {

@@ -1,7 +1,7 @@
 import 'package:flutter_js/flutter_js.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:legado_reader/core/engine/js/js_extensions.dart';
-import 'package:legado_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/engine/js/js_extensions.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
 
 import '../../../test_helper.dart';
 

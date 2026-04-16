@@ -1,8 +1,8 @@
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/engine/analyze_rule.dart';
-import 'package:legado_reader/core/engine/analyze_url.dart';
-import 'package:legado_reader/core/models/dict_rule.dart';
-import 'package:legado_reader/core/database/dao/dict_rule_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/engine/analyze_rule.dart';
+import 'package:inkpage_reader/core/engine/analyze_url.dart';
+import 'package:inkpage_reader/core/models/dict_rule.dart';
+import 'package:inkpage_reader/core/database/dao/dict_rule_dao.dart';
 
 class DictService {
   final DictRuleDao _dao = getIt<DictRuleDao>();

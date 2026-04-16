@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:legado_reader/core/database/dao/http_tts_dao.dart';
-import 'package:legado_reader/core/di/injection.dart';
-import 'package:legado_reader/core/models/http_tts.dart';
+import 'package:inkpage_reader/core/database/dao/http_tts_dao.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
+import 'package:inkpage_reader/core/models/http_tts.dart';
 
 class HttpTtsProvider extends ChangeNotifier {
   final HttpTtsDao _dao = getIt<HttpTtsDao>();

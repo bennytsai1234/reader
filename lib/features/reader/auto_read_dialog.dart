@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'reader_provider.dart';
 import 'widgets/reader_settings_sheets.dart';
-import 'package:legado_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/core/constant/page_anim.dart';
 
 
 class AutoReadDialog extends StatelessWidget {
