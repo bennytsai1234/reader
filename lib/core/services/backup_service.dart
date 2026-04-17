@@ -16,6 +16,8 @@ import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:inkpage_reader/core/services/app_version.dart';
 import 'package:inkpage_reader/core/storage/app_storage_paths.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:inkpage_reader/core/database/app_database.dart';
+import 'package:inkpage_reader/core/database/dao/download_dao.dart';
 import 'package:inkpage_reader/core/services/app_log_service.dart';
 
 class BackupService {
@@ -23,7 +25,8 @@ class BackupService {
   factory BackupService() => _instance;
   BackupService._internal();
 
-  static const int _schemaVersion = 8;
+  /// 備份檔案的 Schema 版本，應與 [AppDatabase.schemaVersion] 保持一致。
+  int get currentSchemaVersion => AppDatabase().schemaVersion;
 
   /// 執行全量備份並返回 ZIP 檔案路徑
   Future<File?> createBackupZip() async {
@@ -37,7 +40,7 @@ class BackupService {
       final version = await AppVersion.current();
       final manifest = {
         'appVersion': version.versionName,
-        'schemaVersion': _schemaVersion,
+        'schemaVersion': currentSchemaVersion,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
       await File(
@@ -89,6 +92,11 @@ class BackupService {
         backupFolder,
         'httpTts.json',
         await getIt<HttpTtsDao>().getAll(),
+      );
+      await _writeJson(
+        backupFolder,
+        'downloadTask.json',
+        await getIt<DownloadDao>().getAll(),
       );
 
       // 2. 導出偏好設定 (對標 config.xml)
