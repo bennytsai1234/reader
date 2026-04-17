@@ -5,9 +5,6 @@ class BookType {
   /// 16 更新失敗
   static const int updateError = 0x10;
 
-  /// 32 音訊
-  static const int audio = 0x20;
-
   /// 64 圖片
   static const int image = 0x40;
 
@@ -24,19 +21,14 @@ class BookType {
   static const int notShelf = 0x400;
 
   /// 所有可以從書源轉換的書籍類型
-  static const int allBookType = text | image | audio | webFile;
+  static const int allBookType = text | image | webFile;
 
-  static const int allBookTypeLocal = text | image | audio | webFile | local;
+  static const int allBookTypeLocal = text | image | webFile | local;
 
   /// 本地書籍書源標誌
   static const String localTag = 'loc_book';
 
-  /// 書源已webDav::開頭的書籍,可以從webDav更新或重新下載
-  static const String webDavTag = 'webDav::';
-
-  static bool isAudio(int type) => (type & audio) != 0;
   static bool isImage(int type) => (type & image) != 0;
   static bool isLocal(int type) => (type & local) != 0;
   static bool isOnShelf(int type) => (type & notShelf) == 0;
 }
-

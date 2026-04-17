@@ -14,7 +14,6 @@ import 'package:inkpage_reader/features/reader/reader_provider.dart';
 import 'package:inkpage_reader/features/search/search_page.dart';
 
 import 'package:inkpage_reader/features/settings/settings_page.dart';
-import 'package:inkpage_reader/features/reader/audio_player_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'widgets/group_select_dialog.dart';
 
@@ -600,18 +599,12 @@ class _BookshelfPageState extends State<BookshelfPage> {
 
   void _openBook(BuildContext context, Book book) {
     if (book.type == 2) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder:
-              (_) => AudioPlayerPage(
-                book: book,
-                chapterIndex: book.durChapterIndex,
-              ),
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('有聲書播放功能已移除，請選擇文本書籍。')),
       );
-    } else {
-      Navigator.push(
+      return;
+    }
+    Navigator.push(
         context,
         MaterialPageRoute(
           builder:

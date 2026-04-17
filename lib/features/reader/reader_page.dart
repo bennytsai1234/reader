@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'package:flutter/material.dart';
+import 'package:inkpage_reader/shared/widgets/app_bottom_sheet.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'reader_provider.dart';
@@ -303,37 +303,31 @@ class _ReaderPageState extends State<ReaderPage> {
     ),
   );
 
-  void _showMore(BuildContext context) => showModalBottomSheet(
-    context: context,
-    builder:
-        (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.rule),
-                title: const Text('替換規則'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ReplaceRulePage()),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.settings),
-                title: const Text('全域設定'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsPage()),
-                  );
-                },
-              ),
-            ],
-          ),
+  void _showMore(BuildContext context) {
+    AppBottomSheet.show(
+      context: context,
+      title: '更多操作',
+      icon: Icons.more_horiz_rounded,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.rule_rounded),
+          title: const Text('內容替換規則'),
+          subtitle: const Text('自定義字詞替換與屏蔽'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const ReplaceRulePage()));
+          },
         ),
-  );
+        ListTile(
+          leading: const Icon(Icons.settings_suggest_rounded),
+          title: const Text('全域系統設定'),
+          subtitle: const Text('備份、還原與解析引擎配置'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
+          },
+        ),
+      ],
+    );
+  }
 }

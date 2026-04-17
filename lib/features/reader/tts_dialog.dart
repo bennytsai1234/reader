@@ -10,7 +10,6 @@ class TtsDialog extends StatelessWidget {
     final readerProvider = context.read<ReaderProvider>();
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => MultiProvider(
         providers: [
@@ -26,178 +25,198 @@ class TtsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<ReaderProvider>();
     final tts = context.watch<TTSService>();
-    final theme = provider.currentTheme;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
-      decoration: BoxDecoration(
-        color: theme.backgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 標題列
-          Row(
-            children: [
-              Text('朗讀', style: TextStyle(color: theme.textColor, fontSize: 18, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              IconButton(
-                icon: Icon(Icons.close, color: theme.textColor),
-                onPressed: () => Navigator.pop(context),
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 頂部拖拽條
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 20),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // 播放/暫停按鈕
-          Center(
-            child: Column(
-              children: [
-                GestureDetector(
-                  onTap: () => provider.toggleTts(),
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: tts.isPlaying ? Colors.redAccent : Colors.blue,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      tts.isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.white,
-                      size: 36,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  provider.currentChapterTitle.isNotEmpty
-                      ? provider.currentChapterTitle
-                      : '尚未開始朗讀',
-                  style: TextStyle(color: theme.textColor.withValues(alpha: 0.7), fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (tts.remainingMinutes > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      '剩餘 ${tts.remainingMinutes} 分鐘',
-                      style: TextStyle(color: theme.textColor.withValues(alpha: 0.5), fontSize: 11),
-                    ),
-                  ),
-              ],
             ),
-          ),
-          const SizedBox(height: 16),
 
-          // 定時與章末停止
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+            // 標題與關閉
+            Row(
               children: [
-                _buildTimeOption(context, '不計時', 0, tts, theme),
-                _buildTimeOption(context, '15分', 15, tts, theme),
-                _buildTimeOption(context, '30分', 30, tts, theme),
-                _buildTimeOption(context, '60分', 60, tts, theme),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text('讀完本章停止', style: TextStyle(fontSize: 12)),
-                  selected: provider.stopAfterChapter,
-                  onSelected: (v) => provider.setStopAfterChapter(v),
-                  selectedColor: Colors.blue.withValues(alpha: 0.2),
-                  checkmarkColor: Colors.blue,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.record_voice_over, color: Theme.of(context).colorScheme.primary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Text('語音朗讀', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.keyboard_arrow_down, size: 28),
                 ),
               ],
             ),
-          ),
-          const Divider(height: 24),
+            const SizedBox(height: 16),
 
-          // 語速選擇（離散）
-          _buildChipRow(
-            context: context,
-            label: '語速',
-            options: const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0],
-            current: tts.rate,
-            format: (v) => '${v}x',
-            onSelected: (v) => provider.setTtsRate(v),
-            theme: theme,
-          ),
-          const SizedBox(height: 8),
+            // 核心控制器 (播放與狀態)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainer,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              provider.currentChapterTitle.isNotEmpty ? provider.currentChapterTitle : '準備就緒',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              tts.isPlaying ? '正在朗讀...' : '已暫停',
+                              style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // 播放按鈕
+                      GestureDetector(
+                        onTap: () => provider.toggleTts(),
+                        child: Container(
+                          width: 56, height: 56,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: tts.isPlaying 
+                                ? [Colors.redAccent, Colors.red.shade700] 
+                                : [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withValues(alpha: 0.8)],
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(color: (tts.isPlaying ? Colors.red : Theme.of(context).colorScheme.primary).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 6)),
+                            ],
+                          ),
+                          child: Icon(tts.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white, size: 32),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (tts.remainingMinutes > 0) ...[
+                    const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1)),
+                    Row(
+                      children: [
+                        const Icon(Icons.timer_outlined, size: 16, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Text('倒數計時中: ${tts.remainingMinutes} 分鐘', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
 
-          // 音調選擇（離散）
-          _buildChipRow(
-            context: context,
-            label: '音調',
-            options: const [0.5, 0.75, 1.0, 1.25, 1.5],
-            current: tts.pitch,
-            format: (v) => '$v',
-            onSelected: (v) => provider.setTtsPitch(v),
-            theme: theme,
-          ),
-          const SizedBox(height: 8),
-
-          // 語言選擇
-          if (tts.languages.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+            // 設定標籤區域
+            _buildSectionTitle('定時關閉'),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
               child: Row(
                 children: [
-                  Text('語言', style: TextStyle(color: theme.textColor, fontSize: 14)),
-                  const Spacer(),
-                  DropdownButton<String>(
-                    value: tts.language,
-                    dropdownColor: theme.backgroundColor,
-                    style: TextStyle(color: theme.textColor, fontSize: 13),
-                    underline: const SizedBox.shrink(),
-                    items: tts.languages.take(20).map((lang) => DropdownMenuItem<String>(
-                      value: lang.toString(),
-                      child: Text(lang.toString()),
-                    )).toList(),
-                    onChanged: (v) { if (v != null) provider.setTtsLanguage(v); },
+                  _buildTimeOption(context, '不計時', 0, tts),
+                  _buildTimeOption(context, '15分', 15, tts),
+                  _buildTimeOption(context, '30分', 30, tts),
+                  _buildTimeOption(context, '60分', 60, tts),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text('讀完本章停止', style: TextStyle(fontSize: 12)),
+                    selected: provider.stopAfterChapter,
+                    onSelected: (v) => provider.setStopAfterChapter(v),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 20),
 
-          const Divider(height: 24),
+            _buildSectionTitle('語音參數'),
+            _buildChipRow(
+              context: context,
+              label: '語速',
+              options: const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0],
+              current: tts.rate,
+              format: (v) => '${v}x',
+              onSelected: (v) => provider.setTtsRate(v),
+            ),
+            _buildChipRow(
+              context: context,
+              label: '音調',
+              options: const [0.8, 0.9, 1.0, 1.1, 1.2],
+              current: tts.pitch,
+              format: (v) => '${v}x',
+              onSelected: (v) => provider.setTtsPitch(v),
+            ),
 
-          // 快捷操作列
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildAction(
-                icon: Icons.skip_previous,
-                label: '上一頁',
-                color: theme.textColor,
-                onTap: () => provider.prevPageOrChapter(),
-              ),
-              _buildAction(
-                icon: Icons.skip_next,
-                label: '下一頁',
-                color: theme.textColor,
-                onTap: () => provider.nextPageOrChapter(),
-              ),
-              _buildAction(
-                icon: Icons.stop_circle_outlined,
-                label: '停止',
-                color: Colors.redAccent,
-                onTap: () {
-                  provider.stopTts();
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
+            const SizedBox(height: 24),
+            // 底層操作
+            Row(
+              children: [
+                Expanded(child: _buildSecondaryAction(context, Icons.skip_previous, '上一頁', () => provider.prevPageOrChapter())),
+                const SizedBox(width: 12),
+                Expanded(child: _buildSecondaryAction(context, Icons.skip_next, '下一頁', () => provider.nextPageOrChapter())),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildSecondaryAction(context, Icons.stop_circle_outlined, '停止朗讀', () {
+                    provider.stopTts();
+                    Navigator.pop(context);
+                  }, isWarning: true),
+                ),
+              ],
+            ),
+            const SizedBox(height: 30),
+          ],
+        ),
       ),
     );
   }
 
-  /// 離散選項 Chip 列（語速 / 音調）
+  Widget _buildSectionTitle(String title) {
+    return Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey, letterSpacing: 0.5));
+  }
+
+  Widget _buildSecondaryAction(BuildContext context, IconData icon, String label, VoidCallback onTap, {bool isWarning = false}) {
+    return ElevatedButton.icon(
+      onPressed: onTap,
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        backgroundColor: isWarning ? Colors.red.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
+        foregroundColor: isWarning ? Colors.red : Theme.of(context).colorScheme.onSurfaceVariant,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+      ),
+      icon: Icon(icon, size: 18),
+      label: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+    );
+  }
+
   Widget _buildChipRow({
     required BuildContext context,
     required String label,
@@ -205,43 +224,38 @@ class TtsDialog extends StatelessWidget {
     required double current,
     required String Function(double) format,
     required void Function(double) onSelected,
-    required dynamic theme,
   }) {
-    // 找最近的選項作為 selected
     final selected = options.reduce((a, b) => (a - current).abs() < (b - current).abs() ? a : b);
-    return Row(
-      children: [
-        SizedBox(
-          width: 32,
-          child: Text(label, style: TextStyle(color: theme.textColor, fontSize: 14)),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: options.map((v) {
-                final isSelected = v == selected;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ChoiceChip(
-                    label: Text(format(v), style: const TextStyle(fontSize: 12)),
-                    selected: isSelected,
-                    onSelected: (_) => onSelected(v),
-                    selectedColor: Colors.blue.withValues(alpha: 0.2),
-                    checkmarkColor: Colors.blue,
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                  ),
-                );
-              }).toList(),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(width: 32, child: Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey))),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              child: Row(
+                children: options.map((v) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      label: Text(format(v), style: const TextStyle(fontSize: 11)),
+                      selected: v == selected,
+                      onSelected: (_) => onSelected(v),
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildTimeOption(BuildContext context, String label, int mins, TTSService tts, dynamic theme) {
+  Widget _buildTimeOption(BuildContext context, String label, int mins, TTSService tts) {
     final isSelected = tts.remainingMinutes == mins;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -249,24 +263,6 @@ class TtsDialog extends StatelessWidget {
         label: Text(label, style: const TextStyle(fontSize: 12)),
         selected: isSelected,
         onSelected: (v) { if (v) tts.setSleepTimer(mins); },
-      ),
-    );
-  }
-
-  Widget _buildAction({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: color, fontSize: 12)),
-          ],
-        ),
       ),
     );
   }
