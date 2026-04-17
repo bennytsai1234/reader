@@ -72,7 +72,6 @@ class ReaderAudioHandler extends BaseAudioHandler {
   @override
   Future<void> skipToPrevious() async => _eventController.add('onSkipToPrevious');
 
-  @override
   Future<void> onMethodCall(String method, dynamic arguments) async {
     _eventController.add(method);
   }

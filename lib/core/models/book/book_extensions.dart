@@ -22,11 +22,11 @@ extension BookExtensions on BookBase {
   }
 
   // --- 類型感知 (對齊 Android BookType 位元) ---
-  bool get isAudio => (type & BookType.audio) != 0;
+  bool get isAudio => type == 2;  // type 2 = 有聲書 (legacy, audio module removed)
   bool get isImage => (type & BookType.image) != 0;
   bool get isText => (type & BookType.text) != 0;
   bool get isEpub => bookUrl.toLowerCase().endsWith('.epub');
-  bool get isLocal => origin == BookType.localTag || origin.startsWith(BookType.webDavTag);
+  bool get isLocal => origin == BookType.localTag || origin.startsWith('loc_');
   bool get isUpdate => lastCheckCount > 0;
 
   // --- 顯示輔助 ---

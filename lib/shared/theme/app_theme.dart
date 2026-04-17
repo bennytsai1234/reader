@@ -25,12 +25,12 @@ class AppTheme {
       centerTitle: true,
       titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: Colors.white,
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: Colors.white,
       titleTextStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
@@ -72,26 +72,26 @@ class AppTheme {
       centerTitle: true,
       titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: const Color(0xFF1E293B),
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: const Color(0xFF1E293B),
     ),
     popupMenuTheme: PopupMenuThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 8,
-      backgroundColor: const Color(0xFF1E293B),
+      color: const Color(0xFF1E293B),
     ),
     bottomSheetTheme: const BottomSheetThemeData(
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      backgroundColor: Color(0xFF1E293B),
+      modalBackgroundColor: Color(0xFF1E293B),
     ),
     dividerTheme: const DividerThemeData(
       thickness: 1,

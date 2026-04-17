@@ -623,7 +623,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
               ),
         ),
       );
-    }
   }
 
   void _showDeleteConfirm(BuildContext context, BookshelfProvider p) {
