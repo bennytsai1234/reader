@@ -21,11 +21,31 @@ const String sourceListUrl =
     'https://shuyuan.nyasama.net/shuyuan/382015f6ff010d7fee368c6daabd5081.json';
 const String _sourceListCacheRelativePath =
     '.cache/inkpage_reader/source_lists/382015f6ff010d7fee368c6daabd5081.json';
+const String legadoValidationDefaultKeyword = '我的';
+
+enum SourceValidationOutcome { pass, skip, fail }
+
+class SearchKeywordSeed {
+  final String keyword;
+  final List<SearchBook> searchBooks;
+
+  const SearchKeywordSeed({required this.keyword, required this.searchBooks});
+}
+
+class ValidationFailureClassification {
+  final SourceValidationOutcome outcome;
+  final String category;
+
+  const ValidationFailureClassification({
+    required this.outcome,
+    required this.category,
+  });
+}
 
 class SourceValidationResult {
   final int index;
   final String sourceName;
-  final bool passed;
+  final SourceValidationOutcome outcome;
   final String stage;
   final String? keyword;
   final String? bookName;
@@ -34,12 +54,16 @@ class SourceValidationResult {
   final String? firstChapterTitle;
   final String? secondChapterTitle;
   final String? failure;
+  final String? category;
   final Duration duration;
+
+  bool get passed => outcome == SourceValidationOutcome.pass;
+  bool get skipped => outcome == SourceValidationOutcome.skip;
 
   const SourceValidationResult({
     required this.index,
     required this.sourceName,
-    required this.passed,
+    required this.outcome,
     required this.stage,
     required this.duration,
     this.keyword,
@@ -49,15 +73,21 @@ class SourceValidationResult {
     this.firstChapterTitle,
     this.secondChapterTitle,
     this.failure,
+    this.category,
   });
 
   String toSummaryLine() {
-    final status = passed ? 'PASS' : 'FAIL';
+    final status = switch (outcome) {
+      SourceValidationOutcome.pass => 'PASS',
+      SourceValidationOutcome.skip => 'SKIP',
+      SourceValidationOutcome.fail => 'FAIL',
+    };
     final info = <String>[
       '#$index',
       sourceName,
       status,
       'stage=$stage',
+      if (category != null && category!.isNotEmpty) 'category=$category',
       if (keyword != null && keyword!.isNotEmpty) 'keyword="$keyword"',
       if (bookName != null && bookName!.isNotEmpty) 'book="$bookName"',
       if (chapterCount != null) 'chapters=$chapterCount',
@@ -256,10 +286,11 @@ Future<SourceValidationResult> validateSourceFlow(
 
   try {
     stage = 'keyword';
-    keyword = await pickKeyword(service, source);
+    final searchSeed = await pickKeywordSeed(service, source);
+    keyword = searchSeed.keyword;
 
     stage = 'search';
-    final searchBooks = await service.searchBooks(source, keyword);
+    final searchBooks = searchSeed.searchBooks;
     if (searchBooks.isEmpty) {
       throw StateError('搜尋 "$keyword" 沒有結果');
     }
@@ -356,7 +387,7 @@ Future<SourceValidationResult> validateSourceFlow(
     return SourceValidationResult(
       index: index,
       sourceName: source.bookSourceName,
-      passed: true,
+      outcome: SourceValidationOutcome.pass,
       stage: stage,
       duration: stopwatch.elapsed,
       keyword: keyword,
@@ -368,10 +399,15 @@ Future<SourceValidationResult> validateSourceFlow(
     );
   } catch (error) {
     stopwatch.stop();
+    final classification = classifyValidationFailure(
+      error,
+      source: source,
+      stage: stage,
+    );
     return SourceValidationResult(
       index: index,
       sourceName: source.bookSourceName,
-      passed: false,
+      outcome: classification.outcome,
       stage: stage,
       duration: stopwatch.elapsed,
       keyword: keyword,
@@ -383,6 +419,7 @@ Future<SourceValidationResult> validateSourceFlow(
           (readableChapters.isNotEmpty ? readableChapters.first.title : null),
       secondChapterTitle: secondReadableChapter?.title,
       failure: compactError(error),
+      category: classification.category,
     );
   }
 }
@@ -394,90 +431,185 @@ String compactError(Object error) {
   return firstLine.length > 160 ? firstLine.substring(0, 160) : firstLine;
 }
 
-Future<String> pickKeyword(BookSourceService service, BookSource source) async {
-  final checkKeyword = source.ruleSearch?.checkKeyWord;
-  if (checkKeyword != null && checkKeyword.trim().isNotEmpty) {
-    final keyword = checkKeyword.trim();
-    try {
-      final results = await service.searchBooks(source, keyword);
-      if (results.isNotEmpty) {
-        return keyword;
-      }
-    } catch (_) {}
+ValidationFailureClassification classifyValidationFailure(
+  Object error, {
+  required BookSource source,
+  required String stage,
+}) {
+  final message = compactError(error);
+  final normalized = message.toLowerCase();
+  final rawNormalized = error.toString().toLowerCase();
+
+  if (_sourceMarkedBrokenForStage(source, stage)) {
+    return const ValidationFailureClassification(
+      outcome: SourceValidationOutcome.skip,
+      category: 'source-marked-broken',
+    );
   }
 
-  final browseKeyword = await pickKeywordFromBrowse(service, source);
-  if (browseKeyword != null && browseKeyword.isNotEmpty) {
-    return browseKeyword;
+  if (rawNormalized.contains('libquickjs_c_bridge_plugin.so') ||
+      rawNormalized.contains('js_error: library not available')) {
+    return const ValidationFailureClassification(
+      outcome: SourceValidationOutcome.skip,
+      category: 'env-js-runtime',
+    );
   }
 
-  const fallbackKeywords = <String>[
-    '我的',
-    '系统',
-    '都市',
-    '后宫',
-    '修仙',
-    '校花',
-    '同人',
-    '人妻',
-    '萝莉',
-    '保育',
-    '龙王殿',
-    '爱',
-  ];
-
-  for (final keyword in fallbackKeywords) {
-    try {
-      final results = await service.searchBooks(source, keyword);
-      if (results.isNotEmpty) {
-        return keyword;
-      }
-    } catch (_) {
-      continue;
-    }
+  if (rawNormalized.contains('webviewplatform.instance != null') ||
+      rawNormalized.contains('headlesswebviewservice') ||
+      rawNormalized.contains('plugins.flutter.io/webview')) {
+    return const ValidationFailureClassification(
+      outcome: SourceValidationOutcome.skip,
+      category: 'env-webview',
+    );
   }
 
-  throw StateError('${source.bookSourceName} 找不到可用測試關鍵詞');
+  if (rawNormalized.contains('missingpluginexception') &&
+      (rawNormalized.contains('gettemporarydirectory') ||
+          rawNormalized.contains('plugins.flutter.io/path_provider'))) {
+    return const ValidationFailureClassification(
+      outcome: SourceValidationOutcome.skip,
+      category: 'env-path-provider',
+    );
+  }
+
+  if (rawNormalized.contains('找不到可用測試關鍵詞') || rawNormalized.contains('沒有結果')) {
+    return const ValidationFailureClassification(
+      outcome: SourceValidationOutcome.skip,
+      category: 'source-search-empty',
+    );
+  }
+
+  if (rawNormalized.contains('receivetimeout') ||
+      rawNormalized.contains('connection timeout') ||
+      rawNormalized.contains('timed out') ||
+      rawNormalized.contains('socketexception') ||
+      rawNormalized.contains('handshakeexception') ||
+      rawNormalized.contains('certificate_verify_failed') ||
+      rawNormalized.contains('handshake error') ||
+      rawNormalized.contains('ssl')) {
+    return const ValidationFailureClassification(
+      outcome: SourceValidationOutcome.skip,
+      category: 'upstream-timeout',
+    );
+  }
+
+  if (rawNormalized.contains('403') ||
+      rawNormalized.contains('404') ||
+      rawNormalized.contains('429') ||
+      rawNormalized.contains('502') ||
+      rawNormalized.contains('503') ||
+      rawNormalized.contains('cloudflare') ||
+      rawNormalized.contains('forbidden')) {
+    return const ValidationFailureClassification(
+      outcome: SourceValidationOutcome.skip,
+      category: 'upstream-blocked',
+    );
+  }
+
+  return const ValidationFailureClassification(
+    outcome: SourceValidationOutcome.fail,
+    category: 'app-or-parser',
+  );
 }
 
-Future<String?> findWorkingKeywordCandidate(
+bool _sourceMarkedBrokenForStage(BookSource source, String stage) {
+  final markers =
+      '${source.bookSourceGroup ?? ''}\n${source.bookSourceComment ?? ''}'
+          .toLowerCase();
+  if (markers.isEmpty) return false;
+
+  if (markers.contains('網站失效') ||
+      markers.contains('网站失效') ||
+      markers.contains('校驗超時') ||
+      markers.contains('校验超时')) {
+    return true;
+  }
+
+  if (stage.startsWith('search') &&
+      (markers.contains('搜尋失效') || markers.contains('搜索失效'))) {
+    return true;
+  }
+
+  if (stage.startsWith('toc') &&
+      (markers.contains('目錄失效') || markers.contains('目录失效'))) {
+    return true;
+  }
+
+  if (stage.startsWith('content') &&
+      (markers.contains('正文失效') || markers.contains('内容失效'))) {
+    return true;
+  }
+
+  return false;
+}
+
+Future<SearchKeywordSeed> pickKeywordSeed(
+  BookSourceService service,
+  BookSource source,
+) async {
+  // Align batch validation with Legado's CheckSourceService:
+  // use ruleSearch.checkKeyWord first, otherwise fall back to the global
+  // default keyword instead of probing many derived candidates.
+  final keyword = resolveValidationKeyword(source);
+  final searchBooks = await service.searchBooks(source, keyword);
+  return SearchKeywordSeed(keyword: keyword, searchBooks: searchBooks);
+}
+
+String resolveValidationKeyword(
+  BookSource source, {
+  String defaultKeyword = legadoValidationDefaultKeyword,
+}) {
+  final keyword = source.getCheckKeyword(defaultKeyword).trim();
+  return keyword.isEmpty ? defaultKeyword : keyword;
+}
+
+Future<String> pickKeyword(BookSourceService service, BookSource source) async =>
+    resolveValidationKeyword(source);
+
+Future<SearchKeywordSeed?> _tryKeyword(
+  BookSourceService service,
+  BookSource source,
+  String keyword,
+) async {
+  try {
+    final results = await service.searchBooks(source, keyword);
+    if (results.isEmpty) return null;
+    return SearchKeywordSeed(keyword: keyword, searchBooks: results);
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<SearchKeywordSeed?> findWorkingKeywordCandidate(
   BookSourceService service,
   BookSource source,
   String seed,
 ) async {
-  String? fallbackKeyword;
+  SearchKeywordSeed? fallbackSeed;
   for (final keyword in buildKeywordCandidates(seed)) {
-    try {
-      final results = await service.searchBooks(source, keyword);
-      if (results.isEmpty) {
-        continue;
-      }
-      if (_plainKeywordPattern.hasMatch(keyword)) {
-        return keyword;
-      }
-      final confirmed = await service.searchBooks(source, keyword);
-      if (confirmed.isNotEmpty) {
-        fallbackKeyword ??= keyword;
-      }
-    } catch (_) {
-      continue;
+    final matched = await _tryKeyword(service, source, keyword);
+    if (matched == null) continue;
+    if (_plainKeywordPattern.hasMatch(keyword)) {
+      return matched;
     }
+    fallbackSeed ??= matched;
   }
-  return fallbackKeyword;
+  return fallbackSeed;
 }
 
-Future<String?> pickKeywordFromBrowse(
+Future<SearchKeywordSeed?> pickKeywordFromBrowse(
   BookSourceService service,
   BookSource source,
 ) async {
   final fromExplore = await pickKeywordFromExplore(service, source);
-  if (fromExplore != null && fromExplore.isNotEmpty) {
+  if (fromExplore != null) {
     return fromExplore;
   }
   return pickKeywordFromHomepage(service, source);
 }
 
-Future<String?> pickKeywordFromExplore(
+Future<SearchKeywordSeed?> pickKeywordFromExplore(
   BookSourceService service,
   BookSource source,
 ) async {
@@ -512,7 +644,7 @@ Future<String?> pickKeywordFromExplore(
   return null;
 }
 
-Future<String?> pickKeywordFromHomepage(
+Future<SearchKeywordSeed?> pickKeywordFromHomepage(
   BookSourceService service,
   BookSource source,
 ) async {

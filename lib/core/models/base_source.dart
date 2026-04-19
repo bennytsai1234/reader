@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:inkpage_reader/core/services/cache_manager.dart';
@@ -81,6 +82,65 @@ abstract class BaseSource {
 
   Future<void> removeLoginHeader() {
     return CacheManager().delete('loginHeader_${getKey()}');
+  }
+
+  Future<void> setVariable(String? variable) {
+    if (variable == null) {
+      return CacheManager().delete('sourceVariable_${getKey()}');
+    }
+    return CacheManager().put('sourceVariable_${getKey()}', variable);
+  }
+
+  Future<String> getVariable() async {
+    return await CacheManager().get('sourceVariable_${getKey()}') ?? '';
+  }
+
+  void setVariableSync(String? variable) {
+    final cacheManager = CacheManager();
+    final cacheKey = 'sourceVariable_${getKey()}';
+    if (variable == null) {
+      cacheManager.deleteMemory(cacheKey);
+      unawaited(cacheManager.delete(cacheKey));
+      return;
+    }
+    cacheManager.putMemory(cacheKey, variable);
+    unawaited(cacheManager.put(cacheKey, variable));
+  }
+
+  String getVariableSync() {
+    return CacheManager().getFromMemory('sourceVariable_${getKey()}')?.toString() ??
+        '';
+  }
+
+  Map<String, String> getHeaderMapSync({bool hasLoginHeader = true}) {
+    final headerMap = <String, String>{};
+    final rawHeader = header;
+    if (rawHeader != null && rawHeader.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawHeader);
+        if (decoded is Map) {
+          decoded.forEach((key, value) {
+            headerMap[key.toString()] = value.toString();
+          });
+        }
+      } catch (_) {}
+    }
+
+    if (hasLoginHeader) {
+      final loginHeaderRaw =
+          CacheManager().getFromMemory('loginHeader_${getKey()}')?.toString();
+      if (loginHeaderRaw != null && loginHeaderRaw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(loginHeaderRaw);
+          if (decoded is Map) {
+            decoded.forEach((key, value) {
+              headerMap[key.toString()] = value.toString();
+            });
+          }
+        } catch (_) {}
+      }
+    }
+    return headerMap;
   }
 }
 

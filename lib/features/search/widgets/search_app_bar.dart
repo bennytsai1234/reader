@@ -14,6 +14,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   final SearchProvider provider;
   final Function(String) onSearch;
   final VoidCallback? onScopePressed;
+  final VoidCallback? onScopeMenuSelected;
 
   const SearchAppBar({
     super.key,
@@ -21,12 +22,14 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.provider,
     required this.onSearch,
     this.onScopePressed,
+    this.onScopeMenuSelected,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scopeDisplay = provider.scopeLoaded ? provider.searchScope.display : '載入中...';
+    final scopeDisplay =
+        provider.scopeLoaded ? provider.searchScope.display : '載入中...';
 
     return AppBar(
       titleSpacing: 0,
@@ -38,7 +41,9 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
               decoration: InputDecoration(
                 hintText: '搜尋書名或作者',
                 border: InputBorder.none,
-                hintStyle: TextStyle(color: theme.colorScheme.onPrimary.withValues(alpha: 0.6)),
+                hintStyle: TextStyle(
+                  color: theme.colorScheme.onPrimary.withValues(alpha: 0.6),
+                ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8),
               ),
               style: TextStyle(color: theme.colorScheme.onPrimary),
@@ -62,10 +67,14 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                   scopeDisplay,
                   style: TextStyle(
                     fontSize: 12,
-                    color: provider.searchScope.isAll
-                        ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-                        : theme.colorScheme.onPrimary,
-                    fontWeight: provider.searchScope.isAll ? FontWeight.normal : FontWeight.bold,
+                    color:
+                        provider.searchScope.isAll
+                            ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
+                            : theme.colorScheme.onPrimary,
+                    fontWeight:
+                        provider.searchScope.isAll
+                            ? FontWeight.normal
+                            : FontWeight.bold,
                   ),
                 ),
                 Icon(
@@ -96,12 +105,21 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
           tooltip: '搜尋設定',
           icon: const Icon(Icons.more_vert),
           onSelected: (value) {
-            if (value == 'precision') {
-              provider.togglePrecisionSearch();
+            switch (value) {
+              case 'scope':
+                onScopeMenuSelected?.call();
+                break;
+              case 'precision':
+                provider.togglePrecisionSearch();
+                break;
             }
           },
           itemBuilder: (context) {
             return [
+              PopupMenuItem<String>(
+                value: 'scope',
+                child: Text('搜尋範圍: $scopeDisplay'),
+              ),
               CheckedPopupMenuItem<String>(
                 value: 'precision',
                 checked: provider.precisionSearch,

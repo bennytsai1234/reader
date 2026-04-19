@@ -327,4 +327,117 @@ mixin AnalyzeRuleElement on AnalyzeRuleBase, AnalyzeRuleRegexHelper {
     }
     return [result];
   }
+
+  Future<List<dynamic>> getElementsAsync(String ruleStr) async {
+    if (ruleStr.isEmpty) {
+      return [];
+    }
+
+    log('⇒ 執行 getElementsAsync: $ruleStr');
+    var result = content;
+    final ruleList = splitSourceRuleCacheString(ruleStr);
+
+    if (result != null && ruleList.isNotEmpty) {
+      for (final sourceRule in ruleList) {
+        if (result == null) {
+          break;
+        }
+
+        if (sourceRule.putMap.isNotEmpty) {
+          for (final entry in sourceRule.putMap.entries) {
+            final val = await getStringAsync(entry.value);
+            if (val.isNotEmpty) {
+              put(entry.key, val);
+              log('  ◇ 保存變數: ${entry.key} = $val');
+            }
+          }
+        }
+
+        final rule = await sourceRule.makeUpRuleAsync(result, this);
+        log('  ◇ 模式: ${sourceRule.mode.name}, 規則: $rule');
+
+        dynamic tempResult;
+        try {
+          switch (sourceRule.mode) {
+            case Mode.regex:
+              tempResult = AnalyzeByRegex.getElements(
+                result.toString(),
+                rule.split('&&').where((s) => s.isNotEmpty).toList(),
+              );
+              break;
+            case Mode.json:
+              tempResult = sourceRule
+                  .getAnalyzeByJSonPath(this, result)
+                  .getElements(rule);
+              break;
+            case Mode.xpath:
+              tempResult = sourceRule
+                  .getAnalyzeByXPath(this, result)
+                  .getElements(rule);
+              break;
+            case Mode.js:
+              tempResult = await evalJSAsync(rule, result);
+              break;
+            default:
+              tempResult = sourceRule
+                  .getAnalyzeByJSoup(this, result)
+                  .getElements(rule);
+              if (tempResult is List &&
+                  tempResult.isEmpty &&
+                  isJsonLikeRuleInput(result)) {
+                final jsonRule = buildJsonFallbackRule(rule);
+                if (jsonRule != null) {
+                  tempResult = sourceRule
+                      .getAnalyzeByJSonPath(this, result)
+                      .getElements(jsonRule);
+                }
+              }
+          }
+        } catch (e) {
+          throw ParsingException(
+            e.toString(),
+            rule: rule,
+            mode: sourceRule.mode.name,
+            url: baseUrl,
+            originalError: e,
+          );
+        }
+
+        if (sourceRule.isDynamic &&
+            (tempResult == null ||
+                (tempResult is List && tempResult.isEmpty) ||
+                (tempResult is String && tempResult.isEmpty))) {
+          result = rule;
+        } else {
+          result = tempResult;
+        }
+
+        if (result != null && sourceRule.replaceRegex.isNotEmpty) {
+          log('  ◇ 正則替換列表元素: ${sourceRule.replaceRegex}');
+          if (result is List) {
+            result =
+                result
+                    .map(
+                      (e) =>
+                          replaceRegexLogic(stringifyRuleResult(e), sourceRule),
+                    )
+                    .toList();
+          } else {
+            result = replaceRegexLogic(stringifyRuleResult(result), sourceRule);
+          }
+        }
+        log(
+          '  └ 列表長度: ${result is List ? result.length : (result == null ? 0 : 1)}',
+        );
+      }
+    }
+
+    if (result is List) {
+      return result;
+    }
+    if (result == null) {
+      return const <dynamic>[];
+    }
+    return <dynamic>[result];
+  }
 }

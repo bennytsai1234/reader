@@ -35,9 +35,19 @@ void main() {
 
       final typedResults = results.cast<SourceValidationResult>();
       final passed = typedResults.where((it) => it.passed).length;
+      final skipped = typedResults.where((it) => it.skipped).length;
+      final failed = typedResults.length - passed - skipped;
+      final categories = <String, int>{};
+      for (final result in typedResults) {
+        final category = result.category;
+        if (category == null || category.isEmpty) continue;
+        categories.update(category, (value) => value + 1, ifAbsent: () => 1);
+      }
       // ignore: avoid_print
       print(
-        '[batch] summary: range=${start + 1}-${start + limit} pass=$passed fail=${typedResults.length - passed}',
+        '[batch] summary: range=${start + 1}-${start + limit} '
+        'pass=$passed skip=$skipped fail=$failed '
+        'categories=$categories',
       );
     },
     timeout: const Timeout(Duration(minutes: 35)),

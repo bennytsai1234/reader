@@ -114,6 +114,22 @@ void main() {
       expect(analyzer.headerMap['Referer'], 'https://source.example.com');
     });
 
+    test('Legacy template aliases support cookie.removeCookie and source.getKey', () async {
+      if (runtime == null) {
+        expect(runtimeError, isNotNull);
+        return;
+      }
+      final analyzer = await AnalyzeUrl.create(
+        '{{cookie.removeCookie(source.getKey())}}/search/, {"method":"POST","body":"searchkey={{key}}"}',
+        key: '龙族',
+        source: BookSource(bookSourceUrl: 'https://www.x23us.cc'),
+      );
+
+      expect(analyzer.url, 'https://www.x23us.cc/search/');
+      expect(analyzer.method, 'POST');
+      expect(analyzer.body, 'searchkey=%E9%BE%99%E6%97%8F');
+    });
+
     test('Lenient JS-style url options are supported', () {
       if (runtime == null) {
         expect(runtimeError, isNotNull);

@@ -92,6 +92,7 @@ class _SearchPageContentState extends State<_SearchPageContent> {
             provider: provider,
             onSearch: _onSearch,
             onScopePressed: _openScopeSheet,
+            onScopeMenuSelected: _openScopeSheet,
           ),
           body: Column(
             children: [

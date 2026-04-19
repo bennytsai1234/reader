@@ -12,6 +12,9 @@ class FakeCookieDao extends Fake implements CookieDao {
   @override
   Future<void> upsert(Cookie cookie) async {}
 
+  @override
+  Future<void> deleteByUrl(String url) async {}
+
 }
 
 class FakeCacheDao extends Fake implements CacheDao {
@@ -20,6 +23,9 @@ class FakeCacheDao extends Fake implements CacheDao {
   
   @override
   Future<void> upsert(Cache cache) async {}
+
+  @override
+  Future<void> deleteByKey(String key) async {}
 }
 
 void setupTestDI() {

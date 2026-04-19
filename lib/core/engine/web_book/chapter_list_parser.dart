@@ -51,7 +51,7 @@ class ChapterListParser {
       source: source,
       ruleData: book,
     ).setContent(body, baseUrl: baseUrl);
-    final elements = rule.getElements(listRule);
+    final elements = await rule.getElementsAsync(listRule);
 
     final chapters = <BookChapter>[];
     for (var i = 0; i < elements.length; i++) {
@@ -73,12 +73,8 @@ class ChapterListParser {
       final isVolume = _isTrue(
         await itemRule.getStringAsync(tocRule.isVolume ?? ''),
       );
-      final isVip = _isTrue(
-        await itemRule.getStringAsync(tocRule.isVip ?? ''),
-      );
-      final isPay = _isTrue(
-        await itemRule.getStringAsync(tocRule.isPay ?? ''),
-      );
+      final isVip = _isTrue(await itemRule.getStringAsync(tocRule.isVip ?? ''));
+      final isPay = _isTrue(await itemRule.getStringAsync(tocRule.isPay ?? ''));
 
       // 空 URL 後備處理 (對標 Android 邏輯)
       if (url.isEmpty) {
@@ -130,9 +126,6 @@ class ChapterListParser {
   static bool _isTrue(String s) {
     if (s.isEmpty) return false;
     final lower = s.trim().toLowerCase();
-    return lower == 'true' ||
-        lower == 'yes' ||
-        lower == '1' ||
-        lower == '是';
+    return lower == 'true' || lower == 'yes' || lower == '1' || lower == '是';
   }
 }

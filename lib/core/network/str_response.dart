@@ -14,5 +14,10 @@ class StrResponse {
     required this.raw,
   });
 
-  bool get isRedirect => raw.redirects.isNotEmpty;
+  List<String> get redirectChain =>
+      ((raw.extra['_manualRedirectChain'] as List?) ?? const <dynamic>[])
+          .map((item) => item.toString())
+          .toList();
+
+  bool get isRedirect => raw.redirects.isNotEmpty || redirectChain.isNotEmpty;
 }

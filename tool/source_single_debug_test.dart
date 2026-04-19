@@ -6,6 +6,7 @@ import 'package:inkpage_reader/core/engine/analyze_rule.dart' as rule_engine;
 import 'package:inkpage_reader/core/engine/analyze_rule.dart';
 import 'package:inkpage_reader/core/engine/analyze_url.dart';
 import 'package:inkpage_reader/core/engine/explore_url_parser.dart';
+import 'package:inkpage_reader/core/engine/web_book/book_list_parser.dart';
 import 'package:inkpage_reader/core/services/book_source_service.dart';
 
 import 'source_validation_support.dart';
@@ -24,6 +25,7 @@ void main() {
   final debugPattern = Platform.environment['DEBUG_PATTERN']?.trim();
   final debugJsIntermediate =
       Platform.environment['DEBUG_JS_INTERMEDIATE'] == '1';
+  final debugTocParse = Platform.environment['DEBUG_TOC_PARSE'] == '1';
 
   test('debug single source flow', () async {
     await initSourceValidationEnvironment();
@@ -136,6 +138,21 @@ void main() {
           'bookUrl=${await itemRule.getStringAsync(searchRule?.bookUrl ?? '', isUrl: true)}',
         );
       }
+      final parsedBooks = await BookListParser.parse(
+        source: source,
+        body: response.body,
+        baseUrl: response.url,
+        isSearch: true,
+      );
+      // ignore: avoid_print
+      print('[debug] BookListParser books=${parsedBooks.length}');
+      for (final book in parsedBooks.take(5)) {
+        // ignore: avoid_print
+        print(
+          '[debug] parser book=${book.name} | '
+          'author=${book.author ?? ''} | url=${book.bookUrl}',
+        );
+      }
     }
 
     final searchBooks = await service.searchBooks(source, keyword);
@@ -159,6 +176,42 @@ void main() {
     final book = await service.getBookInfo(source, selected);
     // ignore: avoid_print
     print('[debug] detail name=${book.name} | tocUrl=${book.tocUrl}');
+
+    if (debugTocParse && source.ruleToc != null) {
+      final tocAnalyzeUrl = await AnalyzeUrl.create(
+        book.tocUrl.isNotEmpty ? book.tocUrl : book.bookUrl,
+        source: source,
+        ruleData: book,
+      );
+      final tocResponse = await tocAnalyzeUrl.getStrResponse();
+      final tocRule = source.ruleToc!;
+      final parser = AnalyzeRule(
+        source: source,
+        ruleData: book,
+      ).setContent(tocResponse.body, baseUrl: tocResponse.url);
+      final tocElements = await parser.getElementsAsync(
+        tocRule.chapterList ?? '',
+      );
+      // ignore: avoid_print
+      print(
+        '[debug] toc response url=${tocResponse.url} '
+        'len=${tocResponse.body.length} elements=${tocElements.length}',
+      );
+      // ignore: avoid_print
+      print('[debug] toc body=${_previewBody(tocResponse.body)}');
+      for (final element in tocElements.take(5)) {
+        final itemRule = AnalyzeRule(
+          source: source,
+          ruleData: book,
+        ).setContent(element, baseUrl: tocResponse.url);
+        // ignore: avoid_print
+        print(
+          '[debug] toc item '
+          'title=${await itemRule.getStringAsync(tocRule.chapterName ?? '')} | '
+          'url=${await itemRule.getStringAsync(tocRule.chapterUrl ?? '', isUrl: true)}',
+        );
+      }
+    }
 
     final chapters = await service.getChapterList(source, book);
     final readable = chapters.where((chapter) => !chapter.isVolume).toList();

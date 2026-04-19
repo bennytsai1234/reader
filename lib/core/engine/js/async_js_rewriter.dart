@@ -54,8 +54,8 @@ class AsyncJsRewriter {
       'getTxtInFolder',
     },
     'cache': {'get', 'getFile'},
-    'cookie': {'get', 'all'},
-    'source': {'get', 'getLoginInfo', 'getLoginInfoMap'},
+    'cookie': {'get', 'getCookie', 'all'},
+    'source': {'get', 'getVariable', 'getLoginInfo', 'getLoginInfoMap'},
   };
 
   /// 快速偵測：source 是否包含任何 async `java.*` 呼叫

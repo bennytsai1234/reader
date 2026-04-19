@@ -157,6 +157,7 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
       currentChineseConvert: () => chineseConvert,
       getSource: () => source,
       setSource: (value) => source = value,
+      resolveNextChapterUrl: _nextReadableChapterUrl,
     );
     _contentManager = ChapterContentManager(
       fetchFn: _fetchChapterData,
@@ -433,7 +434,8 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     _deferredWindowWarmupTimer?.cancel();
     _extendedWindowWarmupTimer?.cancel();
     // slide 模式不需要等 1500ms，立刻觸發以縮短相鄰章節備妥時間。
-    final effectiveDelay = _isScrollMode ? delay : const Duration(milliseconds: 150);
+    final effectiveDelay =
+        _isScrollMode ? delay : const Duration(milliseconds: 150);
     _deferredWindowWarmupTimer = Timer(effectiveDelay, () {
       if (!isDisposed && hasContentManager) {
         if (_isScrollMode && contentManager.userInteractionActive) {
@@ -671,6 +673,16 @@ mixin ReaderContentMixin on ReaderProviderBase, ReaderSettingsMixin {
     final chapter = chapters[i];
     AppLog.d('Reader: Fetching content for chapter $i: ${chapter.title}');
     return _chapterContentLoader!.load(i, chapter);
+  }
+
+  String? _nextReadableChapterUrl(int currentIndex) {
+    for (var i = currentIndex + 1; i < chapters.length; i++) {
+      final chapter = chapters[i];
+      if (!chapter.isVolume && chapter.url.isNotEmpty) {
+        return chapter.url;
+      }
+    }
+    return null;
   }
 
   void disposeContentManager() {

@@ -46,6 +46,7 @@ class _FakeBookSourceService extends BookSourceService {
 
   final String response;
   int getContentCallCount = 0;
+  String? lastNextChapterUrl;
 
   @override
   Future<String> getContent(
@@ -55,6 +56,7 @@ class _FakeBookSourceService extends BookSourceService {
     String? nextChapterUrl,
   }) async {
     getContentCallCount++;
+    lastNextChapterUrl = nextChapterUrl;
     return response;
   }
 }
@@ -87,6 +89,7 @@ void main() {
           currentChineseConvert: () => 0,
           getSource: () => null,
           setSource: (_) {},
+          resolveNextChapterUrl: (_) => null,
         );
 
         final result = await loader.load(
@@ -128,6 +131,8 @@ void main() {
         currentChineseConvert: () => 0,
         getSource: () => null,
         setSource: (_) {},
+        resolveNextChapterUrl:
+            (index) => index == 0 ? 'https://example.com/c2' : null,
       );
 
       final result = await loader.load(
@@ -144,6 +149,7 @@ void main() {
       expect(chapterDao.getContentCallCount, 1);
       expect(sourceDao.lookupCount, 1);
       expect(service.getContentCallCount, 1);
+      expect(service.lastNextChapterUrl, 'https://example.com/c2');
     });
   });
 }

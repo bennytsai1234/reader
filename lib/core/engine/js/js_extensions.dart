@@ -111,6 +111,20 @@ class JsExtensions extends JsExtensionsBase {
       }
       return '';
     });
+    runtime.onMessage('htmlSelectData', (args) {
+      final payload = _decodeSyncArgs(args);
+      if (payload is List && payload.length >= 2) {
+        return _selectHtmlData(payload[0].toString(), payload[1].toString());
+      }
+      return '';
+    });
+    runtime.onMessage('htmlRemove', (args) {
+      final payload = _decodeSyncArgs(args);
+      if (payload is List && payload.length >= 2) {
+        return _removeHtml(payload[0].toString(), payload[1].toString());
+      }
+      return '';
+    });
 
     // ─── Fire-and-forget async (JS 不讀回傳值) ──────────────────
     // 直接啟動 Future，不 block handler；失敗寫 log 但不 reject JS
@@ -153,6 +167,21 @@ class JsExtensions extends JsExtensionsBase {
         source!.putLoginInfo(args.toString());
       }
       return null;
+    });
+    runtime.onMessage('sourceSetVariable', (args) {
+      if (source != null) {
+        final decoded = _decodeSyncArgs(args);
+        source!.setVariableSync(decoded?.toString());
+      }
+      return null;
+    });
+    runtime.onMessage('sourceGetHeaderMap', (args) {
+      if (source == null) return <String, String>{};
+      final includeLoginHeader =
+          _decodeSyncArgs(args) is bool ? _decodeSyncArgs(args) as bool : true;
+      return source!.getHeaderMapSync(
+        hasLoginHeader: includeLoginHeader,
+      );
     });
 
     // ─── Promise bridge: async with return value ────────────────
@@ -205,6 +234,23 @@ class JsExtensions extends JsExtensionsBase {
       return null;
     });
 
+    runtime.onMessage('sourceGetVariable', (args) {
+      final parsed = JsExtensionsBase.parseAsyncCallArgs(args);
+      if (source == null) {
+        resolveJsPending(parsed.callId, '');
+        return null;
+      }
+      source!
+          .getVariable()
+          .then((v) {
+            resolveJsPending(parsed.callId, v);
+          })
+          .catchError((e) {
+            rejectJsPending(parsed.callId, e);
+          });
+      return null;
+    });
+
     runtime.onMessage('cookieGet', (args) {
       final parsed = JsExtensionsBase.parseAsyncCallArgs(args);
       final url = parsed.payload.toString();
@@ -250,11 +296,40 @@ class JsExtensions extends JsExtensionsBase {
 
   List<dom.Element> _selectHtmlElements(String html, String selector) {
     final doc = html_parser.parse(html);
+    return _selectHtmlElementsFromDocument(doc, selector);
+  }
+
+  List<dom.Element> _selectHtmlElementsFromDocument(
+    dom.Document document,
+    String selector,
+  ) {
+    try {
+      return _selectHtmlElementsFromDocumentInternal(document, selector);
+    } catch (_) {
+      final pseudoFallback = _selectHtmlElementsWithPseudoFallback(
+        document,
+        selector,
+      );
+      if (pseudoFallback.isNotEmpty) {
+        return pseudoFallback;
+      }
+      final simplified = _simplifyUnsupportedSelector(selector);
+      if (simplified.isEmpty || simplified == selector) {
+        return const <dom.Element>[];
+      }
+      return _selectHtmlElementsFromDocumentInternal(document, simplified);
+    }
+  }
+
+  List<dom.Element> _selectHtmlElementsFromDocumentInternal(
+    dom.Document document,
+    String selector,
+  ) {
     final eqMatch = RegExp(r'^(.*):eq\((-?\d+)\)\s*$').firstMatch(selector);
     if (eqMatch != null) {
       final baseSelector = eqMatch.group(1)!.trim();
       final index = int.tryParse(eqMatch.group(2)!) ?? 0;
-      final items = doc.querySelectorAll(baseSelector);
+      final items = document.querySelectorAll(baseSelector);
       if (items.isEmpty) return const <dom.Element>[];
       final resolvedIndex = index < 0 ? items.length + index : index;
       if (resolvedIndex < 0 || resolvedIndex >= items.length) {
@@ -262,7 +337,97 @@ class JsExtensions extends JsExtensionsBase {
       }
       return <dom.Element>[items[resolvedIndex]];
     }
-    return doc.querySelectorAll(selector);
+    return document.querySelectorAll(selector);
+  }
+
+  List<dom.Element> _selectHtmlElementsWithPseudoFallback(
+    dom.Document document,
+    String selector,
+  ) {
+    final selectors =
+        selector
+            .split(',')
+            .map((part) => part.trim())
+            .where((part) => part.isNotEmpty)
+            .toList();
+    final results = <dom.Element>[];
+    final seen = <dom.Element>{};
+
+    for (final part in selectors) {
+      final matched = _selectHtmlElementsForSinglePseudoSelector(document, part);
+      for (final element in matched) {
+        if (seen.add(element)) {
+          results.add(element);
+        }
+      }
+    }
+    return results;
+  }
+
+  List<dom.Element> _selectHtmlElementsForSinglePseudoSelector(
+    dom.Document document,
+    String selector,
+  ) {
+    final nthChildMatch = RegExp(
+      r'^(.*):nth-child\((\d+)\)\s*$',
+    ).firstMatch(selector);
+    if (nthChildMatch != null) {
+      final baseSelector = nthChildMatch.group(1)!.trim();
+      final targetIndex = int.parse(nthChildMatch.group(2)!);
+      final candidates = document.querySelectorAll(baseSelector);
+      return candidates.where((element) {
+        final siblings = element.parent?.children ?? const <dom.Element>[];
+        return siblings.indexOf(element) + 1 == targetIndex;
+      }).toList();
+    }
+
+    final nthLastChildMatch = RegExp(
+      r'^(.*):nth-last-child\((\d+)\)\s*$',
+    ).firstMatch(selector);
+    if (nthLastChildMatch != null) {
+      final baseSelector = nthLastChildMatch.group(1)!.trim();
+      final targetIndex = int.parse(nthLastChildMatch.group(2)!);
+      final candidates = document.querySelectorAll(baseSelector);
+      return candidates.where((element) {
+        final siblings = element.parent?.children ?? const <dom.Element>[];
+        final reverseIndex = siblings.length - siblings.indexOf(element);
+        return reverseIndex == targetIndex;
+      }).toList();
+    }
+
+    final firstChildMatch = RegExp(r'^(.*):first-child\s*$').firstMatch(selector);
+    if (firstChildMatch != null) {
+      final baseSelector = firstChildMatch.group(1)!.trim();
+      final candidates = document.querySelectorAll(baseSelector);
+      return candidates.where((element) {
+        final siblings = element.parent?.children ?? const <dom.Element>[];
+        return siblings.isNotEmpty && identical(siblings.first, element);
+      }).toList();
+    }
+
+    final lastChildMatch = RegExp(r'^(.*):last-child\s*$').firstMatch(selector);
+    if (lastChildMatch != null) {
+      final baseSelector = lastChildMatch.group(1)!.trim();
+      final candidates = document.querySelectorAll(baseSelector);
+      return candidates.where((element) {
+        final siblings = element.parent?.children ?? const <dom.Element>[];
+        return siblings.isNotEmpty && identical(siblings.last, element);
+      }).toList();
+    }
+
+    return const <dom.Element>[];
+  }
+
+  String _simplifyUnsupportedSelector(String selector) {
+    return selector
+        .replaceAll(RegExp(r':nth-last-child\([^)]*\)'), '')
+        .replaceAll(RegExp(r':nth-child\([^)]*\)'), '')
+        .replaceAll(RegExp(r':first-child\b'), '')
+        .replaceAll(RegExp(r':last-child\b'), '')
+        .replaceAll(RegExp(r':not\([^)]*\)'), '')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .replaceAll(RegExp(r'\s*,\s*'), ',')
+        .trim();
   }
 
   String _selectHtmlText(String html, String selector) {
@@ -287,6 +452,44 @@ class JsExtensions extends JsExtensionsBase {
       }
     }
     return '';
+  }
+
+  String _selectHtmlData(String html, String selector) {
+    if (selector == 'html') {
+      final document = html_parser.parse(html);
+      final contentElements =
+          document
+              .querySelectorAll('*')
+              .where(
+                (element) =>
+                    element.localName != 'html' &&
+                    element.localName != 'head' &&
+                    element.localName != 'body',
+              )
+              .toList();
+      if (contentElements.length == 1) {
+        return contentElements.first.innerHtml;
+      }
+    }
+    final elements = _selectHtmlElements(html, selector);
+    return elements.map((element) => element.innerHtml).join();
+  }
+
+  String _removeHtml(String html, String selector) {
+    final document = html_parser.parse(html);
+    final targets = _selectHtmlElementsFromDocument(document, selector);
+    if (targets.isEmpty) {
+      return html;
+    }
+
+    for (final target in targets) {
+      target.remove();
+    }
+
+    if (html.contains('<html') || html.contains('<!DOCTYPE')) {
+      return document.outerHtml;
+    }
+    return document.body?.innerHtml ?? html;
   }
 
   /// 下載到快取資料夾並回傳內容；目前僅 Dart 內部呼叫 (非 JS 路徑)

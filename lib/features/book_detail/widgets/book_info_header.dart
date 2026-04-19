@@ -13,10 +13,14 @@ class BookInfoHeader extends StatelessWidget {
   final Function(BuildContext, BookDetailProvider) showChangeSource;
 
   const BookInfoHeader({
-    super.key, required this.book, required this.provider, 
-    required this.showPhotoView, required this.onEdit, 
-    required this.showSourceOptions, required this.navigateToReader,
-    required this.showChangeSource
+    super.key,
+    required this.book,
+    required this.provider,
+    required this.showPhotoView,
+    required this.onEdit,
+    required this.showSourceOptions,
+    required this.navigateToReader,
+    required this.showChangeSource,
   });
 
   @override
@@ -28,14 +32,24 @@ class BookInfoHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onLongPress: () { if (coverUrl != null && coverUrl.isNotEmpty) showPhotoView(context, coverUrl); },
+            onLongPress: () {
+              if (coverUrl != null && coverUrl.isNotEmpty)
+                showPhotoView(context, coverUrl);
+            },
             child: Hero(
               tag: 'book_cover',
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),
-                child: coverUrl != null && coverUrl.isNotEmpty
-                    ? CachedNetworkImage(imageUrl: coverUrl, width: 100, height: 140, fit: BoxFit.cover, errorWidget: (_, __, ___) => _buildCoverPlaceholder())
-                    : _buildCoverPlaceholder(),
+                child:
+                    coverUrl != null && coverUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                          imageUrl: coverUrl,
+                          width: 100,
+                          height: 140,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => _buildCoverPlaceholder(),
+                        )
+                        : _buildCoverPlaceholder(),
               ),
             ),
           ),
@@ -46,21 +60,68 @@ class BookInfoHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(book.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(
+                    book.name,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Text('作者：${book.author}', style: const TextStyle(fontSize: 16)),
+                  Text(
+                    '作者：${book.author}',
+                    style: const TextStyle(fontSize: 16),
+                  ),
                   const SizedBox(height: 4),
                   GestureDetector(
                     onTap: () => showSourceOptions(context, book),
-                    child: Text('來源：${book.originName}', style: const TextStyle(fontSize: 14, color: Colors.blue, decoration: TextDecoration.underline)),
+                    child: Text(
+                      '來源：${book.originName}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.blue,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      ElevatedButton(onPressed: () => navigateToReader(context, book, book.durChapterIndex), child: Text(book.durChapterIndex == 0 && book.durChapterPos == 0 ? '開始閱讀' : '繼續閱讀')),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed:
+                              () => navigateToReader(
+                                context,
+                                book,
+                                book.durChapterIndex,
+                              ),
+                          child: Text(
+                            book.durChapterIndex == 0 && book.durChapterPos == 0
+                                ? '開始閱讀'
+                                : '繼續閱讀',
+                          ),
+                        ),
+                      ),
                       const SizedBox(width: 8),
-                      TextButton(onPressed: () => showChangeSource(context, provider), child: const Text('換源', style: TextStyle(fontSize: 12))),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: provider.toggleInBookshelf,
+                          icon: Icon(
+                            provider.isInBookshelf
+                                ? Icons.library_add_check
+                                : Icons.library_add,
+                          ),
+                          label: Text(provider.isInBookshelf ? '移出書架' : '放入書架'),
+                        ),
+                      ),
                     ],
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: () => showChangeSource(context, provider),
+                      child: const Text('換源', style: TextStyle(fontSize: 12)),
+                    ),
                   ),
                 ],
               ),
@@ -71,6 +132,10 @@ class BookInfoHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildCoverPlaceholder() => Container(width: 100, height: 140, color: Colors.grey.shade200, child: const Icon(Icons.book, size: 50, color: Colors.grey));
+  Widget _buildCoverPlaceholder() => Container(
+    width: 100,
+    height: 140,
+    color: Colors.grey.shade200,
+    child: const Icon(Icons.book, size: 50, color: Colors.grey),
+  );
 }
-

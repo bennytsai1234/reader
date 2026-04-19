@@ -66,6 +66,10 @@ void main() {
         runtime!.evaluate('typeof java.timeFormatUTC').stringResult,
         'function',
       );
+      expect(
+        runtime!.evaluate('typeof java.toNumChapter').stringResult,
+        'function',
+      );
     });
 
     test('java.log returns the original value like Legado', () {
@@ -97,6 +101,18 @@ void main() {
         runtime!.evaluate('typeof cookie.remove').stringResult,
         'function',
       );
+      expect(
+        runtime!.evaluate('typeof cookie.getCookie').stringResult,
+        'function',
+      );
+      expect(
+        runtime!.evaluate('typeof cookie.setCookie').stringResult,
+        'function',
+      );
+      expect(
+        runtime!.evaluate('typeof cookie.removeCookie').stringResult,
+        'function',
+      );
       expect(runtime!.evaluate('typeof cache.get').stringResult, 'function');
       expect(
         runtime!.evaluate('typeof cache.getFile').stringResult,
@@ -125,6 +141,19 @@ void main() {
 
       expect(
         runtime!.evaluate('typeof source.getLoginInfo').stringResult,
+        'function',
+      );
+      expect(runtime!.evaluate('typeof source.getKey').stringResult, 'function');
+      expect(
+        runtime!.evaluate('typeof source.getVariable').stringResult,
+        'function',
+      );
+      expect(
+        runtime!.evaluate('typeof source.setVariable').stringResult,
+        'function',
+      );
+      expect(
+        runtime!.evaluate('typeof source.getHeaderMap').stringResult,
         'function',
       );
       expect(
@@ -167,6 +196,47 @@ void main() {
       ''');
 
       expect(result.stringResult, '/chapter/1');
+    });
+
+    test('Jsoup shim supports data() and remove() mutations', () {
+      if (runtime == null) {
+        expect(runtimeError, isNotNull);
+        return;
+      }
+      final ext = JsExtensions(runtime!);
+      ext.inject();
+
+      final result = runtime!.evaluate(r'''
+        importClass(org.jsoup.Jsoup);
+        var doc = Jsoup.parse('<style>.hide:nth-last-child(2){display:none}</style><div class="hide">X</div><div class="show">Y</div>');
+        var selector = String(doc.select("style").first().data()).replace(/{display:none}/g, ",").slice(0, -1);
+        doc.select(selector).remove();
+        doc.html();
+      ''');
+
+      expect(result.stringResult.contains('>X<'), isFalse);
+      expect(result.stringResult.contains('>Y<'), isTrue);
+    });
+
+    test('Jsoup shim preserves middle nodes for nth-child removals', () {
+      if (runtime == null) {
+        expect(runtimeError, isNotNull);
+        return;
+      }
+      final ext = JsExtensions(runtime!);
+      ext.inject();
+
+      final result = runtime!.evaluate(r'''
+        importClass(org.jsoup.Jsoup);
+        var doc = Jsoup.parse('<style>.list>li:nth-child(1){display:none}.list>li:nth-last-child(1){display:none}</style><ul class="list"><li>A</li><li>B</li><li>C</li></ul>');
+        var selector = String(doc.select("style").first().data()).replace(/{display:none}/g, ",").slice(0, -1);
+        doc.select(selector).remove();
+        doc.html();
+      ''');
+
+      expect(result.stringResult.contains('>A<'), isFalse);
+      expect(result.stringResult.contains('>B<'), isTrue);
+      expect(result.stringResult.contains('>C<'), isFalse);
     });
 
     test('JavaImporter shim supports Base64 and GZIP decode loops', () {
@@ -270,5 +340,20 @@ void main() {
         expect(result.stringResult, 'hello');
       },
     );
+
+    test('java.toNumChapter matches Legado chapter numbering helper', () {
+      if (runtime == null) {
+        expect(runtimeError, isNotNull);
+        return;
+      }
+      final ext = JsExtensions(runtime!);
+      ext.inject();
+
+      final result = runtime!.evaluate(r'''
+        java.toNumChapter("第十二章 归来");
+      ''');
+
+      expect(result.stringResult, '第12章 归来');
+    });
   });
 }

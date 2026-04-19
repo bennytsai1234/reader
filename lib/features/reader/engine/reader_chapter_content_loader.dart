@@ -26,6 +26,7 @@ class ReaderChapterContentLoader {
     required this.currentChineseConvert,
     required this.getSource,
     required this.setSource,
+    this.resolveNextChapterUrl,
   });
 
   final Book book;
@@ -36,6 +37,7 @@ class ReaderChapterContentLoader {
   final int Function() currentChineseConvert;
   final BookSource? Function() getSource;
   final void Function(BookSource source) setSource;
+  final String? Function(int chapterIndex)? resolveNextChapterUrl;
   final ChineseTextConverter _textConverter = const ChineseTextConverter();
 
   List<Map<String, dynamic>>? _cachedRulesJson;
@@ -81,6 +83,8 @@ class ReaderChapterContentLoader {
   }
 
   Future<String> _loadRawContent(int chapterIndex, BookChapter chapter) async {
+    final nextChapterUrl = resolveNextChapterUrl?.call(chapterIndex);
+
     if (book.origin == 'local') {
       return ReaderPerfTrace.measureAsync(
         'local content chapter $chapterIndex',
@@ -110,7 +114,12 @@ class ReaderChapterContentLoader {
     try {
       final raw = await ReaderPerfTrace.measureAsync(
         'remote content chapter $chapterIndex',
-        () => service.getContent(resolvedSource, book, chapter),
+        () => service.getContent(
+          resolvedSource,
+          book,
+          chapter,
+          nextChapterUrl: nextChapterUrl,
+        ),
       );
       if (raw.isNotEmpty) {
         return raw;

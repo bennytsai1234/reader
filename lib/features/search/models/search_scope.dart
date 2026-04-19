@@ -97,14 +97,14 @@ class SearchScope {
 
     if (_scope.isEmpty) {
       // 全部啟用書源
-      return dao.getEnabled();
+      return _sortSources(await dao.getEnabled());
     }
 
     if (_scope.contains('::')) {
       // 單一書源
       final url = _scope.substring(_scope.indexOf('::') + 2);
       final source = await dao.getByUrl(url);
-      return source != null ? [source] : [];
+      return source != null ? _sortSources([source]) : [];
     }
 
     // 分組模式
@@ -114,10 +114,11 @@ class SearchScope {
     final validGroups = <String>[];
 
     for (final group in groups) {
-      final matched = allEnabled.where((s) {
-        final g = s.bookSourceGroup ?? '';
-        return g.split(',').map((e) => e.trim()).contains(group);
-      }).toList();
+      final matched =
+          allEnabled.where((s) {
+            final g = s.bookSourceGroup ?? '';
+            return g.split(',').map((e) => e.trim()).contains(group);
+          }).toList();
       if (matched.isNotEmpty) {
         validGroups.add(group);
         result.addAll(matched);
@@ -127,7 +128,7 @@ class SearchScope {
     // 若分組內已無可用書源，退回全部
     if (result.isEmpty) {
       _scope = '';
-      return dao.getEnabled();
+      return _sortSources(await dao.getEnabled());
     }
 
     // 清理無效分組
@@ -140,7 +141,13 @@ class SearchScope {
     final seen = <String>{};
     result.retainWhere((s) => seen.add(s.bookSourceUrl));
 
-    return result;
+    return _sortSources(result);
+  }
+
+  List<BookSource> _sortSources(List<BookSource> sources) {
+    final sorted = List<BookSource>.from(sources);
+    sorted.sort((a, b) => a.customOrder.compareTo(b.customOrder));
+    return sorted;
   }
 
   /// 持久化

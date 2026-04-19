@@ -10,6 +10,13 @@ import 'package:pool/pool.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models/search_scope.dart';
 
+bool matchesPrecisionSearch(SearchBook book, String key) {
+  final keyword = key.trim();
+  if (keyword.isEmpty) return false;
+  return book.name.contains(keyword) ||
+      (book.author?.contains(keyword) ?? false);
+}
+
 /// SearchModel - 多書源並行搜尋引擎
 /// (對標 Legado model/webBook/SearchModel.kt)
 ///
@@ -114,7 +121,7 @@ class SearchModel {
       // 精準搜尋過濾
       final filteredBooks =
           precisionSearch
-              ? books.where((b) => b.name == key || b.author == key).toList()
+              ? books.where((b) => matchesPrecisionSearch(b, key)).toList()
               : books;
 
       if (filteredBooks.isNotEmpty) {

@@ -23,6 +23,18 @@ import 'package:inkpage_reader/core/services/source_verification_service.dart';
 ///
 /// 純同步 handler 例如 [timeFormatUTC] 則保留同步 return，直接回傳字串。
 extension JsNetworkExtensions on JsExtensions {
+  List<String> _redirectsForResponse(Response response) {
+    final nativeRedirects =
+        response.redirects.map((record) => record.location.toString()).toList();
+    if (nativeRedirects.isNotEmpty) {
+      return nativeRedirects;
+    }
+    return ((response.extra['_manualRedirectChain'] as List?) ??
+            const <dynamic>[])
+        .map((item) => item.toString())
+        .toList();
+  }
+
   void injectNetworkExtensions() {
     // ─── java.ajax(url) — 返回 body 字串 ─────────────────────────
     runtime.onMessage('ajax', (dynamic args) {
@@ -109,10 +121,7 @@ extension JsNetworkExtensions on JsExtensions {
               'requestUrl': url,
               'code': response.statusCode,
               'headers': response.headers.map,
-              'redirects':
-                  response.redirects
-                      .map((record) => record.location.toString())
-                      .toList(),
+              'redirects': _redirectsForResponse(response),
             };
             _stashLastHttpResponse(payload);
             resolveJsPending(parsed.callId, payload);
@@ -167,10 +176,7 @@ extension JsNetworkExtensions on JsExtensions {
               'requestUrl': url,
               'code': response.statusCode,
               'headers': response.headers.map,
-              'redirects':
-                  response.redirects
-                      .map((record) => record.location.toString())
-                      .toList(),
+              'redirects': _redirectsForResponse(response),
             };
             _stashLastHttpResponse(payload);
             resolveJsPending(parsed.callId, payload);

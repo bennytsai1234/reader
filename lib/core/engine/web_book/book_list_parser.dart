@@ -44,7 +44,7 @@ class BookListParser {
       ruleList = ruleList.substring(1);
     }
 
-    final elements = rule.getElements(ruleList);
+    final elements = await rule.getElementsAsync(ruleList);
 
     // 2. 如果列表為空且未配置 bookUrlPattern，嘗試按詳情頁解析 (對標 Android 邏輯)
     if (elements.isEmpty &&

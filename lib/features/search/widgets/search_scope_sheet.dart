@@ -38,11 +38,12 @@ class SearchScopeSheet extends StatefulWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => SearchScopeSheet(
-        currentScope: currentScope,
-        groups: groups,
-        onScopeChanged: onScopeChanged,
-      ),
+      builder:
+          (_) => SearchScopeSheet(
+            currentScope: currentScope,
+            groups: groups,
+            onScopeChanged: onScopeChanged,
+          ),
     );
   }
 
@@ -82,16 +83,17 @@ class _SearchScopeSheetState extends State<SearchScopeSheet>
 
   Future<void> _loadSources() async {
     final dao = getIt<BookSourceDao>();
-    _allSources = await dao.getAll();
+    _allSources =
+        await dao.getAll()
+          ..sort((a, b) => a.customOrder.compareTo(b.customOrder));
     _filteredSources = List.from(_allSources);
 
     // 如果當前是單一書源模式，嘗試找到對應書源
     if (widget.currentScope.isSource) {
       final scopeStr = widget.currentScope.toString();
       final url = scopeStr.substring(scopeStr.indexOf('::') + 2);
-      _selectedSource = _allSources
-          .where((s) => s.bookSourceUrl == url)
-          .firstOrNull;
+      _selectedSource =
+          _allSources.where((s) => s.bookSourceUrl == url).firstOrNull;
     }
 
     if (mounted) setState(() {});
@@ -102,10 +104,13 @@ class _SearchScopeSheetState extends State<SearchScopeSheet>
       if (query.isEmpty) {
         _filteredSources = List.from(_allSources);
       } else {
-        _filteredSources = _allSources.where((s) {
-          return s.bookSourceName.toLowerCase().contains(query.toLowerCase()) ||
-              s.bookSourceUrl.toLowerCase().contains(query.toLowerCase());
-        }).toList();
+        _filteredSources =
+            _allSources.where((s) {
+              return s.bookSourceName.toLowerCase().contains(
+                    query.toLowerCase(),
+                  ) ||
+                  s.bookSourceUrl.toLowerCase().contains(query.toLowerCase());
+            }).toList();
       }
     });
   }
@@ -135,7 +140,12 @@ class _SearchScopeSheetState extends State<SearchScopeSheet>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('搜尋範圍', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  Text(
+                    '搜尋範圍',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   Row(
                     children: [
                       TextButton(
@@ -158,10 +168,7 @@ class _SearchScopeSheetState extends State<SearchScopeSheet>
             // Tab 切換
             TabBar(
               controller: _tabController,
-              tabs: const [
-                Tab(text: '分組'),
-                Tab(text: '書源'),
-              ],
+              tabs: const [Tab(text: '分組'), Tab(text: '書源')],
             ),
             // Tab 內容
             Expanded(
@@ -182,7 +189,9 @@ class _SearchScopeSheetState extends State<SearchScopeSheet>
   /// 分組模式：Checkbox 多選
   Widget _buildGroupTab(ScrollController scrollController) {
     if (widget.groups.isEmpty) {
-      return const Center(child: Text('暫無分組', style: TextStyle(color: Colors.grey)));
+      return const Center(
+        child: Text('暫無分組', style: TextStyle(color: Colors.grey)),
+      );
     }
 
     return ListView.builder(
@@ -221,53 +230,64 @@ class _SearchScopeSheetState extends State<SearchScopeSheet>
               hintText: '搜尋書源',
               prefixIcon: const Icon(Icons.search, size: 20),
               isDense: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
             ),
             onChanged: _filterSources,
           ),
         ),
         Expanded(
-          child: _filteredSources.isEmpty
-              ? const Center(child: Text('無匹配書源', style: TextStyle(color: Colors.grey)))
-              : RadioGroup<String>(
-                  groupValue: _selectedSource?.bookSourceUrl,
-                  onChanged: (String? value) {
-                    if (value != null) {
-                      setState(() {
-                        _selectedSource = _filteredSources.firstWhere((s) => s.bookSourceUrl == value);
-                      });
-                    }
-                  },
-                  child: ListView.builder(
-                    controller: scrollController,
-                    itemCount: _filteredSources.length,
-                    itemBuilder: (context, index) {
-                      final source = _filteredSources[index];
-                      return ListTile(
-                        leading: Radio<String>(
-                          value: source.bookSourceUrl,
-                        ),
-                        title: Text(
-                          source.bookSourceName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          source.bookSourceUrl,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
-                        ),
-                        onTap: () {
-                          setState(() {
-                            _selectedSource = source;
-                          });
-                        },
-                      );
+          child:
+              _filteredSources.isEmpty
+                  ? const Center(
+                    child: Text('無匹配書源', style: TextStyle(color: Colors.grey)),
+                  )
+                  : RadioGroup<String>(
+                    groupValue: _selectedSource?.bookSourceUrl,
+                    onChanged: (String? value) {
+                      if (value != null) {
+                        setState(() {
+                          _selectedSource = _filteredSources.firstWhere(
+                            (s) => s.bookSourceUrl == value,
+                          );
+                        });
+                      }
                     },
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemCount: _filteredSources.length,
+                      itemBuilder: (context, index) {
+                        final source = _filteredSources[index];
+                        return ListTile(
+                          leading: Radio<String>(value: source.bookSourceUrl),
+                          title: Text(
+                            source.bookSourceName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            source.bookSourceUrl,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          onTap: () {
+                            setState(() {
+                              _selectedSource = source;
+                            });
+                          },
+                        );
+                      },
+                    ),
                   ),
-                ),
         ),
       ],
     );

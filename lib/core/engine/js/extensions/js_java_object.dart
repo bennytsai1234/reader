@@ -166,6 +166,7 @@ extension JsJavaObject on JsExtensionsBase {
         randomUUID: function() { return sendMessage('_randomUUID', ''); },
         timeFormat: function(time) { return sendMessage('_timeFormat', JSON.stringify(time)); },
         timeFormatUTC: function(time, format, sh) { return sendMessage('timeFormatUTC', JSON.stringify([time, format, sh])); },
+        toNumChapter: function(text) { return sendMessage('_toNumChapter', JSON.stringify(text)); },
         t2s: function(text) { return sendMessage('t2s', JSON.stringify(text)); },
         s2t: function(text) { return sendMessage('s2t', JSON.stringify(text)); },
         strToBytes: function(str, charset) {
@@ -216,8 +217,11 @@ extension JsJavaObject on JsExtensionsBase {
       // ─── cookie / cache / source 全域物件 ────────────────────
       var cookie = {
         get: function(url) { return __asyncCall('cookieGet', url); },
+        getCookie: function(url) { return __asyncCall('cookieGet', url); },
         set: function(url, value) { sendMessage('setCookie', JSON.stringify([url, value])); },
+        setCookie: function(url, value) { sendMessage('setCookie', JSON.stringify([url, value])); },
         remove: function(url) { sendMessage('removeCookie', JSON.stringify(url)); },
+        removeCookie: function(url) { sendMessage('removeCookie', JSON.stringify(url)); },
         all: function() { return __asyncCall('allCookies', ''); }
       };
 
@@ -230,6 +234,24 @@ extension JsJavaObject on JsExtensionsBase {
       };
 
       var source = source || {};
+      source.getKey = function() { return String(source.key || ''); };
+      source.getTag = function() {
+        return String(source.tag || source.bookSourceName || '');
+      };
+      source.getVariable = function() { return __asyncCall('sourceGetVariable', ''); };
+      source.setVariable = function(value) {
+        sendMessage('sourceSetVariable', JSON.stringify(value == null ? null : String(value)));
+        return value;
+      };
+      source.getHeaderMap = function(hasLoginHeader) {
+        var includeLoginHeader = hasLoginHeader === undefined ? true : !!hasLoginHeader;
+        var headerMap = sendMessage('sourceGetHeaderMap', JSON.stringify(includeLoginHeader));
+        if (headerMap == null || headerMap === '') return {};
+        if (typeof headerMap === 'string') {
+          try { return JSON.parse(headerMap); } catch (e) { return {}; }
+        }
+        return headerMap;
+      };
       source.getLoginInfo = function() { return __asyncCall('sourceGetLoginInfo', ''); };
       source.putLoginInfo = function(info) { sendMessage('sourcePutLoginInfo', JSON.stringify(info)); };
       source.getLoginInfoMap = function() {
@@ -357,25 +379,32 @@ extension JsJavaObject on JsExtensionsBase {
 
       var Jsoup = {
         parse: function(html) {
-          function createSelection(baseHtml, selector) {
+          function createSelection(docRef, selector) {
             return {
               text: function() {
-                return sendMessage('htmlSelectText', JSON.stringify([baseHtml, selector]));
+                return sendMessage('htmlSelectText', JSON.stringify([docRef.__html, selector]));
               },
               html: function() {
-                return sendMessage('htmlSelectHtml', JSON.stringify([baseHtml, selector]));
+                return sendMessage('htmlSelectHtml', JSON.stringify([docRef.__html, selector]));
+              },
+              data: function() {
+                return sendMessage('htmlSelectData', JSON.stringify([docRef.__html, selector]));
               },
               attr: function(name) {
-                return sendMessage('htmlSelectAttr', JSON.stringify([baseHtml, selector, name]));
+                return sendMessage('htmlSelectAttr', JSON.stringify([docRef.__html, selector, name]));
+              },
+              remove: function() {
+                docRef.__html = sendMessage('htmlRemove', JSON.stringify([docRef.__html, selector]));
+                return docRef;
               },
               first: function() {
                 return Jsoup.parse(
-                  sendMessage('htmlSelectHtml', JSON.stringify([baseHtml, selector + ':eq(0)']))
+                  sendMessage('htmlSelectHtml', JSON.stringify([docRef.__html, selector + ':eq(0)']))
                 );
               },
               get: function(index) {
                 return Jsoup.parse(
-                  sendMessage('htmlSelectHtml', JSON.stringify([baseHtml, selector + ':eq(' + index + ')']))
+                  sendMessage('htmlSelectHtml', JSON.stringify([docRef.__html, selector + ':eq(' + index + ')']))
                 );
               },
               toString: function() {
@@ -386,10 +415,13 @@ extension JsJavaObject on JsExtensionsBase {
           var doc = {
             __html: String(html || ''),
             select: function(selector) {
-              return createSelection(this.__html, selector);
+              return createSelection(this, selector);
             },
             text: function() {
               return sendMessage('htmlSelectText', JSON.stringify([this.__html, 'html']));
+            },
+            data: function() {
+              return sendMessage('htmlSelectData', JSON.stringify([this.__html, 'html']));
             },
             attr: function(name) {
               return sendMessage(
