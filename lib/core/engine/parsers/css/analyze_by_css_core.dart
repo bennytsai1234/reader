@@ -76,7 +76,8 @@ extension AnalyzeByCssCore on AnalyzeByCssBase {
 
     final sourceRule = SourceRule(ruleStr);
     if (sourceRule.elementsRule.isEmpty) {
-      return [element.text];
+      final data = getElementData(element);
+      return data.isEmpty ? [] : [data];
     }
 
     final ruleAnalyzes = RuleAnalyzer(sourceRule.elementsRule);
@@ -137,6 +138,12 @@ extension AnalyzeByCssCore on AnalyzeByCssBase {
     if (list.isEmpty) return null;
     if (list.length == 1) return list.first;
     return list.join('\n');
+  }
+
+  String getString0(String ruleStr, {bool isUrl = false}) {
+    final list = getStringList(ruleStr);
+    if (list.isEmpty) return '';
+    return list.first;
   }
 
   List<String>? getResultList(String ruleStr) {

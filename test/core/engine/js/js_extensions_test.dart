@@ -70,6 +70,23 @@ void main() {
         runtime!.evaluate('typeof java.toNumChapter').stringResult,
         'function',
       );
+      expect(
+        runtime!.evaluate('typeof java.cacheFile').stringResult,
+        'function',
+      );
+      expect(
+        runtime!.evaluate('typeof java.importScript').stringResult,
+        'function',
+      );
+      expect(runtime!.evaluate('typeof java.head').stringResult, 'function');
+      expect(
+        runtime!.evaluate('typeof java.webViewGetSource').stringResult,
+        'function',
+      );
+      expect(
+        runtime!.evaluate('typeof java.webViewGetOverrideUrl').stringResult,
+        'function',
+      );
     });
 
     test('java.log returns the original value like Legado', () {

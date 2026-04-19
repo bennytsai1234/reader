@@ -9,6 +9,7 @@ import 'package:inkpage_reader/core/engine/analyze_url.dart';
 import 'package:inkpage_reader/core/services/http_client.dart';
 import 'package:inkpage_reader/core/services/backstage_webview.dart';
 import 'package:inkpage_reader/core/services/source_verification_service.dart';
+import 'package:inkpage_reader/core/network/interceptors/app_interceptor.dart';
 
 /// 網路/WebView/I/O 相關 `java.*` 方法的 Dart 側 handler
 ///
@@ -74,22 +75,35 @@ extension JsNetworkExtensions on JsExtensions {
     // ─── java.connect(url) — 返回 {body, url, code} ──────────────
     runtime.onMessage('connect', (dynamic args) {
       final parsed = JsExtensionsBase.parseAsyncCallArgs(args);
-      final url = _parseUrlArg(parsed.payload);
+      final payload = parsed.payload;
+      final url = _parseUrlArg(payload);
+      final headerMap = _parseOptionalHeaderMap(payload);
       () async {
         try {
           final analyzeUrl = AnalyzeUrl(url, source: source as BookSource?);
-          final body = await analyzeUrl.getResponseBody();
+          analyzeUrl.headerMap.addAll(
+            headerMap.map(
+              (key, value) => MapEntry(key, value?.toString() ?? ''),
+            ),
+          );
+          final response = await analyzeUrl.getStrResponse();
           resolveJsPending(parsed.callId, {
-            'body': body,
-            'url': analyzeUrl.url,
-            'code': 200,
+            'body': response.body,
+            'url': response.url,
+            'requestUrl': analyzeUrl.url,
+            'code': response.raw.statusCode ?? 200,
+            'headers': response.headers,
+            'redirects': const <String>[],
           });
         } catch (e) {
           AppLog.e('java.connect failed: $e');
           resolveJsPending(parsed.callId, {
             'body': e.toString(),
             'url': url,
+            'requestUrl': url,
             'code': 500,
+            'headers': <String, dynamic>{},
+            'redirects': const <String>[],
           });
         }
       }();
@@ -112,8 +126,11 @@ extension JsNetworkExtensions on JsExtensions {
           payload.length > 1 && payload[1] is Map
               ? Map<String, dynamic>.from(payload[1] as Map)
               : <String, dynamic>{};
-      HttpClient().client
-          .get(url, options: Options(headers: headers))
+      _requestWithoutRedirects(
+            method: 'GET',
+            url: url,
+            headers: headers,
+          )
           .then((response) {
             final payload = {
               'body': response.data?.toString() ?? '',
@@ -123,7 +140,6 @@ extension JsNetworkExtensions on JsExtensions {
               'headers': response.headers.map,
               'redirects': _redirectsForResponse(response),
             };
-            _stashLastHttpResponse(payload);
             resolveJsPending(parsed.callId, payload);
           })
           .catchError((e) {
@@ -167,8 +183,12 @@ extension JsNetworkExtensions on JsExtensions {
                 ? 'application/json; charset=utf-8'
                 : 'application/x-www-form-urlencoded; charset=utf-8';
       }
-      HttpClient().client
-          .post(url, data: body, options: Options(headers: headers))
+      _requestWithoutRedirects(
+            method: 'POST',
+            url: url,
+            data: body,
+            headers: headers,
+          )
           .then((response) {
             final payload = {
               'body': response.data?.toString() ?? '',
@@ -178,11 +198,55 @@ extension JsNetworkExtensions on JsExtensions {
               'headers': response.headers.map,
               'redirects': _redirectsForResponse(response),
             };
-            _stashLastHttpResponse(payload);
             resolveJsPending(parsed.callId, payload);
           })
           .catchError((e) {
             AppLog.e('java.post failed: $e');
+            resolveJsPending(parsed.callId, {
+              'body': e.toString(),
+              'url': url,
+              'requestUrl': url,
+              'code': 500,
+              'headers': <String, dynamic>{},
+              'redirects': const <String>[],
+            });
+          });
+      return null;
+    });
+
+    // ─── java.head(url, headers) — 返回 headers/status，且不自動跟跳轉 ───
+    runtime.onMessage('head', (dynamic args) {
+      final parsed = JsExtensionsBase.parseAsyncCallArgs(args);
+      final payload = parsed.payload;
+      if (payload is! List || payload.isEmpty) {
+        rejectJsPending(
+          parsed.callId,
+          ArgumentError('java.head requires [url, headers]'),
+        );
+        return null;
+      }
+      final url = payload[0].toString();
+      final headers =
+          payload.length > 1 && payload[1] is Map
+              ? Map<String, dynamic>.from(payload[1] as Map)
+              : <String, dynamic>{};
+      _requestWithoutRedirects(
+            method: 'HEAD',
+            url: url,
+            headers: headers,
+          )
+          .then((response) {
+            resolveJsPending(parsed.callId, {
+              'body': response.data?.toString() ?? '',
+              'url': response.realUri.toString(),
+              'requestUrl': url,
+              'code': response.statusCode,
+              'headers': response.headers.map,
+              'redirects': _redirectsForResponse(response),
+            });
+          })
+          .catchError((e) {
+            AppLog.e('java.head failed: $e');
             resolveJsPending(parsed.callId, {
               'body': e.toString(),
               'url': url,
@@ -245,6 +309,65 @@ extension JsNetworkExtensions on JsExtensions {
           resolveJsPending(parsed.callId, response['body']?.toString() ?? '');
         } catch (e) {
           AppLog.e('java.webView failed: $e', error: e);
+          rejectJsPending(parsed.callId, e);
+        }
+      }();
+      return null;
+    });
+
+    runtime.onMessage('webViewGetSource', (dynamic args) {
+      final parsed = JsExtensionsBase.parseAsyncCallArgs(args);
+      final payload = parsed.payload;
+      if (payload is! List) {
+        resolveJsPending(parsed.callId, '');
+        return null;
+      }
+      final html = payload.isNotEmpty ? payload[0]?.toString() : null;
+      final url = payload.length > 1 ? payload[1]?.toString() : null;
+      final js = payload.length > 2 ? payload[2]?.toString() : null;
+      final sourceRegex = payload.length > 3 ? payload[3]?.toString() : null;
+      () async {
+        try {
+          final webView = BackstageWebView(
+            html: html,
+            url: url,
+            javaScript: js,
+            sourceRegex: sourceRegex,
+          );
+          final response = await webView.getStrResponse();
+          resolveJsPending(parsed.callId, response['body']?.toString() ?? '');
+        } catch (e) {
+          AppLog.e('java.webViewGetSource failed: $e', error: e);
+          rejectJsPending(parsed.callId, e);
+        }
+      }();
+      return null;
+    });
+
+    runtime.onMessage('webViewGetOverrideUrl', (dynamic args) {
+      final parsed = JsExtensionsBase.parseAsyncCallArgs(args);
+      final payload = parsed.payload;
+      if (payload is! List) {
+        resolveJsPending(parsed.callId, '');
+        return null;
+      }
+      final html = payload.isNotEmpty ? payload[0]?.toString() : null;
+      final url = payload.length > 1 ? payload[1]?.toString() : null;
+      final js = payload.length > 2 ? payload[2]?.toString() : null;
+      final overrideUrlRegex =
+          payload.length > 3 ? payload[3]?.toString() : null;
+      () async {
+        try {
+          final webView = BackstageWebView(
+            html: html,
+            url: url,
+            javaScript: js,
+            overrideUrlRegex: overrideUrlRegex,
+          );
+          final response = await webView.getStrResponse();
+          resolveJsPending(parsed.callId, response['body']?.toString() ?? '');
+        } catch (e) {
+          AppLog.e('java.webViewGetOverrideUrl failed: $e', error: e);
           rejectJsPending(parsed.callId, e);
         }
       }();
@@ -362,6 +485,40 @@ extension JsNetworkExtensions on JsExtensions {
   String _parseUrlArg(dynamic payload) {
     if (payload is List && payload.isNotEmpty) return payload[0].toString();
     return payload.toString();
+  }
+
+  Map<String, dynamic> _parseOptionalHeaderMap(dynamic payload) {
+    if (payload is! List || payload.length < 2) {
+      return <String, dynamic>{};
+    }
+    final rawHeaders = payload[1];
+    if (rawHeaders is Map) {
+      return Map<String, dynamic>.from(rawHeaders);
+    }
+    return <String, dynamic>{};
+  }
+
+  Future<Response<dynamic>> _requestWithoutRedirects({
+    required String method,
+    required String url,
+    dynamic data,
+    Map<String, dynamic>? headers,
+  }) {
+    final requestOptions = RequestOptions(
+      method: method,
+      path: url,
+      baseUrl: '',
+      data: data,
+      headers: headers ?? const <String, dynamic>{},
+      followRedirects: false,
+      maxRedirects: 0,
+      validateStatus: (_) => true,
+      responseType: ResponseType.plain,
+      extra: <String, dynamic>{
+        AppInterceptor.disableManualRedirectHandlingKey: true,
+      },
+    );
+    return HttpClient().client.fetch<dynamic>(requestOptions);
   }
 
   void _stashLastHttpResponse(Map<String, dynamic> payload) {

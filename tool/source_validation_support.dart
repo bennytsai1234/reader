@@ -295,7 +295,11 @@ Future<SourceValidationResult> validateSourceFlow(
       throw StateError('搜尋 "$keyword" 沒有結果');
     }
 
-    selectedBook = selectBook(searchBooks);
+    final matchedBook = selectMatchingSearchBook(searchBooks, keyword);
+    if (matchedBook == null) {
+      throw StateError('搜尋結果未命中關鍵詞 "$keyword"');
+    }
+    selectedBook = matchedBook.toBook();
 
     stage = 'detail';
     hydratedBook = await service.getBookInfo(source, selectedBook);
@@ -473,10 +477,19 @@ ValidationFailureClassification classifyValidationFailure(
     );
   }
 
-  if (rawNormalized.contains('找不到可用測試關鍵詞') || rawNormalized.contains('沒有結果')) {
+  if (rawNormalized.contains('找不到可用測試關鍵詞') ||
+      rawNormalized.contains('沒有結果')) {
     return const ValidationFailureClassification(
       outcome: SourceValidationOutcome.skip,
       category: 'source-search-empty',
+    );
+  }
+
+  if (rawNormalized.contains('搜尋結果未命中關鍵詞') ||
+      rawNormalized.contains('搜索结果未命中关键词')) {
+    return const ValidationFailureClassification(
+      outcome: SourceValidationOutcome.skip,
+      category: 'source-search-mismatch',
     );
   }
 
@@ -690,12 +703,38 @@ Future<SearchKeywordSeed?> pickKeywordFromHomepage(
   return null;
 }
 
-Book selectBook(List<SearchBook> searchBooks) {
-  final selected = searchBooks.firstWhere(
-    (book) => book.bookUrl.trim().isNotEmpty,
-    orElse: () => searchBooks.first,
-  );
-  return selected.toBook();
+SearchBook? selectMatchingSearchBook(
+  List<SearchBook> searchBooks,
+  String? keyword,
+) {
+  final candidates =
+      searchBooks.where((book) => book.bookUrl.trim().isNotEmpty).toList();
+  if (candidates.isEmpty) {
+    return searchBooks.isEmpty ? null : searchBooks.first;
+  }
+
+  final trimmedKeyword = keyword?.trim() ?? '';
+  if (trimmedKeyword.isEmpty) {
+    return candidates.first;
+  }
+
+  for (final book in candidates) {
+    if (_searchBookMatchesKeyword(book, trimmedKeyword)) {
+      return book;
+    }
+  }
+  return null;
+}
+
+Book selectBook(List<SearchBook> searchBooks, {String? keyword}) {
+  final selected = selectMatchingSearchBook(searchBooks, keyword);
+  if (selected != null) {
+    return selected.toBook();
+  }
+  if (searchBooks.isEmpty) {
+    throw StateError('searchBooks is empty');
+  }
+  return searchBooks.first.toBook();
 }
 
 bool looksReadable(String content) {
@@ -829,6 +868,57 @@ bool looksLikeBookName(String text) {
     return false;
   }
   return RegExp(r'[\u4e00-\u9fffA-Za-z0-9]', unicode: true).hasMatch(value);
+}
+
+bool _searchBookMatchesKeyword(SearchBook book, String keyword) {
+  final haystacks = <String>[
+    _normalizeKeywordText(book.name),
+    _normalizeKeywordText(book.author ?? ''),
+  ].where((value) => value.isNotEmpty).toList();
+  if (haystacks.isEmpty) return false;
+
+  for (final candidate in _buildKeywordMatchCandidates(keyword)) {
+    if (candidate.isEmpty) continue;
+    if (haystacks.any((value) => value.contains(candidate))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+List<String> _buildKeywordMatchCandidates(String keyword) {
+  final trimmed = keyword.trim();
+  final candidates = <String>[];
+
+  void addCandidate(String value) {
+    final normalized = _normalizeKeywordText(value);
+    if (normalized.runes.length < 2) return;
+    if (candidates.contains(normalized)) return;
+    candidates.add(normalized);
+  }
+
+  addCandidate(trimmed);
+
+  final cleaned =
+      trimmed
+          .replaceAll(RegExp(r'[《》【】\[\]（）()<>]'), ' ')
+          .replaceAll(RegExp(r'[:：,，.。!！?？/\\|_\-]+'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+  addCandidate(cleaned);
+
+  for (final token in cleaned.split(' ')) {
+    addCandidate(token);
+  }
+
+  return candidates;
+}
+
+String _normalizeKeywordText(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[《》【】\[\]（）()<>]'), '')
+      .replaceAll(RegExp(r'[:：,，.。!！?？/\\|_\-\s]+'), '');
 }
 
 class _PassthroughHttpOverrides extends HttpOverrides {}

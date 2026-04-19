@@ -9,6 +9,13 @@ extension AnalyzeByCssHelper on AnalyzeByCssBase {
     return single.getElementsSingle(temp, rule);
   }
 
+  String getElementData(Element element) {
+    if (element.localName == 'script' || element.localName == 'style') {
+      return element.innerHtml;
+    }
+    return element.innerHtml;
+  }
+
   List<String> getResultLast(List<Element> elements, String lastRule) {
     final textS = <String>[];
     String attrName = lastRule;

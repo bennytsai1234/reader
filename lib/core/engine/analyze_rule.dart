@@ -53,6 +53,9 @@ class AnalyzeRule extends AnalyzeRuleBase with AnalyzeRuleRegexHelper, AnalyzeRu
     }
     this.content = content;
     this.baseUrl = baseUrl;
+    // legado 會在解析鏈中同時維護 baseUrl 與 redirectUrl；若呼叫端尚未
+    // 額外指定 redirectUrl，預設以目前內容所在 URL 作為 redirectUrl。
+    redirectUrl = baseUrl;
     analyzeByXPath = null;
     analyzeByJSoup = null;
     analyzeByJSonPath = null;
@@ -111,4 +114,3 @@ class AnalyzeRule extends AnalyzeRuleBase with AnalyzeRuleRegexHelper, AnalyzeRu
     return '';
   }
 }
-

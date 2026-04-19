@@ -1,6 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkpage_reader/core/engine/analyze_rule.dart';
+import 'package:inkpage_reader/core/models/book_source.dart';
 import 'package:inkpage_reader/core/models/rule_data_interface.dart';
+import 'package:inkpage_reader/core/services/cookie_store.dart';
+
+import '../../test_helper.dart';
 
 class MockRuleData extends RuleDataInterface {
   @override
@@ -20,6 +24,9 @@ class MockRuleData extends RuleDataInterface {
 }
 
 void main() {
+  setupTestDI();
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('AnalyzeRule Tests', () {
     const htmlStr = '''
     <html>
@@ -184,6 +191,32 @@ void main() {
       );
     });
 
+    test('isUrl=true prefers redirectUrl over baseUrl', () {
+      final analyzer = AnalyzeRule()
+        ..setContent(
+          htmlStr,
+          baseUrl: 'https://example.com/search?q=test',
+        )
+        ..setRedirectUrl('https://cdn.example.net/results/list.html');
+
+      expect(
+        analyzer.getString('.link@href', isUrl: true),
+        'https://cdn.example.net/book/1',
+      );
+    });
+
+    test('isUrl=true returns the first css match instead of joined values', () {
+      final analyzer = AnalyzeRule().setContent(
+        htmlStr,
+        baseUrl: 'https://example.com/search?q=test',
+      );
+
+      expect(
+        analyzer.getString('.links@tag.a@href', isUrl: true),
+        'https://example.com/chapter/1',
+      );
+    });
+
     test('getStringList with isUrl=true resolves relative urls', () {
       final analyzer = AnalyzeRule().setContent(
         htmlStr,
@@ -208,6 +241,52 @@ void main() {
           await analyzer.getStringAsync('.link@href', isUrl: true),
           'https://example.com/book/1',
         );
+      },
+    );
+
+    test(
+      'getStringAsync with isUrl=true prefers redirectUrl over baseUrl',
+      () async {
+        final analyzer = AnalyzeRule()
+          ..setContent(
+            htmlStr,
+            baseUrl: 'https://example.com/search?q=test',
+          )
+          ..setRedirectUrl('https://cdn.example.net/results/list.html');
+
+        expect(
+          await analyzer.getStringAsync('.link@href', isUrl: true),
+          'https://cdn.example.net/book/1',
+        );
+      },
+    );
+
+    test(
+      'getStringListAsync resolves async dynamic rules before css parsing',
+      () async {
+        await CookieStore().setCookie(
+          'https://example.com',
+          'selector=.links',
+        );
+        try {
+          final analyzer = AnalyzeRule().setContent(
+            htmlStr,
+            baseUrl: 'https://example.com/search?q=test',
+          );
+
+          expect(
+            await analyzer.getStringListAsync(
+              '{{java.getCookie("https://example.com", "selector")}}@tag.a@href',
+              isUrl: true,
+            ),
+            [
+              'https://example.com/chapter/1',
+              'https://example.com/chapter/2',
+            ],
+          );
+        } finally {
+          await CookieStore().removeCookie('https://example.com');
+        }
       },
     );
   });

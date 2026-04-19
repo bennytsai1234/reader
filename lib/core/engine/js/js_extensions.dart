@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:html/dom.dart' as dom;
@@ -196,6 +197,54 @@ class JsExtensions extends JsExtensionsBase {
           .catchError((e) {
             rejectJsPending(parsed.callId, e);
           });
+      return null;
+    });
+
+    runtime.onMessage('cacheTextFile', (args) {
+      final parsed = JsExtensionsBase.parseAsyncCallArgs(args);
+      final payload = parsed.payload;
+      final url = payload is List && payload.isNotEmpty
+          ? payload[0].toString()
+          : payload.toString();
+      final saveTime = payload is List && payload.length > 1
+          ? int.tryParse(payload[1].toString()) ?? 0
+          : 0;
+      cacheFile(url, saveTime)
+          .then((content) {
+            resolveJsPending(parsed.callId, content);
+          })
+          .catchError((e) {
+            rejectJsPending(parsed.callId, e);
+          });
+      return null;
+    });
+
+    runtime.onMessage('importScript', (args) {
+      final parsed = JsExtensionsBase.parseAsyncCallArgs(args);
+      final path = parsed.payload.toString();
+      () async {
+        try {
+          if (path.startsWith('http')) {
+            final content = await cacheFile(path, 0);
+            if (content.trim().isEmpty) {
+              throw Exception('$path 內容獲取失敗或者為空');
+            }
+            resolveJsPending(parsed.callId, content);
+            return;
+          }
+          final file = File(path);
+          if (!await file.exists()) {
+            throw Exception('$path 內容獲取失敗或者為空');
+          }
+          final content = await file.readAsString();
+          if (content.trim().isEmpty) {
+            throw Exception('$path 內容獲取失敗或者為空');
+          }
+          resolveJsPending(parsed.callId, content);
+        } catch (e) {
+          rejectJsPending(parsed.callId, e);
+        }
+      }();
       return null;
     });
 

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/models/book_source.dart';
+import 'package:inkpage_reader/core/models/search_book.dart';
 import 'package:inkpage_reader/core/models/source/book_source_rules.dart';
 
 import '../../tool/source_validation_support.dart';
@@ -212,6 +213,22 @@ void main() {
       expect(result.category, 'env-path-provider');
     });
 
+    test('classification skips search results that miss the keyword', () {
+      final source = BookSource(
+        bookSourceUrl: 'https://example.com',
+        bookSourceName: '搜尋錯書源',
+      );
+
+      final result = classifyValidationFailure(
+        StateError('搜尋結果未命中關鍵詞 "剑来"'),
+        source: source,
+        stage: 'search',
+      );
+
+      expect(result.outcome, SourceValidationOutcome.skip);
+      expect(result.category, 'source-search-mismatch');
+    });
+
     test('validation keyword matches legado check source behavior', () {
       final sourceWithCheckKeyword = BookSource(
         bookSourceUrl: 'https://example.com/check',
@@ -228,6 +245,41 @@ void main() {
         resolveValidationKeyword(sourceWithoutCheckKeyword),
         legadoValidationDefaultKeyword,
       );
+    });
+
+    test('matching search book prefers a keyword hit over the first result', () {
+      final searchBooks = <SearchBook>[
+        SearchBook(
+          name: '一念神魔.',
+          author: '水泽',
+          bookUrl: 'https://example.com/book/1',
+          origin: 'https://example.com/source',
+        ),
+        SearchBook(
+          name: '剑来',
+          author: '烽火戏诸侯',
+          bookUrl: 'https://example.com/book/2',
+          origin: 'https://example.com/source',
+        ),
+      ];
+
+      final matched = selectMatchingSearchBook(searchBooks, '剑来');
+
+      expect(matched?.name, '剑来');
+      expect(matched?.bookUrl, 'https://example.com/book/2');
+    });
+
+    test('matching search book returns null when no result matches keyword', () {
+      final searchBooks = <SearchBook>[
+        SearchBook(
+          name: '一念神魔.',
+          author: '水泽',
+          bookUrl: 'https://example.com/book/1',
+          origin: 'https://example.com/source',
+        ),
+      ];
+
+      expect(selectMatchingSearchBook(searchBooks, '剑来'), isNull);
     });
   });
 }

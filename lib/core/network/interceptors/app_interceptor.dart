@@ -12,6 +12,8 @@ class AppInterceptor extends Interceptor {
       '(KHTML, like Gecko) Chrome/91.0.4472.124 Mobile Safari/537.36';
   static const String manualRedirectCountKey = '_manualRedirectCount';
   static const String manualRedirectChainKey = '_manualRedirectChain';
+  static const String disableManualRedirectHandlingKey =
+      '_disableManualRedirectHandling';
   static const int _maxManualRedirects = 10;
 
   @override
@@ -91,6 +93,9 @@ class AppInterceptor extends Interceptor {
   Future<Response<dynamic>?> _tryFollowRedirect(DioException err) async {
     final response = err.response;
     if (err.type != DioExceptionType.badResponse || response == null) {
+      return null;
+    }
+    if (err.requestOptions.extra[disableManualRedirectHandlingKey] == true) {
       return null;
     }
     final statusCode = response.statusCode;

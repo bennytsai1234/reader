@@ -169,7 +169,11 @@ void main() {
       expect(searchBooks, isNotEmpty);
       return;
     }
-    final selected = selectBook(searchBooks);
+    final matchedSearchBook = selectMatchingSearchBook(searchBooks, keyword);
+    if (matchedSearchBook == null) {
+      throw StateError('搜尋結果未命中關鍵詞 "$keyword"');
+    }
+    final selected = matchedSearchBook.toBook();
     // ignore: avoid_print
     print('[debug] search hit=${selected.name} | url=${selected.bookUrl}');
 

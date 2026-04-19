@@ -166,6 +166,13 @@ void main() {
       expect(helper.getString('a@href'), '/chapter/1');
     });
 
+    test('13b. Root html element can match itself in legacy selector mode', () {
+      final helper = AnalyzeByCss(htmlStr);
+
+      expect(helper.getElements('html'), hasLength(1));
+      expect(helper.getString('html@text'), contains('Chapter 1'));
+    });
+
     test('14. :contains selector works in direct CSS mode', () {
       final helper = AnalyzeByCss('''
         <div class="pager">
@@ -199,6 +206,39 @@ void main() {
         ''');
 
       expect(helper.getString('div[style=text-indent: 2em;]@text'), '正文内容');
+    });
+
+    test('17. :has(:contains()) works with adjacent sibling selectors', () {
+      final helper = AnalyzeByCss('''
+        <div class="info-chapters-title"><strong>《示例书》正文</strong></div>
+        <div class="info-chapters">
+          <a href="/chapter/1">第一章</a>
+          <a href="/chapter/2">第二章</a>
+        </div>
+        <div class="info-chapters-title"><strong>《示例书》番外</strong></div>
+        <div class="info-chapters">
+          <a href="/extra/1">番外一</a>
+        </div>
+        ''');
+
+      expect(
+        helper.getStringList(
+          '@CSS:.info-chapters-title:has(:contains(正文)) + .info-chapters a@text',
+        ),
+        ['第一章', '第二章'],
+      );
+    });
+
+    test('18. :not(:has()) filters selector matches compatibly', () {
+      final helper = AnalyzeByCss('''
+        <div class="section with-link"><a href="/a">A</a></div>
+        <div class="section plain"><span>B</span></div>
+        ''');
+
+      expect(
+        helper.getString('@CSS:.section:not(:has(a))@text'),
+        'B',
+      );
     });
   });
 }

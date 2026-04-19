@@ -68,7 +68,7 @@ mixin AnalyzeRuleString on AnalyzeRuleBase, AnalyzeRuleRegexHelper {
               default:
                 tempResult = sourceRule
                     .getAnalyzeByJSoup(this, result)
-                    .getString(rule);
+                    .getString0(rule, isUrl: isUrl);
                 if ((tempResult == null || tempResult.toString().isEmpty) &&
                     isJsonLikeRuleInput(result)) {
                   final jsonRule = buildJsonFallbackRule(rule);
@@ -119,10 +119,10 @@ mixin AnalyzeRuleString on AnalyzeRuleBase, AnalyzeRuleRegexHelper {
       str = AnalyzeRuleBase.htmlUnescape.convert(str);
     }
     if (isUrl && str.isEmpty) {
-      return baseUrl ?? '';
+      return redirectUrl ?? baseUrl ?? '';
     }
     if (isUrl) {
-      return NetworkUtils.getAbsoluteURL(baseUrl, str);
+      return NetworkUtils.getAbsoluteURL(redirectUrl ?? baseUrl, str);
     }
     return str;
   }
@@ -155,7 +155,7 @@ mixin AnalyzeRuleString on AnalyzeRuleBase, AnalyzeRuleRegexHelper {
             }
           }
 
-          final rule = await sourceRule.makeUpRuleAsync(result, this);
+          final rule = sourceRule.makeUpRule(result, this);
           log('  ◇ 模式: ${sourceRule.mode.name}, 規則: $rule');
 
           dynamic tempResult;
@@ -187,7 +187,7 @@ mixin AnalyzeRuleString on AnalyzeRuleBase, AnalyzeRuleRegexHelper {
               default:
                 tempResult = sourceRule
                     .getAnalyzeByJSoup(this, result)
-                    .getString(rule);
+                    .getString0(rule, isUrl: isUrl);
                 if ((tempResult == null || tempResult.toString().isEmpty) &&
                     isJsonLikeRuleInput(result)) {
                   final jsonRule = buildJsonFallbackRule(rule);
@@ -238,10 +238,10 @@ mixin AnalyzeRuleString on AnalyzeRuleBase, AnalyzeRuleRegexHelper {
       str = AnalyzeRuleBase.htmlUnescape.convert(str);
     }
     if (isUrl && str.isEmpty) {
-      return baseUrl ?? '';
+      return redirectUrl ?? baseUrl ?? '';
     }
     if (isUrl) {
-      return NetworkUtils.getAbsoluteURL(baseUrl, str);
+      return NetworkUtils.getAbsoluteURL(redirectUrl ?? baseUrl, str);
     }
     return str;
   }
@@ -382,7 +382,7 @@ mixin AnalyzeRuleString on AnalyzeRuleBase, AnalyzeRuleRegexHelper {
             }
           }
 
-          final rule = sourceRule.makeUpRule(result, this);
+          final rule = await sourceRule.makeUpRuleAsync(result, this);
           log('  ◇ 模式: ${sourceRule.mode.name}, 規則: $rule');
           final currentInput = result;
 
@@ -472,7 +472,12 @@ mixin AnalyzeRuleString on AnalyzeRuleBase, AnalyzeRuleRegexHelper {
             .where((value) => value.isNotEmpty)
             .map(
               (value) =>
-                  isUrl ? NetworkUtils.getAbsoluteURL(baseUrl, value) : value,
+                  isUrl
+                      ? NetworkUtils.getAbsoluteURL(
+                        redirectUrl ?? baseUrl,
+                        value,
+                      )
+                      : value,
             )
             .toSet()
             .toList();

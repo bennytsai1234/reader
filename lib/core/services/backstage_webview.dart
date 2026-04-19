@@ -118,6 +118,20 @@ class BackstageWebView {
                    content = jsonDecode(content);
                 }
                 content = HtmlUnescape().convert(content);
+
+                if (sourceRegex != null && sourceRegex!.isNotEmpty) {
+                  final match = RegExp(sourceRegex!).firstMatch(content);
+                  if (match != null) {
+                    finish({
+                      'body': match.groupCount > 0
+                          ? (match.group(1) ?? match.group(0) ?? '')
+                          : (match.group(0) ?? ''),
+                      'url': currentUrl,
+                      'code': 200,
+                    });
+                    return;
+                  }
+                }
                 
                 finish({
                   'body': content,
@@ -193,4 +207,3 @@ class BackstageWebView {
     return completer.future;
   }
 }
-

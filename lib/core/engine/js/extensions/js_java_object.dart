@@ -119,7 +119,13 @@ extension JsJavaObject on JsExtensionsBase {
         // ─── async: HTTP ─────────────────────────────────────────
         ajax: function(url) { return __asyncCall('ajax', url); },
         ajaxAll: function(urlList) { return __asyncCall('ajaxAll', urlList); },
-        connect: function(url) { return __asyncCall('connect', url); },
+        cacheFile: function(url, saveTime) { return __asyncCall('cacheTextFile', [url, saveTime || 0]); },
+        connect: function(url, header) {
+          return __asyncCall(
+            'connect',
+            arguments.length > 1 ? [url, header || null] : url
+          );
+        },
         get: function(url, headers) {
           if (arguments.length <= 1) {
             return sendMessage('scopeGet', JSON.stringify(url));
@@ -129,13 +135,22 @@ extension JsJavaObject on JsExtensionsBase {
         post: function(url, body, headers) {
           return __asyncCall('post', [url, body, headers || {}]).then(buildHttpResponse);
         },
-        head: function(url, headers) { return this.get(url, headers); },
+        head: function(url, headers) {
+          return __asyncCall('head', [url, headers || {}]).then(buildHttpResponse);
+        },
 
         // ─── async: WebView / I/O ────────────────────────────────
         webView: function(html, url, js) { return __asyncCall('webView', [html, url, js]); },
+        webViewGetSource: function(html, url, js, sourceRegex) {
+          return __asyncCall('webViewGetSource', [html, url, js, sourceRegex]);
+        },
+        webViewGetOverrideUrl: function(html, url, js, overrideUrlRegex) {
+          return __asyncCall('webViewGetOverrideUrl', [html, url, js, overrideUrlRegex]);
+        },
         startBrowserAwait: function(url, title) { return __asyncCall('startBrowserAwait', [url, title]); },
         getVerificationCode: function(imageUrl) { return __asyncCall('getVerificationCode', imageUrl); },
         downloadFile: function(url) { return __asyncCall('downloadFile', url); },
+        importScript: function(path) { return __asyncCall('importScript', path); },
         readFile: function(path) { return __asyncCall('readFile', path); },
         readTxtFile: function(path, charset) { return __asyncCall('readTxtFile', [path, charset]); },
         getZipByteArrayContent: function(url, innerPath) { return __asyncCall('getZipByteArrayContent', [url, innerPath]); },
