@@ -289,5 +289,30 @@ void main() {
         }
       },
     );
+
+    test('leading standalone comment lines are ignored before json rules', () {
+      final analyzer = AnalyzeRule().setContent({
+        'isvip': true,
+      });
+
+      expect(
+        analyzer.getString('// 删掉这行字，vip章节会显示🔓\n\$.isvip'),
+        'true',
+      );
+    });
+
+    test(
+      'leading standalone comment lines are ignored before json rules asynchronously',
+      () async {
+        final analyzer = AnalyzeRule().setContent({
+          'isvip': true,
+        });
+
+        expect(
+          await analyzer.getStringAsync('// 删掉这行字，vip章节会显示🔓\n\$.isvip'),
+          'true',
+        );
+      },
+    );
   });
 }

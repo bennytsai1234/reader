@@ -9,12 +9,13 @@ extension JsCryptoExtensions on JsExtensions {
   void injectCryptoExtensions() {
     // 實作 java.createSymmetricCrypto
     runtime.onMessage('symmetricCrypto', (dynamic args) {
-      final action = args[0].toString();
-      final transformation = args[1].toString();
-      final key = args[2];
-      final iv = args[3];
-      final data = args[4];
-      final outputFormat = args[5].toString();
+      final payload = _decodeArgs(args);
+      final action = payload[0].toString();
+      final transformation = payload[1].toString();
+      final key = payload[2];
+      final iv = payload[3];
+      final data = payload[4];
+      final outputFormat = payload[5].toString();
 
       return JsEncodeUtils.symmetricCrypto(
         action,
@@ -35,14 +36,36 @@ extension JsCryptoExtensions on JsExtensions {
       '_md5Encode16',
       (dynamic args) => JsEncodeUtils.md5Encode16(args.toString()),
     );
+    runtime.onMessage('_digest', (dynamic args) {
+      final payload = _decodeArgs(args);
+      if (payload is List && payload.length >= 2) {
+        final data = payload[0].toString();
+        final algorithm = payload[1].toString();
+        final hexFormat =
+            payload.length > 2 ? payload[2].toString() != 'false' : true;
+        return JsEncodeUtils.digest(
+          data,
+          algorithm,
+          hexFormat: hexFormat,
+        );
+      }
+      return '';
+    });
     runtime.onMessage(
       '_base64Encode',
-      (dynamic args) => JsEncodeUtils.base64Encode(args.toString()),
+      (dynamic args) {
+        final payload = _decodeArgs(args);
+        return JsEncodeUtils.base64Encode(payload);
+      },
     );
     runtime.onMessage('_base64Decode', (dynamic args) {
-      final str = args is List ? args[0].toString() : args.toString();
+      final payload = _decodeArgs(args);
+      final str =
+          payload is List ? payload[0].toString() : payload.toString();
       final charset =
-          args is List && args.length > 1 ? args[1].toString() : 'UTF-8';
+          payload is List && payload.length > 1
+              ? payload[1].toString()
+              : 'UTF-8';
       return JsEncodeUtils.base64Decode(str, charset: charset);
     });
     runtime.onMessage('_base64DecodeToBytes', (dynamic args) {

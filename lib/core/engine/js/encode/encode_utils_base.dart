@@ -14,7 +14,14 @@ class EncodeUtilsBase {
 
   static List<int> toBytes(dynamic data) {
     if (data is Uint8List) return data.toList();
-    if (data is List<int>) return data;
+    if (data is List<int>) {
+      return data.map((value) => value & 0xFF).toList();
+    }
+    if (data is List) {
+      if (data.every((item) => item is num)) {
+        return data.map((item) => (item as num).toInt() & 0xFF).toList();
+      }
+    }
     if (data is String) return utf8.encode(data);
     throw ArgumentError('Unsupported data type: ${data.runtimeType}');
   }
@@ -64,4 +71,3 @@ class DESEngine extends DesBase implements pc.BlockCipher {
   @override
   void reset() {}
 }
-

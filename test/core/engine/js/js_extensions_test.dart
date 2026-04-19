@@ -337,6 +337,28 @@ void main() {
     );
 
     test(
+      'java.base64Encode supports byte arrays',
+      () {
+        if (runtime == null) {
+          expect(runtimeError, isNotNull);
+          return;
+        }
+        final ext = JsExtensions(runtime!);
+        ext.inject();
+
+        final result = runtime!.evaluate(r'''
+        var javaImport = new JavaImporter();
+        javaImport.importPackage(Packages.java.lang);
+        with(javaImport) {
+          java.base64Encode(String("hello").getBytes());
+        }
+      ''');
+
+        expect(result.stringResult, 'aGVsbG8=');
+      },
+    );
+
+    test(
       'java.aesBase64DecodeToString helper matches symmetric crypto output',
       () {
         if (runtime == null) {
@@ -355,6 +377,155 @@ void main() {
       ''');
 
         expect(result.stringResult, 'hello');
+      },
+    );
+
+    test(
+      'JavaImporter shim supports javax crypto, Arrays.copyOfRange, and digestHex',
+      () {
+        if (runtime == null) {
+          expect(runtimeError, isNotNull);
+          return;
+        }
+        final ext = JsExtensions(runtime!);
+        ext.inject();
+
+        final result = runtime!.evaluate(r'''
+        var javaImport = new JavaImporter();
+        javaImport.importPackage(
+          Packages.java.lang,
+          Packages.java.util,
+          Packages.javax.crypto.spec,
+          Packages.javax.crypto
+        );
+        with(javaImport) {
+          var keyBytes = String("1234567890123456").getBytes();
+          var ivBytes = String("6543210987654321").getBytes();
+          var prefix = String(Arrays.copyOfRange(keyBytes, 0, 3)).toString();
+          var parsed = Integer.parseInt("ff", 16);
+          var digest = java.digestHex("hello", "sha-256");
+
+          var encrypted = java.base64DecodeToByteArray(
+            java.createSymmetricCrypto("AES/CBC/PKCS5Padding", "1234567890123456", "6543210987654321")
+              .encryptBase64("hello")
+          );
+          var decryptCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+          decryptCipher.init(2, SecretKeySpec(keyBytes, "AES"), IvParameterSpec(ivBytes));
+          var plain = String(decryptCipher.doFinal(encrypted)).toString();
+
+          prefix + "|" + parsed + "|" + digest.length() + "|" + plain;
+        }
+      ''');
+
+        expect(result.stringResult, '123|255|64|hello');
+      },
+    );
+
+    test(
+      'Cipher.doFinal decrypts large byte arrays without corrupting payloads',
+      () {
+        if (runtime == null) {
+          expect(runtimeError, isNotNull);
+          return;
+        }
+        final ext = JsExtensions(runtime!);
+        ext.inject();
+
+        final result = runtime!.evaluate(r'''
+        var javaImport = new JavaImporter();
+        javaImport.importPackage(
+          Packages.java.lang,
+          Packages.java.util,
+          Packages.javax.crypto.spec,
+          Packages.javax.crypto
+        );
+        with(javaImport) {
+          var prefix = '{"book":[';
+          var suffix = '],"ok":true}';
+          var filler = "章节内容".repeat(20000);
+          var plainText = prefix + JSON.stringify({ title: "深空彼岸", body: filler }) + suffix;
+          var keyBytes = String("12345678901234561234567890123456").getBytes();
+          var ivBytes = String("6543210987654321").getBytes();
+
+          var encrypted = java.base64DecodeToByteArray(
+            java.createSymmetricCrypto(
+              "AES/CBC/PKCS5Padding",
+              keyBytes,
+              ivBytes
+            ).encryptBase64(plainText)
+          );
+
+          var decryptCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+          decryptCipher.init(2, SecretKeySpec(keyBytes, "AES"), IvParameterSpec(ivBytes));
+          var decoded = String(decryptCipher.doFinal(encrypted)).toString();
+
+          decoded.length + "|" + decoded.substring(0, 8) + "|" + decoded.substring(decoded.length - 11);
+        }
+      ''');
+
+        final parts = result.stringResult.split('|');
+        expect(parts.length, 3);
+        expect(int.tryParse(parts[0]), isNotNull);
+        expect(parts[1], '{"book":');
+        expect(parts[2], ',"ok":true}');
+      },
+    );
+
+    test(
+      'Cipher.doFinal matches createSymmetricCrypto for signed byte key material',
+      () {
+        if (runtime == null) {
+          expect(runtimeError, isNotNull);
+          return;
+        }
+        final ext = JsExtensions(runtime!);
+        ext.inject();
+
+        final result = runtime!.evaluate(r'''
+        function intToByte(i) {
+          var b = i & 0xFF;
+          if (b >= 128) {
+            return -1 * (128 - (b % 128));
+          }
+          return b;
+        }
+
+        var javaImport = new JavaImporter();
+        javaImport.importPackage(
+          Packages.java.lang,
+          Packages.java.util,
+          Packages.javax.crypto.spec,
+          Packages.javax.crypto
+        );
+        with(javaImport) {
+          var prefix = "T2CP9CY7FAQIBEZW";
+          var suffix = "PE3PHV5A4NVHZ73W";
+          var sha = java.digestHex(prefix, "sha-256").toString();
+          var md5 = java.md5Encode(suffix).toString();
+          var keyBytes = [];
+          for (var i = 0; i < sha.length; i += 2) {
+            keyBytes.push(intToByte(Integer.parseInt(sha.substring(i, i + 2), 16)));
+          }
+          var suffixBytes = String(suffix).getBytes();
+          var md5Bytes = String(md5).getBytes();
+          var ivBytes = [];
+          for (var j = 0; j < 16; j++) {
+            ivBytes[j] = (md5Bytes[j] ^ suffixBytes[j]) ^ (-1);
+          }
+
+          var plain = '{"book":[{"title":"深空彼岸"}],"ok":true}';
+          var encrypted = java.base64DecodeToByteArray(
+            java.createSymmetricCrypto("AES/CBC/PKCS5Padding", keyBytes, ivBytes)
+              .encryptBase64(plain)
+          );
+
+          var decryptCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+          decryptCipher.init(2, SecretKeySpec(keyBytes, "AES"), IvParameterSpec(ivBytes));
+          String(decryptCipher.doFinal(encrypted)).toString();
+        }
+      ''');
+
+        expect(result.stringResult, '{"book":[{"title":"深空彼岸"}],"ok":true}');
       },
     );
 

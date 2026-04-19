@@ -56,6 +56,32 @@ Updated: 2026-04-19
     - `cache.getFile/putFile` 兼容已補。
     - headless 測試環境仍會遇到 `path_provider` plugin 缺失；即使略過後，主站 API `http://appi.kuwo.cn/novels/api/book` 目前也是 404，偏向站點側失效。
 
+## Recent Window: Sources 89-96
+
+- Latest confirmed status across two small reruns:
+  - `#89-91`: `pass=1 / skip=2 / fail=0`
+  - `#93-96`: `pass=3 / skip=1 / fail=0`
+
+- Passed:
+  - `#89` QQ阅读
+    - 先前的 comment-prefixed JSON rule / JS parity 問題已修復。
+  - `#93` 乡土小说
+    - `POST -> 302 -> GET` 搜尋鏈路已 live 驗證通過。
+  - `#94` 漫小肆20251217
+  - `#95` 🎃阅友小说🎃#2
+- Skipped:
+  - `#90` 🎃连城读书🎃
+    - 站點入口 `http://a.lc1001.com/false` 返回 404，偏向上游失效。
+  - `#91` 破天小说
+    - 目前關鍵詞 `我的` 搜尋結果為空，先歸為 `source-search-empty`，待更穩定的 browse/explore 選詞再確認。
+  - `#96` 🚬 疯情书库
+    - 已可到詳情與目錄，正文驗證卡在 headless `webview` 環境限制，歸為 `env-webview`。
+
+- Known outlier:
+  - `#92` 小小阅读/书香之家app
+    - Rhino-style Java crypto 規則已補上大部分 shim，`createSymmetricCrypto(...)` 可解出正確內容。
+    - 目前仍有單點 `Cipher.doFinal(...)` / 書源腳本語義差異，暫不阻塞整體擴窗驗證。
+
 ## Completed Foundations
 
 - 批量連網審計工具已支持 `SOURCE_START` / `SOURCE_LIMIT`。

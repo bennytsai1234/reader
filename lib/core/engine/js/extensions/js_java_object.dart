@@ -167,8 +167,11 @@ extension JsJavaObject on JsExtensionsBase {
             encryptHex: function(data) { return sendMessage('symmetricCrypto', JSON.stringify(['encrypt', transformation, key, iv, data, 'hex'])); }
           };
         },
-        md5Encode: function(str) { return sendMessage('_md5Encode', JSON.stringify(str)); },
-        md5Encode16: function(str) { return sendMessage('_md5Encode16', JSON.stringify(str)); },
+        md5Encode: function(str) { return new JavaString(sendMessage('_md5Encode', JSON.stringify(str))); },
+        md5Encode16: function(str) { return new JavaString(sendMessage('_md5Encode16', JSON.stringify(str))); },
+        digestHex: function(str, algorithm) {
+          return new JavaString(sendMessage('_digest', JSON.stringify([str, algorithm, true])));
+        },
         base64Encode: function(str) { return sendMessage('_base64Encode', JSON.stringify(str)); },
         base64Decode: function(str) { return sendMessage('_base64Decode', JSON.stringify(str)); },
         base64DecodeToByteArray: function(str) {
@@ -326,10 +329,50 @@ extension JsJavaObject on JsExtensionsBase {
       }
 
       function JavaString(value) {
-        this._value = globalThis.String(value == null ? '' : value);
+        if (value != null && (Array.isArray(value) || (typeof value === 'object' && typeof value.length === 'number'))) {
+          this._value = java.bytesToStr(normalizeByteArray(value), 'UTF-8');
+        } else {
+          this._value = globalThis.String(value == null ? '' : value);
+        }
       }
       JavaString.prototype.getBytes = function(charset) {
         return java.strToBytes(this._value, charset || 'UTF-8');
+      };
+      JavaString.prototype.length = function() {
+        return this._value.length;
+      };
+      JavaString.prototype.substring = function(start, end) {
+        return this._value.substring(start, end);
+      };
+      JavaString.prototype.charAt = function(index) {
+        return this._value.charAt(index);
+      };
+      JavaString.prototype.indexOf = function(value) {
+        return this._value.indexOf(value);
+      };
+      JavaString.prototype.startsWith = function(value) {
+        return this._value.startsWith(value);
+      };
+      JavaString.prototype.endsWith = function(value) {
+        return this._value.endsWith(value);
+      };
+      JavaString.prototype.split = function(separator) {
+        return this._value.split(separator);
+      };
+      JavaString.prototype.replace = function(pattern, replacement) {
+        return this._value.replace(pattern, replacement);
+      };
+      JavaString.prototype.match = function(pattern) {
+        return this._value.match(pattern);
+      };
+      JavaString.prototype.toUpperCase = function() {
+        return this._value.toUpperCase();
+      };
+      JavaString.prototype.toLowerCase = function() {
+        return this._value.toLowerCase();
+      };
+      JavaString.prototype.trim = function() {
+        return this._value.trim();
       };
       JavaString.prototype.toString = function() {
         return this._value;
@@ -389,6 +432,65 @@ extension JsJavaObject on JsExtensionsBase {
               );
             }
           };
+        }
+      };
+
+      var Arrays = {
+        copyOfRange: function(value, start, end) {
+          return normalizeByteArray(value).slice(start, end);
+        }
+      };
+
+      var Integer = {
+        parseInt: function(value, radix) {
+          return globalThis.parseInt(value, radix == null ? 10 : radix);
+        }
+      };
+
+      function SecretKeySpec(bytes, algorithm) {
+        if (!(this instanceof SecretKeySpec)) {
+          return new SecretKeySpec(bytes, algorithm);
+        }
+        this.bytes = normalizeByteArray(bytes);
+        this.algorithm = algorithm || '';
+      }
+
+      function IvParameterSpec(bytes) {
+        if (!(this instanceof IvParameterSpec)) {
+          return new IvParameterSpec(bytes);
+        }
+        this.bytes = normalizeByteArray(bytes);
+      }
+
+      function CipherInstance(transformation) {
+        this._transformation = transformation || 'AES/CBC/PKCS5Padding';
+        this._mode = 2;
+        this._key = [];
+        this._iv = [];
+      }
+      CipherInstance.prototype.init = function(mode, key, iv) {
+        this._mode = mode;
+        this._key = key && key.bytes ? normalizeByteArray(key.bytes) : normalizeByteArray(key);
+        this._iv = iv && iv.bytes ? normalizeByteArray(iv.bytes) : normalizeByteArray(iv);
+      };
+      CipherInstance.prototype.doFinal = function(data) {
+        var crypto = java.createSymmetricCrypto(
+          this._transformation,
+          this._key,
+          this._iv
+        );
+        if (this._mode === 1) {
+          return normalizeByteArray(crypto.encrypt(data));
+        }
+        if (Array.isArray(data) || (data && typeof data === 'object' && typeof data.length === 'number')) {
+          return crypto.decryptStr(java.base64Encode(normalizeByteArray(data)));
+        }
+        return crypto.decryptStr(data);
+      };
+
+      var Cipher = {
+        getInstance: function(transformation) {
+          return new CipherInstance(transformation);
         }
       };
 
@@ -462,16 +564,27 @@ extension JsJavaObject on JsExtensionsBase {
       var Packages = {
         java: {
           lang: {
-            String: function(value) { return new JavaString(value); }
+            String: function(value) { return new JavaString(value); },
+            Integer: Integer
           },
           io: {
             ByteArrayOutputStream: ByteArrayOutputStream,
             ByteArrayInputStream: ByteArrayInputStream
           },
           util: {
+            Arrays: Arrays,
             Base64: Base64,
             zip: {
               GZIPInputStream: GZIPInputStream
+            }
+          }
+        },
+        javax: {
+          crypto: {
+            Cipher: Cipher,
+            spec: {
+              SecretKeySpec: SecretKeySpec,
+              IvParameterSpec: IvParameterSpec
             }
           }
         }

@@ -26,6 +26,7 @@ class SourceRule {
   static const int defaultRuleType = 0;
 
   SourceRule(this.rule, {this.mode = Mode.defaultMode}) {
+    rule = _stripLeadingStandaloneCommentLines(rule);
     // 處理 ##regex##replacement 與 ### replaceFirst
     if (rule.contains('##')) {
       final rawParts = rule.split('##');
@@ -220,6 +221,47 @@ class SourceRule {
     if (o != analyzer.content) return AnalyzeByJsonPath(o);
     return analyzer.analyzeByJSonPath ??= AnalyzeByJsonPath(analyzer.content);
   }
+}
+
+String _stripLeadingStandaloneCommentLines(String input) {
+  if (!input.contains('\n')) {
+    return input;
+  }
+
+  final lines = input.split('\n');
+  var start = 0;
+  while (start < lines.length) {
+    final trimmed = lines[start].trim();
+    if (trimmed.isEmpty) {
+      start++;
+      continue;
+    }
+    if (_looksLikeStandaloneRuleComment(trimmed) &&
+        lines
+            .skip(start + 1)
+            .map((line) => line.trim())
+            .any((line) => line.isNotEmpty)) {
+      start++;
+      continue;
+    }
+    break;
+  }
+
+  if (start == 0) {
+    return input;
+  }
+  return lines.sublist(start).join('\n').trimLeft();
+}
+
+bool _looksLikeStandaloneRuleComment(String line) {
+  if (!line.startsWith('//')) {
+    return false;
+  }
+  final remainder = line.substring(2).trimLeft();
+  if (remainder.isEmpty) {
+    return true;
+  }
+  return !RegExp(r'^[A-Za-z_*\.@]').hasMatch(remainder);
 }
 
 String stringifyRuleResult(dynamic value) {
