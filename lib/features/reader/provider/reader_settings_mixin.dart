@@ -120,7 +120,7 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
     themeIndex = i;
     saveSetting('theme_index', i);
     _rememberDayNightThemeIndex(i);
-    _triggerRepaginate();
+    notifyListeners();
   }
 
   bool get isCurrentThemeDark => _isThemeDark(themeIndex);

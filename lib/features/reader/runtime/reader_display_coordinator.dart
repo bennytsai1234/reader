@@ -28,15 +28,17 @@ class ReaderDisplayCoordinator {
     required List<TextPage> slidePages,
     required ReaderChapter? runtimeChapter,
   }) {
-    final location = ReaderLocation(
-      chapterIndex: chapterIndex,
-      charOffset: fromEnd && chapterPages.isNotEmpty
-          ? ChapterPositionResolver.getCharOffsetForPage(
-              chapterPages,
-              chapterPages.length - 1,
-            )
-          : persistedCharOffset,
-    ).normalized();
+    final location =
+        ReaderLocation(
+          chapterIndex: chapterIndex,
+          charOffset:
+              fromEnd && chapterPages.isNotEmpty
+                  ? ChapterPositionResolver.getCharOffsetForPage(
+                    chapterPages,
+                    chapterPages.length - 1,
+                  )
+                  : persistedCharOffset,
+        ).normalized();
 
     if (isScrollMode) {
       return ReaderDisplayInstruction(
@@ -51,13 +53,14 @@ class ReaderDisplayCoordinator {
 
     return ReaderDisplayInstruction(
       location: location,
-      slidePageIndex: ReaderPositionResolver.resolveSlideTarget(
-        location: location,
-        runtimeChapter: runtimeChapter,
-        chapterPages: chapterPages,
-        slidePages: slidePages,
-        targetChapterIndex: chapterIndex,
-      ).globalPageIndex,
+      slidePageIndex:
+          ReaderPositionResolver.resolveSlideTarget(
+            location: location,
+            runtimeChapter: runtimeChapter,
+            chapterPages: chapterPages,
+            slidePages: slidePages,
+            targetChapterIndex: chapterIndex,
+          ).globalPageIndex,
     );
   }
 
@@ -104,10 +107,28 @@ class ReaderDisplayCoordinator {
     ).globalPageIndex;
   }
 
-  String formatChapterPercent(int chapterIndex, int totalChapters) {
+  String formatReadProgress({
+    required int chapterIndex,
+    required int totalChapters,
+    required int pageIndex,
+    required int totalPages,
+  }) {
     if (totalChapters <= 0) return '0.0%';
-    final index = chapterIndex.clamp(0, totalChapters - 1);
-    return '${(index / totalChapters * 100).toStringAsFixed(1)}%';
+    final safeChapterIndex = chapterIndex.clamp(0, totalChapters - 1);
+    if (totalPages <= 0) {
+      return '${(((safeChapterIndex + 1) / totalChapters) * 100).toStringAsFixed(1)}%';
+    }
+    final safePageIndex = pageIndex.clamp(0, totalPages - 1);
+    final percent =
+        (safeChapterIndex / totalChapters) +
+        (1.0 / totalChapters) * ((safePageIndex + 1) / totalPages);
+    var formatted = '${(percent * 100).toStringAsFixed(1)}%';
+    if (formatted == '100.0%' &&
+        (safeChapterIndex + 1 != totalChapters ||
+            safePageIndex + 1 != totalPages)) {
+      formatted = '99.9%';
+    }
+    return formatted;
   }
 
   String formatPageLabel(int pageIndex, int totalPages) {

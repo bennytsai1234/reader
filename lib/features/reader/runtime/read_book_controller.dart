@@ -609,16 +609,14 @@ class ReadBookController extends ReaderProviderBase
         pagesForChapter(targetLocation.chapterIndex).isNotEmpty) {
       _applyModeSwitchWithCachedContent(targetLocation);
       if (isAutoPaging) {
-        autoPageProgressNotifier.value = 0.0;
-        setAutoPageSpeed(autoPageSpeed);
+        restartAutoPageCycle();
       }
       return;
     }
 
     notifyListeners();
     if (isAutoPaging) {
-      autoPageProgressNotifier.value = 0.0;
-      setAutoPageSpeed(autoPageSpeed);
+      restartAutoPageCycle();
     }
     unawaited(
       loadChapter(
@@ -788,9 +786,11 @@ class ReadBookController extends ReaderProviderBase
   }
 
   String get displayChapterPercentLabel {
-    return _displayCoordinator.formatChapterPercent(
-      _displayPageChapterIndex,
-      chapters.length,
+    return _displayCoordinator.formatReadProgress(
+      chapterIndex: _displayPageChapterIndex,
+      totalChapters: chapters.length,
+      pageIndex: displayPageIndex,
+      totalPages: displayPageCount,
     );
   }
 

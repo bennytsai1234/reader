@@ -233,7 +233,7 @@ class AutoReadDialog extends StatelessWidget {
 
   /// 翻頁模式選擇器（平移 vs 捲動）
   Widget _buildPageModeSelector(BuildContext context, ReaderProvider provider) {
-    const modes = [(PageAnim.slide, '平移'), (PageAnim.scroll, '捲動')];
+    const modes = [(PageAnim.slide, '平移翻頁'), (PageAnim.scroll, '上下滾動')];
 
     return Row(
       children:
@@ -243,9 +243,8 @@ class AutoReadDialog extends StatelessWidget {
               child: GestureDetector(
                 onTap: () {
                   provider.setPageTurnMode(mode.$1);
-                  // 切換模式後重啟自動翻頁計時器
                   if (provider.isAutoPaging) {
-                    provider.setAutoPageSpeed(provider.autoPageSpeed);
+                    provider.restartAutoPageCycle();
                   }
                 },
                 child: Container(

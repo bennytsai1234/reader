@@ -6,10 +6,29 @@ class ScrollExecutionAdapter {
   final Map<String, GlobalKey> pageKeys;
   final VoidCallback? onStateChanged;
 
-  const ScrollExecutionAdapter({
-    required this.pageKeys,
-    this.onStateChanged,
-  });
+  const ScrollExecutionAdapter({required this.pageKeys, this.onStateChanged});
+
+  bool scrollByDelta({
+    required ReaderProvider provider,
+    required double deltaPixels,
+  }) {
+    if (deltaPixels <= 0) return false;
+    final position = _resolveActiveScrollPosition(provider);
+    if (position == null || !position.hasPixels) {
+      return false;
+    }
+    final currentPixels = position.pixels;
+    final targetPixels = (currentPixels + deltaPixels).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((targetPixels - currentPixels).abs() < 0.1) {
+      return false;
+    }
+    position.jumpTo(targetPixels);
+    onStateChanged?.call();
+    return true;
+  }
 
   void scrollToPageKey({
     required int chapterIndex,
@@ -41,38 +60,38 @@ class ScrollExecutionAdapter {
         (runtimeChapter != null && runtimeChapter.isEmpty)) {
       return;
     }
-    final target = runtimeChapter != null
-        ? runtimeChapter.resolveRestoreTarget(localOffset: localOffset)
-        : () {
-            final pageIndex = ChapterPositionResolver.pageIndexAtLocalOffset(
-              pages,
-              localOffset,
-            );
-            final pageStartOffset = ChapterPositionResolver.getCharOffsetForPage(
-              pages,
-              pageIndex,
-            );
-            final pageStartLocalOffset =
-                ChapterPositionResolver.charOffsetToLocalOffset(
-              pages,
-              pageStartOffset,
-            );
-            final intraPageOffset = (localOffset - pageStartLocalOffset).clamp(
-              0.0,
-              double.infinity,
-            );
-            return (
-              pageIndex: pageIndex,
-              pageStartCharOffset: pageStartOffset,
-              pageStartLocalOffset: pageStartLocalOffset,
-              targetLocalOffset: localOffset,
-              intraPageOffset: intraPageOffset,
-              alignment: ChapterPositionResolver.charOffsetToAlignment(
+    final target =
+        runtimeChapter != null
+            ? runtimeChapter.resolveRestoreTarget(localOffset: localOffset)
+            : () {
+              final pageIndex = ChapterPositionResolver.pageIndexAtLocalOffset(
                 pages,
-                pageStartOffset,
-              ),
-            );
-          }();
+                localOffset,
+              );
+              final pageStartOffset =
+                  ChapterPositionResolver.getCharOffsetForPage(
+                    pages,
+                    pageIndex,
+                  );
+              final pageStartLocalOffset =
+                  ChapterPositionResolver.charOffsetToLocalOffset(
+                    pages,
+                    pageStartOffset,
+                  );
+              final intraPageOffset = (localOffset - pageStartLocalOffset)
+                  .clamp(0.0, double.infinity);
+              return (
+                pageIndex: pageIndex,
+                pageStartCharOffset: pageStartOffset,
+                pageStartLocalOffset: pageStartLocalOffset,
+                targetLocalOffset: localOffset,
+                intraPageOffset: intraPageOffset,
+                alignment: ChapterPositionResolver.charOffsetToAlignment(
+                  pages,
+                  pageStartOffset,
+                ),
+              );
+            }();
     final key = pageKeys['$chapterIndex:${target.pageIndex}'];
     final pageContext = key?.currentContext;
     if (pageContext == null) {
@@ -95,12 +114,11 @@ class ScrollExecutionAdapter {
       }
       final pageTop =
           renderObject.localToGlobal(Offset.zero, ancestor: viewportObject).dy;
-      final targetPixels =
-          (position.pixels + pageTop + target.intraPageOffset - topPadding)
-              .clamp(
-        position.minScrollExtent,
-        position.maxScrollExtent,
-      );
+      final targetPixels = (position.pixels +
+              pageTop +
+              target.intraPageOffset -
+              topPadding)
+          .clamp(position.minScrollExtent, position.maxScrollExtent);
       if (animate) {
         position.animateTo(
           targetPixels,
@@ -135,5 +153,37 @@ class ScrollExecutionAdapter {
       curve: Curves.easeOut,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => applyScrollOffset());
+  }
+
+  ScrollPosition? _resolveActiveScrollPosition(ReaderProvider provider) {
+    final chapterIndex = provider.visibleChapterIndex;
+    final runtimeChapter = provider.chapterAt(chapterIndex);
+    final pages = provider.pagesForChapter(chapterIndex);
+    final pageIndex =
+        runtimeChapter != null
+            ? runtimeChapter.pageIndexAtLocalOffset(
+              provider.visibleChapterLocalOffset,
+            )
+            : ChapterPositionResolver.pageIndexAtLocalOffset(
+              pages,
+              provider.visibleChapterLocalOffset,
+            );
+    final primaryContext = pageKeys['$chapterIndex:$pageIndex']?.currentContext;
+    final primaryPosition = _scrollPositionFromContext(primaryContext);
+    if (primaryPosition != null) {
+      return primaryPosition;
+    }
+    for (final key in pageKeys.values) {
+      final position = _scrollPositionFromContext(key.currentContext);
+      if (position != null) {
+        return position;
+      }
+    }
+    return null;
+  }
+
+  ScrollPosition? _scrollPositionFromContext(BuildContext? context) {
+    if (context == null) return null;
+    return Scrollable.maybeOf(context)?.position;
   }
 }

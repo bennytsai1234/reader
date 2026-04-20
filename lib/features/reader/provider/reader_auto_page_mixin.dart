@@ -16,6 +16,7 @@ mixin ReaderAutoPageMixin
   // --- 自動翻頁穩定版 (對標 Android AutoPager) ---
   final ReaderAutoPageCoordinator _autoPageCoordinator =
       ReaderAutoPageCoordinator();
+  bool Function(double deltaPixels)? _scrollAutoPageDriver;
 
   bool get isAutoPaging => _autoPageCoordinator.isActive;
   double get autoPageSpeed => _autoPageCoordinator.speed; // 單位：秒/頁
@@ -39,6 +40,14 @@ mixin ReaderAutoPageMixin
     );
   }
 
+  void attachScrollAutoPageDriver(bool Function(double deltaPixels) driver) {
+    _scrollAutoPageDriver = driver;
+  }
+
+  void detachScrollAutoPageDriver() {
+    _scrollAutoPageDriver = null;
+  }
+
   void detachAutoPageTicker() {
     _autoPageCoordinator.detachTicker();
   }
@@ -49,6 +58,7 @@ mixin ReaderAutoPageMixin
       // 自動翻頁與 TTS 互斥
       if (TTSService().isPlaying) TTSService().stop();
       _autoPageCoordinator.isPaused = false;
+      restartAutoPageCycle();
     } else {
       stopAutoPage();
     }
@@ -76,38 +86,40 @@ mixin ReaderAutoPageMixin
 
   void _onAutoPageTick(double dtSeconds) {
     if (pageTurnMode != PageAnim.scroll) {
-      final delta = dtSeconds / autoPageSpeed.clamp(1.0, 120.0);
-      autoPageProgressNotifier.value += delta;
-      if (autoPageProgressNotifier.value >= 1.0) {
-        autoPageProgressNotifier.value = 0.0;
-        nextPage(reason: ReaderCommandReason.autoPage);
-      }
+      _tickSlideAutoPage(dtSeconds);
       return;
     }
+    _tickScrollAutoPage(dtSeconds);
+  }
 
+  void _tickSlideAutoPage(double dtSeconds) {
+    final delta = dtSeconds / autoPageSpeed.clamp(1.0, 120.0);
+    autoPageProgressNotifier.value += delta;
+    if (autoPageProgressNotifier.value < 1.0) {
+      return;
+    }
+    autoPageProgressNotifier.value = 0.0;
+    final atBookEnd =
+        currentChapterIndex >= chapters.length - 1 &&
+        currentPageIndex >= slidePages.length - 1;
+    if (atBookEnd) {
+      stopAutoPage();
+      return;
+    }
+    nextPage(reason: ReaderCommandReason.autoPage);
+  }
+
+  void _tickScrollAutoPage(double dtSeconds) {
     final viewSize = this.viewSize;
     if (viewSize == null) return;
-
-    final step = contentCallbacksRef.evaluateScrollAutoPageStep?.call(
-      dtSeconds,
-    );
-    if (step != null) {
-      if (!step.advanceChapter &&
-          step.chapterIndex != null &&
-          step.localOffset != null) {
-        contentCallbacksRef.jumpToChapterLocalOffset?.call(
-          chapterIndex: step.chapterIndex!,
-          localOffset: step.localOffset!,
-          alignment: 0.0,
-          reason: ReaderCommandReason.autoPage,
-        );
-      } else if (step.advanceChapter) {
-        nextChapter(reason: ReaderCommandReason.autoPage);
-      }
-    }
-
     final deltaPixels = scrollDeltaPerFrame(viewSize, dtSeconds);
+    final moved = _scrollAutoPageDriver?.call(deltaPixels) ?? false;
     final pageBasis = viewSize.height <= 0 ? 1.0 : viewSize.height;
+    if (!moved) {
+      autoPageProgressNotifier.value = 1.0;
+      stopAutoPage();
+      return;
+    }
     autoPageProgressNotifier.value =
         ((autoPageProgressNotifier.value * pageBasis) + deltaPixels) %
         pageBasis /
@@ -117,10 +129,16 @@ mixin ReaderAutoPageMixin
   void setAutoPageSpeed(double speed) {
     final normalized = speed.clamp(1.0, 120.0).roundToDouble();
     _autoPageCoordinator.speed = normalized;
+    restartAutoPageCycle();
     SharedPreferences.getInstance().then(
       (prefs) => prefs.setInt(PreferKey.autoReadSpeed, normalized.round()),
     );
     notifyListeners();
+  }
+
+  void restartAutoPageCycle() {
+    _autoPageCoordinator.restartCycle();
+    autoPageProgressNotifier.value = 0.0;
   }
 
   void stopAutoPage() {
@@ -131,6 +149,7 @@ mixin ReaderAutoPageMixin
 
   void disposeAutoPageCoordinator() {
     _autoPageCoordinator.dispose();
+    _scrollAutoPageDriver = null;
     autoPageProgressNotifier.value = 0.0;
   }
 }

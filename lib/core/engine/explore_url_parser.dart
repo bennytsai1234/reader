@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:inkpage_reader/core/engine/analyze_rule.dart';
@@ -10,6 +11,7 @@ import 'package:inkpage_reader/core/utils/encoder_utils.dart';
 /// ExploreUrlParser - 發現規則解析器 (對標 Android BookSource.getExploreKinds)
 class ExploreUrlParser {
   static const String _cacheName = 'explore';
+  static Future<void> _pendingJsExploreResolution = Future<void>.value();
 
   /// 同步版本，僅適用於純同步 JS 或靜態 exploreUrl。
   static List<ExploreKind> parse(String? exploreUrl, {BookSource? source}) {
@@ -30,6 +32,7 @@ class ExploreUrlParser {
     String? exploreUrl, {
     BookSource? source,
     Future<dynamic> Function(String jsSource)? jsExecutor,
+    Duration? jsTimeout,
   }) async {
     if (exploreUrl == null || exploreUrl.isEmpty) return [];
 
@@ -45,11 +48,22 @@ class ExploreUrlParser {
     }
 
     try {
-      final resolved = await _resolveAsync(
-        normalizedExploreUrl,
-        source: source,
-        jsExecutor: jsExecutor,
-      );
+      final resolved =
+          useJsRuntime
+              ? await _runSerializedJsResolution(
+                () => _resolveAsync(
+                  normalizedExploreUrl,
+                  source: source,
+                  jsExecutor: jsExecutor,
+                  jsTimeout: jsTimeout,
+                ),
+              )
+              : await _resolveAsync(
+                normalizedExploreUrl,
+                source: source,
+                jsExecutor: jsExecutor,
+                jsTimeout: jsTimeout,
+              );
       if (_looksLikeJsError(resolved)) {
         return cachedKinds.isNotEmpty
             ? cachedKinds
@@ -66,6 +80,11 @@ class ExploreUrlParser {
       return cachedKinds;
     } catch (e) {
       AppLog.e('ExploreUrl 非同步解析失敗: $e', error: e);
+      if (useJsRuntime) {
+        return cachedKinds.isNotEmpty
+            ? cachedKinds
+            : _buildErrorKinds(e.toString());
+      }
       try {
         final fallback = _resolveSync(normalizedExploreUrl, source: source);
         if (_looksLikeJsError(fallback)) {
@@ -110,28 +129,65 @@ class ExploreUrlParser {
     }
 
     final rule = AnalyzeRule(source: source);
-    return rule.evalJS(_extractJsBody(exploreUrl), null);
+    try {
+      return rule.evalJS(_extractJsBody(exploreUrl), null);
+    } finally {
+      rule.dispose();
+    }
   }
 
   static Future<dynamic> _resolveAsync(
     String exploreUrl, {
     BookSource? source,
     Future<dynamic> Function(String jsSource)? jsExecutor,
+    Duration? jsTimeout,
   }) async {
     if (!_isJsExploreUrl(exploreUrl)) {
       return exploreUrl;
     }
 
     final jsSource = _extractJsBody(exploreUrl);
+    AnalyzeRule? rule;
+    Future<dynamic> evaluation;
     if (jsExecutor != null) {
-      return jsExecutor(jsSource);
-    }
-    if (source == null) {
-      return '';
+      evaluation = jsExecutor(jsSource);
+    } else {
+      if (source == null) {
+        return '';
+      }
+      rule = AnalyzeRule(source: source);
+      evaluation = rule.evalJSAsync(jsSource, null);
     }
 
-    final rule = AnalyzeRule(source: source);
-    return rule.evalJSAsync(jsSource, null);
+    try {
+      if (jsTimeout == null) {
+        return await evaluation;
+      }
+      return await evaluation.timeout(
+        jsTimeout,
+        onTimeout: () {
+          rule?.dispose();
+          throw TimeoutException('ExploreUrl JS resolve timed out', jsTimeout);
+        },
+      );
+    } finally {
+      rule?.dispose();
+    }
+  }
+
+  static Future<T> _runSerializedJsResolution<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    final scheduled = _pendingJsExploreResolution.catchError((_) {}).then((
+      _,
+    ) async {
+      try {
+        completer.complete(await action());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    _pendingJsExploreResolution = scheduled;
+    return completer.future;
   }
 
   static bool _isJsExploreUrl(String exploreUrl) {

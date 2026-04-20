@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/shared/widgets/app_bottom_sheet.dart';
 import 'package:flutter/services.dart';
@@ -114,7 +112,7 @@ class _ReaderPageState extends State<ReaderPage> {
         p.nextChapter();
         break;
       case 4:
-        p.prevChapter();
+        p.prevChapter(fromEnd: false);
         break;
       case 5:
         p.toggleTts();
@@ -191,28 +189,6 @@ class _ReaderPageState extends State<ReaderPage> {
       color: p.currentTheme.backgroundColor,
       child: Stack(
         children: [
-          // 1. 底層自定義背景圖片 (對標 Android bgImage)
-          if (p.currentTheme.backgroundImage != null &&
-              File(p.currentTheme.backgroundImage!).existsSync())
-            Positioned.fill(
-              child: Image.file(
-                File(p.currentTheme.backgroundImage!),
-                fit: BoxFit.cover,
-              ),
-            ),
-
-          // 2. 背景模糊特效 (對標 Android backgroundBlur)
-          if (p.currentTheme.backgroundImage != null && p.backgroundBlur > 0)
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(
-                  sigmaX: p.backgroundBlur,
-                  sigmaY: p.backgroundBlur,
-                ),
-                child: Container(color: Colors.black.withValues(alpha: 0.1)),
-              ),
-            ),
-
           ReadViewRuntime(
             key: ValueKey(_controllerGeneration),
             provider: p,

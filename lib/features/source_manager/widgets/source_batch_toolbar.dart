@@ -46,6 +46,10 @@ class SelectActionBar extends StatelessWidget {
     final allCount = provider.sources.length;
     final hasSelection = selectCount > 0;
     final allSelected = selectCount >= allCount && allCount > 0;
+    final selectionLabel =
+        allSelected
+            ? '取消全選 ($selectCount/$allCount)'
+            : '全選 ($selectCount/$allCount)';
 
     return Container(
       decoration: BoxDecoration(
@@ -61,43 +65,54 @@ class SelectActionBar extends StatelessWidget {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       child: Row(
         children: [
-          // 全選 Checkbox + 計數
-          InkWell(
-            onTap: () => provider.selectAll(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    allSelected
-                        ? Icons.check_box
-                        : Icons.check_box_outline_blank,
-                    size: 22,
-                    color: allSelected ? theme.colorScheme.primary : null,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    allSelected
-                        ? '取消全選 ($selectCount/$allCount)'
-                        : '全選 ($selectCount/$allCount)',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.textTheme.bodyMedium?.color,
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => provider.selectAll(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            allSelected
+                                ? Icons.check_box
+                                : Icons.check_box_outline_blank,
+                            size: 22,
+                            color:
+                                allSelected ? theme.colorScheme.primary : null,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              selectionLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
-              ),
+                ),
+
+                // 反選
+                TextButton(
+                  onPressed:
+                      allCount > 0 ? () => provider.revertSelection() : null,
+                  child: const Text('反選', style: TextStyle(fontSize: 13)),
+                ),
+              ],
             ),
           ),
-
-          // 反選
-          TextButton(
-            onPressed: allCount > 0 ? () => provider.revertSelection() : null,
-            child: const Text('反選', style: TextStyle(fontSize: 13)),
-          ),
-
-          const Spacer(),
 
           // 刪除 (主操作)
           TextButton(

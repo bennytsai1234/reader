@@ -139,5 +139,91 @@ void main() {
       expect(kinds.first.title, startsWith('ERROR:'));
       expect(kinds.first.url, contains('JS_ERROR:'));
     });
+
+    test(
+      'parseAsync does not retry sync fallback after async js failure',
+      () async {
+        const exploreRule =
+            '@js: JSON.stringify([{"title":"推薦","url":"https://example.com/recommend"}])';
+        final source = BookSource(
+          bookSourceUrl: 'https://no-fallback.example.com',
+          bookSourceName: '禁止重跑源',
+          exploreUrl: exploreRule,
+        );
+        await ExploreUrlParser.clearCache(source, exploreUrl: exploreRule);
+        addTearDown(
+          () => ExploreUrlParser.clearCache(source, exploreUrl: exploreRule),
+        );
+
+        final kinds = await ExploreUrlParser.parseAsync(
+          exploreRule,
+          source: source,
+          jsExecutor: (_) async => throw StateError('async failed'),
+        );
+
+        expect(kinds, hasLength(1));
+        expect(kinds.first.title, startsWith('ERROR:'));
+        expect(kinds.first.url, contains('async failed'));
+      },
+    );
+
+    test('parseAsync serializes js explore execution to reduce overlap', () async {
+      const firstRule =
+          '@js: JSON.stringify([{"title":"第一個","url":"https://example.com/one"}])';
+      const secondRule =
+          '@js: JSON.stringify([{"title":"第二個","url":"https://example.com/two"}])';
+      final firstSource = BookSource(
+        bookSourceUrl: 'https://serial-one.example.com',
+        bookSourceName: '序列源一',
+        exploreUrl: firstRule,
+      );
+      final secondSource = BookSource(
+        bookSourceUrl: 'https://serial-two.example.com',
+        bookSourceName: '序列源二',
+        exploreUrl: secondRule,
+      );
+      await ExploreUrlParser.clearCache(firstSource, exploreUrl: firstRule);
+      await ExploreUrlParser.clearCache(secondSource, exploreUrl: secondRule);
+      addTearDown(() async {
+        await ExploreUrlParser.clearCache(firstSource, exploreUrl: firstRule);
+        await ExploreUrlParser.clearCache(secondSource, exploreUrl: secondRule);
+      });
+
+      var activeExecutions = 0;
+      var maxActiveExecutions = 0;
+
+      Future<String> runExecutor(String payload) async {
+        activeExecutions++;
+        if (activeExecutions > maxActiveExecutions) {
+          maxActiveExecutions = activeExecutions;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        activeExecutions--;
+        return payload;
+      }
+
+      final results = await Future.wait([
+        ExploreUrlParser.parseAsync(
+          firstRule,
+          source: firstSource,
+          jsExecutor:
+              (_) => runExecutor(
+                '[{"title":"第一個","url":"https://example.com/one"}]',
+              ),
+        ),
+        ExploreUrlParser.parseAsync(
+          secondRule,
+          source: secondSource,
+          jsExecutor:
+              (_) => runExecutor(
+                '[{"title":"第二個","url":"https://example.com/two"}]',
+              ),
+        ),
+      ]);
+
+      expect(maxActiveExecutions, 1);
+      expect(results[0].first.title, '第一個');
+      expect(results[1].first.title, '第二個');
+    });
   });
 }

@@ -48,6 +48,10 @@ class ReaderAutoPageCoordinator {
     _lastTickTime = Duration.zero;
   }
 
+  void restartCycle() {
+    _lastTickTime = Duration.zero;
+  }
+
   void detachTicker() {
     _ticker?.stop();
     _ticker?.dispose();

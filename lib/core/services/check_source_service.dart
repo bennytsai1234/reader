@@ -551,6 +551,7 @@ class CheckSourceService extends ChangeNotifier {
       final kinds = await ExploreUrlParser.parseAsync(
         exploreUrl,
         source: source,
+        jsTimeout: config.timeoutDuration,
       ).timeout(config.timeoutDuration);
 
       String? targetUrl;

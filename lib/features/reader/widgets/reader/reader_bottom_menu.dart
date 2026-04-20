@@ -147,7 +147,7 @@ class ReaderBottomMenu extends StatelessWidget {
               TextButton(
                 onPressed:
                     provider.currentChapterIndex > 0
-                        ? provider.prevChapter
+                        ? () => provider.prevChapter(fromEnd: false)
                         : null,
                 child: const Text(
                   '上一章',

@@ -72,6 +72,12 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       viewportHeight: () => context.size?.height ?? 0.0,
     );
     widget.provider.attachAutoPageTicker(createTicker);
+    widget.provider.attachScrollAutoPageDriver((deltaPixels) {
+      return _scrollExecution.scrollByDelta(
+        provider: widget.provider,
+        deltaPixels: deltaPixels,
+      );
+    });
     _fadeCtrl = AnimationController(
       duration: const Duration(milliseconds: 150),
       vsync: this,
@@ -99,6 +105,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       _handleItemPositionsChanged,
     );
     widget.provider.detachAutoPageTicker();
+    widget.provider.detachScrollAutoPageDriver();
     _userScrollResetTimer?.cancel();
     widget.provider.setScrollInteractionActive(false);
     super.dispose();
@@ -177,13 +184,11 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
             )
             .toList();
     if (visible.isEmpty) return;
-    final topItem = visible.first;
-    final chapterIndex = topItem.index;
+    final focusItem = _resolveFocusItem(visible);
+    final chapterIndex = focusItem.index;
     final viewportHeight = context.size?.height ?? 1.0;
-    final rawLocalOffset = (-topItem.itemLeadingEdge * viewportHeight).clamp(
-      0.0,
-      double.infinity,
-    );
+    final rawLocalOffset = ((0.5 - focusItem.itemLeadingEdge) * viewportHeight)
+        .clamp(0.0, double.infinity);
     final localOffset = (rawLocalOffset - p.contentTopInset).clamp(
       0.0,
       double.infinity,
@@ -191,9 +196,36 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     p.handleVisibleScrollState(
       chapterIndex: chapterIndex,
       localOffset: localOffset,
-      alignment: topItem.itemLeadingEdge.clamp(0.0, 1.0),
+      alignment: focusItem.itemLeadingEdge.clamp(0.0, 1.0),
       visibleChapterIndexes: visible.map((item) => item.index).toList(),
     );
+  }
+
+  ItemPosition _resolveFocusItem(List<ItemPosition> visible) {
+    const focusLine = 0.5;
+    ItemPosition best = visible.first;
+    var bestDistance = _distanceToFocusLine(best, focusLine);
+    for (final item in visible) {
+      final distance = _distanceToFocusLine(item, focusLine);
+      if (distance < bestDistance) {
+        best = item;
+        bestDistance = distance;
+      }
+      if (distance == 0) {
+        return item;
+      }
+    }
+    return best;
+  }
+
+  double _distanceToFocusLine(ItemPosition item, double focusLine) {
+    if (focusLine < item.itemLeadingEdge) {
+      return item.itemLeadingEdge - focusLine;
+    }
+    if (focusLine > item.itemTrailingEdge) {
+      return focusLine - item.itemTrailingEdge;
+    }
+    return 0.0;
   }
 
   @override
@@ -204,7 +236,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         final mediaPadding = MediaQuery.paddingOf(context);
         final insetsChanged = provider.updateContentInsets(
-          top: mediaPadding.top + 20,
+          top: 0,
           bottom: mediaPadding.bottom + 46,
         );
         if (insetsChanged && provider.viewSize == size && provider.isReady) {
