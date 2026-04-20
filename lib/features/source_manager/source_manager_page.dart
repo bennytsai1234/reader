@@ -371,11 +371,6 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     );
   }
 
-  /// 校驗選中書源 — 輸入關鍵字後開始 (對標 legado checkSource)
-  void _showCheckSourceDialog(BuildContext context, SourceManagerProvider p) {
-    SourceManagerDialogs.showCheckConfigDialog(context, p);
-  }
-
   /// 加入分組 (對標 legado selectionAddToGroups)
   void _showAddGroupDialog(BuildContext context, SourceManagerProvider p) {
     final ctrl = TextEditingController();

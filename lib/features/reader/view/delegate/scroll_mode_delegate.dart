@@ -135,8 +135,9 @@ class ScrollModeDelegate extends PageModeDelegate {
       }
     }
     final insetPadding = provider.contentTopInset + provider.contentBottomInset;
-    if (heights.isEmpty)
+    if (heights.isEmpty) {
       return (provider.viewSize?.height ?? 600.0) + insetPadding;
+    }
     return heights.reduce((double a, double b) => a + b) / heights.length +
         insetPadding;
   }

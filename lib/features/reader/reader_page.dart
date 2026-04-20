@@ -144,10 +144,13 @@ class _ReaderPageState extends State<ReaderPage> {
             systemNavigationBarIconBrightness:
                 isDarkBackground ? Brightness.light : Brightness.dark,
           ),
-          child: WillPopScope(
-            onWillPop: () async {
-              await _handleExitIntent(context, p);
-              return false;
+          child: PopScope<void>(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (didPop) {
+                return;
+              }
+              _handleExitIntent(context, p);
             },
             child: Scaffold(
               key: _key,
@@ -285,15 +288,18 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _handleExitIntent(BuildContext context, ReaderProvider p) async {
     if (_isHandlingExit || !mounted) return;
+    final navigator = Navigator.of(context);
     if (_key.currentState?.isDrawerOpen ?? false) {
-      Navigator.pop(context);
+      navigator.pop();
       return;
     }
 
     _isHandlingExit = true;
     try {
       if (!p.shouldPromptAddToBookshelfOnExit()) {
-        if (mounted) Navigator.pop(context);
+        if (mounted) {
+          navigator.pop();
+        }
         return;
       }
       final addToBookshelf = await _showAddToBookshelfDialog(context, p.book);
@@ -302,7 +308,7 @@ class _ReaderPageState extends State<ReaderPage> {
         await p.addCurrentBookToBookshelf();
       }
       if (mounted) {
-        Navigator.pop(context);
+        navigator.pop();
       }
     } finally {
       _isHandlingExit = false;

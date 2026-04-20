@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:inkpage_reader/core/config/app_config.dart';
 import 'package:inkpage_reader/core/constant/prefer_key.dart';
 import 'package:inkpage_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/tts_service.dart';
 import 'provider/settings_base.dart';
 
 export 'provider/settings_base.dart';
@@ -75,7 +76,7 @@ class SettingsProvider extends SettingsProviderBase {
   bool mediaButtonPerNext = false;
   bool readAloudByPage = false;
   bool streamReadAloudAudio = false;
-  double speechRate = 0.5;
+  double speechRate = 1.0;
   double speechPitch = 1.0;
   double speechVolume = 1.0;
 
@@ -268,9 +269,12 @@ class SettingsProvider extends SettingsProviderBase {
     readAloudByPage = prefs.getBool(PreferKey.readAloudByPage) ?? false;
     streamReadAloudAudio = prefs.getBool(PreferKey.streamReadAloudAudio) ?? false;
     readAloudByMediaButton = prefs.getBool(PreferKey.readAloudByMediaButton) ?? false;
-    speechRate = prefs.getDouble(PreferKey.ttsSpeechRate) ?? 0.5;
+    speechRate = prefs.getDouble(PreferKey.ttsSpeechRate) ?? 1.0;
     speechPitch = prefs.getDouble(PreferKey.speechPitch) ?? 1.0;
     speechVolume = prefs.getDouble(PreferKey.speechVolume) ?? 1.0;
+    TTSService().setRate(speechRate);
+    TTSService().setPitch(speechPitch);
+    TTSService().setVolume(speechVolume);
 
     notifyListeners();
   }
@@ -318,9 +322,26 @@ class SettingsProvider extends SettingsProviderBase {
   }
 
   // --- 朗讀速率 ---
-  void setSpeechRate(double v) { speechRate = v; save(PreferKey.ttsSpeechRate, v); update(); }
-  void setSpeechPitch(double v) { speechPitch = v; save(PreferKey.speechPitch, v); update(); }
-  void setSpeechVolume(double v) { speechVolume = v; save(PreferKey.speechVolume, v); update(); }
+  void setSpeechRate(double v) {
+    speechRate = v;
+    TTSService().setRate(v);
+    save(PreferKey.ttsSpeechRate, v);
+    update();
+  }
+
+  void setSpeechPitch(double v) {
+    speechPitch = v;
+    TTSService().setPitch(v);
+    save(PreferKey.speechPitch, v);
+    update();
+  }
+
+  void setSpeechVolume(double v) {
+    speechVolume = v;
+    TTSService().setVolume(v);
+    save(PreferKey.speechVolume, v);
+    update();
+  }
 
   // --- 閱讀顯示 ---
   void setHideStatusBar(bool v) { hideStatusBar = v; save(PreferKey.hideStatusBar, v); update(); }
@@ -329,5 +350,4 @@ class SettingsProvider extends SettingsProviderBase {
   void setAutoChangeSource(bool v) { autoChangeSource = v; save(PreferKey.autoChangeSource, v); update(); }
   void setOptimizeRender(bool v) { optimizeRender = v; save(PreferKey.optimizeRender, v); update(); }
 }
-
 

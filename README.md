@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/bennytsai1234/reader/releases/tag/v0.2.8"><img src="https://img.shields.io/github/v/release/bennytsai1234/reader?display_name=tag&label=release&color=C7783B" alt="Release"></a>
+  <a href="https://github.com/bennytsai1234/reader/releases/tag/v0.2.10"><img src="https://img.shields.io/github/v/release/bennytsai1234/reader?display_name=tag&label=release&color=C7783B" alt="Release"></a>
   <a href="https://github.com/bennytsai1234/reader/actions/workflows/dart.yml"><img src="https://img.shields.io/github/actions/workflow/status/bennytsai1234/reader/dart.yml?branch=main&label=ci&color=4E7A5D" alt="CI"></a>
   <img src="https://img.shields.io/badge/flutter-3.x-2E7BCF" alt="Flutter">
   <img src="https://img.shields.io/badge/dart-3.7+-1E9AA7" alt="Dart">
@@ -57,13 +57,13 @@
 
 | 項目 | 狀態 |
 | --- | --- |
-| 最新版本 | `v0.2.8` |
+| 最新版本 | `v0.2.10` |
 | 目前主線 | `main` |
 | 資料庫 schema | `v8` |
 | Dart SDK | `^3.7.0` |
 | 目前主焦點 | 打磨既有能力，不再盲目擴張新功能 |
 
-`v0.2.8` 之後，專案的重心不是再追求更多功能，而是把現有能力做穩：
+`v0.2.10` 之後，專案的重心不是再追求更多功能，而是把現有能力做穩：
 
 - 閱讀器 runtime
 - 書源引擎可預測性
@@ -91,7 +91,7 @@
 
 ### 本地與資料
 
-- TXT / EPUB 匯入
+- TXT / EPUB / UMD 匯入
 - 書架管理、分組、書籍詳情
 - 本地備份 / 還原
 - 書架匯入匯出
@@ -179,7 +179,7 @@ flutter build ios --release --no-codesign
 
 ## 測試與驗證
 
-目前 repo 有 **82 個測試檔**，覆蓋：
+目前 repo 有 **89 個測試檔**，覆蓋：
 
 - 閱讀器 runtime：restore、progress、navigation、scroll/slide、TTS
 - 書源引擎：parser、AnalyzeUrl、JS extensions、Promise bridge、integration
@@ -217,6 +217,7 @@ GitHub Actions 會自動產生 release build。
 - [docs/DATABASE.md](docs/DATABASE.md) — Drift schema、DAO、migration
 - [docs/roadmap.md](docs/roadmap.md) — 目前主線、不做清單與下一階段重點
 - [docs/next_stage_handoff.md](docs/next_stage_handoff.md) — 下一階段交接與風險
+- [docs/source_audit_backlog.md](docs/source_audit_backlog.md) — 與 `legado` 的手動對照紀錄
 
 ## 貢獻與社群
 

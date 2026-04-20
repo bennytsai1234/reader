@@ -34,7 +34,7 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
     AppConfig.readerPageAnim = pageTurnMode;
     chineseConvert = p.getInt(PreferKey.readerChineseConvert) ?? 0;
 
-    final ttsRate = p.getDouble(PreferKey.readerTtsRate) ?? 0.5;
+    final ttsRate = p.getDouble(PreferKey.readerTtsRate) ?? 1.0;
     final ttsPitch = p.getDouble(PreferKey.readerTtsPitch) ?? 1.0;
     final ttsLang = p.getString(PreferKey.readerTtsLanguage);
 

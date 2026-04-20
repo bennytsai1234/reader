@@ -4,6 +4,21 @@
 
 ---
 
+## [0.2.10] — 2026-04-20
+
+### 修復
+
+- 修正 `朗讀與語音` 設定頁只保存語速 / 音調但不即時同步到 `TTSService` 的問題，現在調整會直接作用到目前的朗讀服務
+- 將 TTS 預設語速與音調基準統一收斂到 `1.0`，避免全域設定頁與閱讀器內部 fallback 使用不同預設值
+- 修正閱讀器返回攔截實作，改用 `PopScope` 以對齊新版 Flutter 的 Android predictive back 要求
+
+### 工程整理
+
+- 清掉閱讀器與 scroll delegate 的 flow-control braces lint
+- 移除書源管理頁未引用的 `_showCheckSourceDialog`
+- 重寫一批以現況程式碼為準的架構 / roadmap / handoff / database 文檔，移除過時敘事
+- `flutter analyze` 已恢復為 `No issues found!`
+
 ## [0.2.9] — 2026-04-20
 
 ### 新功能 / 體驗優化

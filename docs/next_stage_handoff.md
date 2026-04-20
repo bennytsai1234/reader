@@ -1,205 +1,186 @@
-# 下一階段交接
+# 接手說明
 
 更新日期：2026-04-20
 
-這份文檔是 `v0.2.4` 發版後的正式交接稿，目的是讓下一位接手的人不需要重新考古整個書源審計與產品整合過程，就能直接進入下一階段。
+這份 handoff 不假設舊文檔可靠，只以目前 repo 實際狀態整理。
 
-## 一句話結論
+## 先講結論
 
-`v0.2.4` 已經把「書源相容層補強 + 書源狀態系統 + 執行期隔離策略 + 閱讀失敗換源」正式接進 app。下一階段不應再以大範圍書源掃描為主，而應改做：
+如果今天要接手 `reader`，最合理的策略不是先加功能，而是先把三件事吃透：
 
-1. JS / QuickJS 測試環境與 full suite 可信度
-2. 書源健康狀態與校驗結果資料正規化
-3. rule 級診斷、WebView / login recovery 與閱讀器 runtime 收尾
+1. `features/reader` runtime
+2. `core/engine` 書源解析鏈
+3. `core/database` 與 `core/services/check_source_service.dart`
 
-## 目前已完成的事情
+## 現在的產品邊界
 
-### 書源相容層
+`reader` 目前是一個聚焦在小說閱讀主線的 Flutter app。
 
-- 大量對齊 `legado` 的 URL、Regex、CSS、JsonPath、JS bridge、TOC / 正文解析行為
-- 前 `1-300` 個純小說源已完成主窗口收斂
-- 非小說源、下載站、登入牆來源已有清理與隔離策略
+已存在的主線：
 
-### 書源狀態系統
+- 書架
+- 書籍詳情
+- 搜尋
+- 探索
+- 書源管理
+- 閱讀器
+- 備份還原
+- 本地書匯入
 
-- 校驗結果已接入 app，不再只是工具輸出
-- `搜尋失效 / 詳情失效 / 目錄失效 / 正文失效 / 上游異常 / 非小說源 / 下載站 / 需要登入` 等狀態會影響：
-  - 搜尋池
-  - 閱讀可用性
-  - 建議清理來源
+明確不應假設存在的線：
 
-### 閱讀器恢復能力
+- RSS
+- 多媒體閱讀
+- 完整對齊 `legado` 的所有 Android-only 能力
 
-- 正文或章節失敗時，頁面內會直接顯示恢復卡片
-- 已支援：
-  - 自動換源
-  - 手動換源
-  - 保留閱讀進度切換來源
+## 先讀哪些檔
 
-### UI / 產品策略
+### 第一輪
 
-- 已移除 `ms` 響應時間顯示與排序
-- 已確立「純小說閱讀器」方向，不再比照 `legado` 全收音頻 / 漫畫 / 影片源
+1. [main.dart](/home/benny/projects/reader/lib/main.dart:1)
+2. [app_providers.dart](/home/benny/projects/reader/lib/app_providers.dart:1)
+3. [architecture.md](architecture.md)
+4. [DATABASE.md](DATABASE.md)
+5. [source_audit_backlog.md](source_audit_backlog.md)
 
-## 目前不要再做的事情
+### 第二輪
 
-- 不要再把主線目標設成「繼續掃更多書源」
-- 不要再做大範圍 `50+` 書源 batch 驗證
-- 不要再引入新功能線，特別是非核心工具頁或新平台能力
-- 不要把書源健康狀態繼續綁死在 group/comment 模式上擴寫更多規則
+1. [read_book_controller.dart](/home/benny/projects/reader/lib/features/reader/runtime/read_book_controller.dart:1)
+2. [reader_content_mixin.dart](/home/benny/projects/reader/lib/features/reader/provider/reader_content_mixin.dart:1)
+3. [chapter_content_manager.dart](/home/benny/projects/reader/lib/features/reader/engine/chapter_content_manager.dart:1)
+4. [js_engine.dart](/home/benny/projects/reader/lib/core/engine/js/js_engine.dart:1)
+5. [check_source_service.dart](/home/benny/projects/reader/lib/core/services/check_source_service.dart:1)
 
-## 已知問題
+### 第三輪
 
-### 1. `flutter test` 尚未完全可信
+1. [source_manager_page.dart](/home/benny/projects/reader/lib/features/source_manager/source_manager_page.dart:1)
+2. [search_page.dart](/home/benny/projects/reader/lib/features/search/search_page.dart:1)
+3. [explore_page.dart](/home/benny/projects/reader/lib/features/explore/explore_page.dart:1)
+4. [book_detail_provider.dart](/home/benny/projects/reader/lib/features/book_detail/book_detail_provider.dart:1)
+5. [bookshelf_provider.dart](/home/benny/projects/reader/lib/features/bookshelf/bookshelf_provider.dart:1)
 
-本地 full suite 目前不是全綠，主要是兩類問題：
+## 接手時不要被哪些舊印象誤導
 
-- 某些 VM / WSL 環境若直接裸跑 `flutter test`，會缺 `libquickjs_c_bridge_plugin.so`
-- 少數既有 compatibility 測試仍紅
+### 不要假設文件裡說「已完成」就真的完成
 
-這意味著：
+目前實際程式碼裡仍可直接看到：
 
-- `flutter analyze` 已可作為穩定護欄
-- Linux / WSL 請優先使用 `tool/flutter_test_with_quickjs.sh`
-- `flutter test` 目前還不能在所有本機環境上直接視為可靠綠燈
+- 過渡性的書源狀態實作
+- provider 中的簡化註解式邏輯
+- 未接線 widget
+- lint 與舊 API 殘留
 
-### 2. 書源健康狀態是過渡實作
+### 不要假設 `reader` 是一個完整複刻的 `legado`
 
-目前 health 是透過：
+它更接近：
 
-- `bookSourceGroup` 的系統 tag
-- `bookSourceComment` 的錯誤註解
+- 以 `legado` 書源能力為規格參考
+- 但產品邊界刻意縮成小說閱讀器
 
-推導而來，而不是獨立欄位或獨立表。這已經能用，但不夠乾淨。
+### 不要假設本地書已全面支持
 
-### 3. 校驗結果沒有正式歷史
+目前可直接驗證的本地格式只有：
 
-`CheckSourceService` 現在只有記憶體內的 `lastReport`，來源管理頁顯示的是這份最近結果，沒有真正的：
+- TXT
+- EPUB
+- UMD
 
-- 上次校驗時間
-- 最後失敗階段
-- 歷史摘要
-- 來源級別的審計追蹤
+## 目前最實際的風險
 
-### 4. WebView / login recovery 仍然偏弱
+### 1. 測試可信度不是無條件成立
 
-parser parity 已補很多，但：
+`flutter test` 可過，但有 QuickJS 相關 skip，代表：
 
-- WebView 書源仍偏黑盒
-- login 只有基礎可用
-- headless recovery 的測試覆蓋還不夠
+- 綠燈不完全等於完整覆蓋
+- JS compatibility 仍有環境依賴
 
-### 5. 換源仍偏「失敗後補救」
+### 2. 書源治理還停在過渡態
 
-目前換源體驗已經可用，但仍主要發生在正文失敗之後。它還沒完全前移到：
+核心症狀：
 
-- 詳情失敗
-- 目錄失敗
-- 來源預測性評分
+- health 沒正式欄位
+- `lastReport` 只有記憶體版本
+- group/comment 同時扮演使用者語義與系統語義
 
-這種更無感的執行期自癒層。
+### 3. 閱讀器已進入重構後期，但還沒完全收口
 
-## 下一階段建議順序
+核心症狀：
 
-### P0：先修測試環境與 full suite 可信度
+- mixin 鏈還在
+- controller 還大
+- 交互邊角還有待清理項
 
-目標：
+## 建議實作順序
 
-- 讓 QuickJS 缺件時有明確的測試策略
-- 收斂目前 compatibility 紅燈
+### 第一步
 
-完成標準：
+先清 `flutter analyze`。
 
-- `flutter analyze` 全綠
-- `flutter test` 不再被大量 `JS_ERROR: Library not available` 汙染
-- 剩餘失敗能被明確歸類成真 regression
+理由：
 
-### P1：把書源健康狀態正規化
+- 這是最便宜、也最能快速摸清全域代碼氣味的方法
+- 可以順便收掉 deprecated 與死碼
 
-目標：
+### 第二步
 
-- 不再只靠 `group/comment` 推導健康狀態
-- 讓來源管理、搜尋池、閱讀策略共用正式資料
+把 source health 與 last check state 正規化。
 
-建議落點：
+理由：
 
-- `BookSources` 新增正式欄位，或
-- 建一張獨立的 `SourceHealth` / `SourceCheckState` 表
+- 這會同時改善 source manager、search、explore、reader fallback
+- 是目前最明顯的結構缺口
 
-至少要有：
+### 第三步
 
-- `healthCategory`
-- `lastCheckedAt`
-- `lastStage`
-- `lastMessage`
-- `quarantined`
-- `cleanupCandidate`
+補 engine 錯誤訊息與 WebView/login recovery。
 
-### P2：把校驗結果做成正式歷史
+理由：
 
-目標：
+- 這是 `reader` 和 `legado` 真正仍有成熟度差距的地方
 
-- app 重啟後仍看得到上次校驗資訊
-- 來源管理頁可以按狀態、時間、建議清理與隔離做篩選
+### 第四步
 
-建議不要一開始就做完整歷史表；先把最後一次結果落地即可。
+回頭收閱讀器產品層邊角。
 
-### P3：補 engine 的 rule 級診斷與 WebView / login recovery
+理由：
 
-目標：
+- 閱讀器主幹已經存在，不需要先重寫
+- 先修邊角比再做一輪大改更划算
 
-- 錯誤能追到：
-  - 哪個階段
-  - 哪條 rule
-  - 哪個 URL
-- WebView / login 類失敗不再只是 timeout 或黑盒錯誤
-
-### P4：閱讀器 runtime 與換源流程收尾
-
-目標：
-
-- 讓換源從「正文失敗後補救」往前推
-- 繼續收斂 `ReadBookController` / `ReaderContentMixin`
-
-## 建議先讀哪些檔
-
-如果是要直接開始下一階段，建議閱讀順序：
-
-1. [roadmap.md](roadmap.md)
-2. [reader_architecture_current.md](reader_architecture_current.md)
-3. [DATABASE.md](DATABASE.md)
-4. [source_audit_backlog.md](source_audit_backlog.md)
-
-之後直接看這些程式檔：
-
-- [js_engine.dart](/home/benny/projects/reader/lib/core/engine/js/js_engine.dart)
-- [check_source_service.dart](/home/benny/projects/reader/lib/core/services/check_source_service.dart)
-- [book_source_logic.dart](/home/benny/projects/reader/lib/core/models/source/book_source_logic.dart)
-- [headless_webview_service.dart](/home/benny/projects/reader/lib/core/engine/web_book/headless_webview_service.dart)
-- [read_book_controller.dart](/home/benny/projects/reader/lib/features/reader/runtime/read_book_controller.dart)
-
-## 執行與驗證注意事項
-
-這個 repo 在 WSL 下容易被重型 Dart / Flutter 命令頂爆，請遵守：
-
-- 一次只跑一個 heavy command
-- 不要同時跑 `analyze` 和 `test`
-- 不要再做大型 batch source validation
-- 優先 targeted test
+## 驗證方式
 
 建議順序：
 
-1. 先改資料模型 / 文檔
-2. `flutter analyze`
-3. targeted `flutter test`
-4. 只有真的需要時才跑 full `flutter test`
+1. `flutter analyze`
+2. targeted `flutter test`
+3. `tool/flutter_test_with_quickjs.sh`
+4. 有需要才跑 full suite
 
-## 當前完成判斷
+不要一開始就：
 
-下一階段如果做到以下幾件事，就算真的往前跨一大步：
+- 同時跑多個 heavy command
+- 重新做大規模 source batch audit
+- 直接改動閱讀器多個子域再一起驗證
 
-- full suite 的可信度恢復
-- 書源健康狀態脫離 `group/comment` 過渡實作
-- 校驗結果能持久化
-- WebView / login 類來源不再是黑盒
-- 換源從「補救」走向更主動的執行期恢復
+## 和 legado 的相處方式
+
+接手時最好把 `legado` 當作三種東西：
+
+1. 產品流對照
+2. parser / JS / source 行為 spec
+3. 缺口確認工具
+
+不要把它當成：
+
+- 每個頁面都要照抄的模板
+- 評價 `reader` 好壞的唯一標準
+
+## 當前最有價值的交付
+
+如果下一位接手者只做一輪高價值整理，最值得交付的是：
+
+1. `flutter analyze` 全綠
+2. source health 正式欄位或正式表
+3. 最後一次 source check 落地
+4. rule 級錯誤訊息
+5. 閱讀器返回與交互收尾

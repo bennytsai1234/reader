@@ -1,189 +1,195 @@
-# 資料層
+# 資料層現況
 
 更新日期：2026-04-20
 
-本文只描述目前可以由代碼直接驗證的資料庫事實，依據：
+這份文檔只寫目前程式碼能直接驗證的事，主要依據：
 
-- `lib/core/database/app_database.dart`
-- `lib/core/database/tables/`
-- `lib/core/database/dao/`
+- [app_database.dart](/home/benny/projects/reader/lib/core/database/app_database.dart:1)
+- [app_tables.dart](/home/benny/projects/reader/lib/core/database/tables/app_tables.dart:1)
+- `lib/core/database/dao/*.dart`
 
 ## 基本資訊
 
-- 技術：Drift（SQLite ORM） + `sqlite3_flutter_libs` native SQLite
-- 主要入口：`lib/core/database/app_database.dart`
-- Schema version：**8**
-- 資料庫檔案：`ApplicationSupportDirectory/databases/inkpage_reader.db`
-- 對應產生程式碼：`app_database.g.dart`（build_runner 產出，**不要手動編輯**）
+- 技術：Drift + SQLite
+- 資料庫入口：`lib/core/database/app_database.dart`
+- schema version：`8`
+- DB 路徑：`ApplicationSupportDirectory/databases/inkpage_reader.db`
+- `AppDatabase` 採 singleton factory
 
-## 表與 DAO 規模
+## 目前有哪些表
 
-`AppDatabase` 目前註冊 **20 張資料表** 與 **20 個 DAO**。
+`AppDatabase` 目前掛了 20 張表：
 
-### 核心閱讀資料
+1. `Books`
+2. `Chapters`
+3. `BookSources`
+4. `BookGroups`
+5. `SearchHistoryTable`
+6. `ReplaceRules`
+7. `Bookmarks`
+8. `Cookies`
+9. `DictRules`
+10. `HttpTtsTable`
+11. `ReadRecords`
+12. `Servers`
+13. `TxtTocRules`
+14. `CacheTable`
+15. `KeyboardAssists`
+16. `RuleSubs`
+17. `SourceSubscriptions`
+18. `SearchBooks`
+19. `DownloadTasks`
+20. `SearchKeywords`
 
-| 表 | 用途 |
-|----|------|
-| `Books` | 書籍主資料、書架狀態、閱讀進度、閱讀設定 |
-| `Chapters` | 章節清單與正文快取 |
-| `Bookmarks` | 書籤 |
-| `ReadRecords` | 閱讀記錄 |
+## 目前有哪些 DAO
 
-### 書源與規則
+也對應 20 個 DAO：
 
-| 表 | 用途 |
-|----|------|
-| `BookSources` | 書源規則、登入設定、解析規則 |
-| `ReplaceRules` | 正文替換規則 |
-| `DictRules` | 字典規則 |
-| `RuleSubs` | 規則訂閱 |
-| `SourceSubscriptions` | 書源訂閱 |
-| `TxtTocRules` | TXT 目錄規則 |
+1. `BookDao`
+2. `ChapterDao`
+3. `BookSourceDao`
+4. `BookGroupDao`
+5. `BookmarkDao`
+6. `ReplaceRuleDao`
+7. `SearchHistoryDao`
+8. `CookieDao`
+9. `DictRuleDao`
+10. `HttpTtsDao`
+11. `ReadRecordDao`
+12. `ServerDao`
+13. `TxtTocRuleDao`
+14. `CacheDao`
+15. `KeyboardAssistDao`
+16. `RuleSubDao`
+17. `SourceSubscriptionDao`
+18. `SearchBookDao`
+19. `DownloadDao`
+20. `SearchKeywordDao`
 
-### 搜尋、快取與網路狀態
-
-| 表 | 用途 |
-|----|------|
-| `SearchHistoryTable` | 搜尋歷史 |
-| `SearchBooks` | 搜尋結果快取 |
-| `SearchKeywords` | 關鍵字統計 |
-| `CacheTable` | 通用 key-value 快取 |
-| `Cookies` | 站點 cookie |
-
-### 其他功能資料
-
-| 表 | 用途 |
-|----|------|
-| `BookGroups` | 書籍分組 |
-| `Servers` | 服務端設定 |
-| `HttpTtsTable` | HTTP TTS 設定 |
-| `KeyboardAssists` | 鍵盤輔助設定 |
-| `DownloadTasks` | 下載任務 |
-
-## 對閱讀器最重要的三張表
+## 三個最關鍵的真源
 
 ### `Books`
 
-**主鍵**：`bookUrl`
+主鍵是 `bookUrl`。
 
-**閱讀器常用欄位**：
+這張表同時承擔：
 
+- 書籍基本資訊
+- 書架狀態
+- 閱讀進度
+- 部分閱讀設定
+
+閱讀器最關鍵的欄位：
+
+- `durChapterIndex`
+- `durChapterPos`
 - `durChapterTitle`
-- `durChapterIndex` — **閱讀進度真源（章節 index）**
-- `durChapterPos` — **閱讀進度真源（章內 char offset）**
-- `durChapterTime`
 - `readConfig`
 - `isInBookshelf`
 
-這張表是閱讀進度的持久化真源。閱讀器 runtime 內的 `pageIndex` 與 `localOffset` 都只是投影，最後都要收斂回 `durChapterIndex` + `durChapterPos`。
+對 `reader` 而言，真正的持久化進度不是 page index，而是：
+
+- `durChapterIndex`
+- `durChapterPos`
+
+這點和 `reader` 的 runtime 設計是一致的。
 
 ### `Chapters`
 
-**主鍵**：`url`
+主鍵是 `url`。
 
-**閱讀器與書源常用欄位**：
+這張表承擔：
+
+- 章節目錄
+- 正文快取
+- 本地 TXT offset
+- 部分片段定位資訊
+
+重要欄位：
 
 - `bookUrl`
 - `title`
 - `index`
-- `content` — 正文快取
-- `start`、`end`
-- `startFragmentId`、`endFragmentId`
+- `content`
+- `start` / `end`
+- `startFragmentId` / `endFragmentId`
 
-承擔章節目錄與正文快取。
+### `BookSources`
 
-### `Bookmarks`
+主鍵是 `bookSourceUrl`。
 
-閱讀器定位相關欄位：
+目前保存：
 
-- `bookUrl`
-- `chapterIndex`
-- `chapterPos`
-- `chapterName`
-- `bookText`
+- 書源基本資訊
+- login 設定
+- JS lib
+- explore/search URL
+- search/explore/bookInfo/toc/content/review rule
+- 開關與排序欄位
 
-## DAO 清單
+這張表目前沒有獨立的 health / check state 欄位。
 
-| DAO | 主要職責 |
-|-----|---------|
-| `BookDao` | 書籍資料、進度、書架狀態 |
-| `ChapterDao` | 章節目錄、正文快取 |
-| `BookSourceDao` | 書源 CRUD 與查詢 |
-| `BookGroupDao` | 書籍分組 |
-| `BookmarkDao` | 書籤 |
-| `ReplaceRuleDao` | 替換規則 |
-| `SearchHistoryDao` | 搜尋歷史 |
-| `CookieDao` | 站點 cookie |
-| `DictRuleDao` | 字典規則 |
-| `HttpTtsDao` | HTTP TTS |
-| `ReadRecordDao` | 閱讀記錄 |
-| `ServerDao` | 服務端設定 |
-| `TxtTocRuleDao` | TXT 目錄規則 |
-| `CacheDao` | 通用快取 |
-| `KeyboardAssistDao` | 鍵盤輔助 |
-| `RuleSubDao` | 規則訂閱 |
-| `SourceSubscriptionDao` | 書源訂閱 |
-| `SearchBookDao` | 搜尋結果快取 |
-| `DownloadDao` | 下載任務 |
-| `SearchKeywordDao` | 關鍵字統計 |
+## 目前 migration 真相
 
-## 與閱讀器的主要交互
+從 [app_database.dart](/home/benny/projects/reader/lib/core/database/app_database.dart:88) 可以直接確認：
 
-閱讀器流程最常碰到：
+- `schemaVersion == 8`
+- `from < 7` 時會移除舊 RSS 相關表
+- `from < 8` 時會為 `download_tasks` 新增 `startChapterIndex`、`endChapterIndex`
+- `beforeOpen` 會補建所有已註冊表
 
-- `BookDao` — 讀寫書籍資料、進度、書架狀態
-- `ChapterDao` — 讀章節目錄與正文快取
-- `BookSourceDao` — 讀書源設定
-- `ReplaceRuleDao` — 讀內容替換規則
-- `BookmarkDao` — 建立書籤
+這代表資料層策略偏保守：
 
-書源引擎會透過 service / repository 向 DAO 寫入章節內容，不直接在 parser 層寫 DB。
+- 先確保不缺表
+- 再做少量增量欄位遷移
+- 已經主動清掉被正式移除的 RSS 痕跡
 
-## 書源健康狀態（目前實作）
+## 與 legado 的手動對照
 
-`BookSources` 目前**沒有**獨立的「健康狀態 / 校驗結果」欄位。
+### 共同點
 
-目前 app 的書源健康狀態是透過：
+- 都有 `Book`、`BookChapter`、`BookSource` 這三條主線
+- 都把閱讀進度與書架資料落進本地資料庫
+- 都有書源規則、替換規則、書籤、搜尋歷史等資料結構
 
-- `bookSourceGroup` 中的系統 tag
-- `bookSourceComment` 中的錯誤註解
+### `reader` 較簡化的地方
 
-來推導，例如：
+- 沒有 RSS 相關表，舊表還在 migration 中被清掉
+- 沒有把 `legado` 的整個內容生態一比一搬過來
+- schema 比 `legado` 明顯更偏向小說閱讀器本體
 
-- `搜尋失效`
-- `詳情失效`
-- `目錄失效`
-- `正文失效`
-- `上游異常`
-- `下載站`
-- `非小說源`
-- `需要登入`
+### `reader` 當前最明顯的缺口
 
-這是 `v0.2.4` 引入的過渡設計，已能支撐搜尋池過濾、閱讀隔離、來源管理清理與換源流程；但後續若要做校驗歷史、排序、篩選與統計，應考慮把這套狀態正規化為正式欄位或獨立表。
+- `BookSources` 沒有正式 health 欄位
+- 最近一次書源校驗結果沒有正式持久化表
+- 來源治理目前仍依賴 `bookSourceGroup` / `bookSourceComment`
 
-## Migration 現況
+這意味著資料層對書源治理仍停在過渡態，不算完全完成。
 
-可由代碼直接確認的 migration 行為：
+## 和 feature 的責任邊界
 
-- schema version = **8**
-- `from < 7` — 刪除舊 RSS 相關表
-- `from < 8` — 為 `download_tasks` 新增 `startChapterIndex`、`endChapterIndex`
-- `beforeOpen` — 確保所有註冊表存在
+現在的正確邊界應該這樣理解：
 
-升級策略偏保守，重點是避免舊版升級路徑因缺表而失敗。
+- DAO：只做 CRUD、查詢、watch
+- service：組合多個 DAO 與 engine/network/local-book 能力
+- provider/controller：協調頁面狀態與使用者流程
+- widget/page：不直接碰 DAO
 
-## 改動 schema 時
+這條原則大致成立，但不能誇大。像 `BookDetailProvider`、`BookshelfProvider` 這類 provider 仍直接操作 DAO，只是 UI widget 本身已不直接碰資料層。
 
-1. 編輯 `lib/core/database/tables/` 下的 table 定義
-2. 在 `app_database.dart` 的 `schemaVersion` 提高版本號
-3. 在 `migration` 對應 `from < N` 分支加遷移邏輯
-4. 跑 `flutter pub run build_runner build --delete-conflicting-outputs`
-5. 加 migration 測試（可參考既有 schema 測試）
+## 目前最值得補的資料層工作
 
-## 實務判讀
+1. 將書源 health 正規化，別再靠 group/comment 推導。
+2. 將最後一次書源校驗結果落地。
+3. 讓來源治理資料能在重啟後保留，並支撐排序、篩選與清理建議。
+4. 釐清 cache、download、chapter content 的資料責任。
 
-- `Books` 是閱讀進度與書架狀態真源
-- `Chapters` 是章節目錄與正文快取真源
-- 其他表多數是書源、規則、搜尋、下載與周邊功能支撐
+## 結論
 
-UI 層不應直接呼叫 DAO（M5 已完成消除）。跨 DAO 或整合性邏輯應在 `core/services/` 或 feature 層的 repository 類別中組裝。
+`reader` 的資料層已經足夠支撐小說閱讀主線，但它不是完全對齊 `legado` 的資料模型。
+
+最準確的說法是：
+
+- 書籍、章節、書源三條主線已成立
+- RSS 線已被正式移除
+- 書源治理資料仍處於「能用但不正規」的過渡階段

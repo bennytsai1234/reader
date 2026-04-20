@@ -1,331 +1,323 @@
-# Source Audit Backlog
+# Reader 與 Legado 手動對照
 
-Updated: 2026-04-20
+更新日期：2026-04-20
 
-> 狀態：歷史相容性審計記錄。`v0.2.4` 發版後，這份文檔不再代表當前主線，只保留作為 parser / JS bridge parity 的考古資料。
+這份文件已不再是舊的 source batch audit backlog，而是手動對照 `reader` 與 `legado` 現況的差異紀錄。
 
-## Goal
+對照依據：
 
-把使用者提供的大型 Legado 書源清單，持續驗證到 `搜尋 -> 詳情 -> 目錄 -> 正文 -> 換章 -> 緩存/持續閱讀` 都可穩定運行，並把兼容缺口收斂成可回歸的 parser / JS bridge / tool 層修正。
+- `reader/lib/**/*`
+- `legado/app/src/main/java/io/legado/app/ui/**/*`
+- `legado/app/src/main/java/io/legado/app/data/**/*`
 
-## Current Track
+## 一句話結論
 
-這一階段的主目標已完成：
+`reader` 目前不是「Flutter 版完整 `legado`」，而是：
 
-- 前 `1-300` 個純小說源已完成大窗口收斂
-- 書源健康狀態、隔離策略與閱讀失敗換源已接入 app
-- 後續不再以「繼續往後掃更多書源」作為主線
+- 在書源引擎與主要產品流上明顯參照 `legado`
+- 在內容範圍上刻意收縮成小說閱讀器
+- 在架構上比 `legado` 更強調資料層、引擎、閱讀器 runtime 的明確分區
+- 在產品成熟度與周邊能力上仍落後 `legado`
 
-之後只有在 parser / JS bridge 出現回歸時，才回到這份文檔追溯相應的 canary 與 parity 補丁。
+## 對照方法
 
-## Baseline: Sources 1-10
+這份對照不是只看檔名，而是人工比對：
 
-- Latest rerun summary: `8/10` passed.
+- app 入口
+- 主頁結構
+- 搜尋
+- 探索
+- 書源管理
+- 閱讀器
+- 資料層
+- 本地書
+- 明確缺席的功能線
 
-- Passed:
-  - `#1` BB成人小说
-  - `#2` 🎓 爱丽丝书屋
-  - `#3` 随心看吧
-  - `#4` 🎃酷匠阅读🎃
-  - `#6` 五六中文
-  - `#7` 🎃轻之文库🎃
-  - `#8` 阅友小说🎃#2
-  - `#9` SF轻小说🎃#2
-- Failed:
-  - `#5` ♜ ✎笔趣阁⑬⑥ #破冰1101
-    - `POST` `Content-Type` 兼容已修，手動關鍵詞如 `龙族` 可正常出結果。
-    - 目前剩餘問題是 audit 自動選詞仍可能挑到站點不穩定的書名關鍵詞，需再收斂。
-  - `#10` AAA小说
-    - 站點可連。
-    - audit 關鍵詞發現仍未命中，需補更多 browse/explore 關鍵詞策略。
+## 1. App 入口與主頁
 
-## Baseline: Sources 11-20
+### legado
 
-- Latest confirmed status: `7/10` passed.
-  - `#20` 八叉书库已於單源 live 驗證中確認通過。
-  - `11-20` 全批重跑仍受書源鏡像 timeout 影響，待鏡像恢復後再補完整 batch 統計。
+主入口是 `MainActivity`。
 
-- Passed:
-  - `#12` 五六中万
-  - `#14` 🎃读书网🎃
-  - `#15` 新笔趣阁 wap2.xinbiquge.org
-  - `#16` ❤️五六中文 破冰
-  - `#18` 阅友小说🎃
-  - `#19` 🎃笔趣阁🎃
-  - `#20` 八叉书库
-- Failed:
-  - `#11` 爱优漫🎃
-    - TLS 憑證過期，屬站點側問題。
-  - `#13` 🎃一个阅读🎃
-    - 關鍵詞探測命中 404，偏向站點路由已變或規則已失效。
-  - `#17` ❤️酷我小说
-    - `cache.getFile/putFile` 兼容已補。
-    - headless 測試環境仍會遇到 `path_provider` plugin 缺失；即使略過後，主站 API `http://appi.kuwo.cn/novels/api/book` 目前也是 404，偏向站點側失效。
+實際可見：
 
-## Recent Window: Sources 89-96
+- 書架
+- 探索
+- RSS
+- 我的
 
-- Latest confirmed status across two small reruns:
-  - `#89-91`: `pass=1 / skip=2 / fail=0`
-  - `#93-96`: `pass=3 / skip=1 / fail=0`
+而且 `MainActivity` 本身處理很多 app 級流程：
 
-- Passed:
-  - `#89` QQ阅读
-    - 先前的 comment-prefixed JSON rule / JS parity 問題已修復。
-  - `#93` 乡土小说
-    - `POST -> 302 -> GET` 搜尋鏈路已 live 驗證通過。
-  - `#94` 漫小肆20251217
-  - `#95` 🎃阅友小说🎃#2
-- Skipped:
-  - `#90` 🎃连城读书🎃
-    - 站點入口 `http://a.lc1001.com/false` 返回 404，偏向上游失效。
-  - `#91` 破天小说
-    - 目前關鍵詞 `我的` 搜尋結果為空，先歸為 `source-search-empty`，待更穩定的 browse/explore 選詞再確認。
-  - `#96` 🚬 疯情书库
-    - 已可到詳情與目錄，正文驗證卡在 headless `webview` 環境限制，歸為 `env-webview`。
+- 隱私協議
+- 版本提示
+- 備份同步
+- 自動更新書籍
+- 雙擊返回
+- tab reselect 行為
 
-- Known outlier:
-  - `#92` 小小阅读/书香之家app
-    - Rhino-style Java crypto 規則已補上大部分 shim，`createSymmetricCrypto(...)` 可解出正確內容。
-    - 目前仍有單點 `Cipher.doFinal(...)` / 書源腳本語義差異，暫不阻塞整體擴窗驗證。
+### reader
 
-## Recent Window: Sources 100-115
+主入口是：
 
-- Latest confirmed status from serial 20s windows / single-source reruns:
-  - `#100-109`: `pass=6 / skip=4 / fail=0`
-  - `#110-111`: `pass=2 / skip=0 / fail=0`
-  - `#112`: 站點在目前 20s 預算下仍會拖住搜尋 POST，暫列 timeout candidate，待專項排查。
-  - `#113-115`: `pass=2 / skip=1 / fail=0`
+- [main.dart](/home/benny/projects/reader/lib/main.dart:1)
+- [features/welcome/main_page.dart](/home/benny/projects/reader/lib/features/welcome/main_page.dart:1)
 
-- Passed:
-  - `#101` 奇书网络
-  - `#104` 第一版主网
-  - `#105` 👔 疯情书库
-    - 已修復 `java.ajax(...).replaceAll(...)` 這類帶 regex literal 的 async chained rule。
-  - `#107` 💠 手机看书
-  - `#108` 🎃顶点中文🎃
-  - `#109` 中华诗词（优+）
-  - `#110` 💠 望书阁网
-  - `#111` 笔趣阁
-  - `#114` 🎃笔趣阁🎃#15
-  - `#115` 学外漫画
-    - 已補 `unpack(...)` helper，可解 Dean Edwards packed JS 後還原漫畫圖片列表。
+主頁目前只有：
 
-- Skipped:
-  - `#100` 🎃宜搜小说🎃
-    - `source-search-empty`
-  - `#102` 🎃兔九三吧🎃
-    - `source-search-mismatch`
-  - `#103` 果露小说
-    - `upstream-blocked` / 404
-  - `#106` 茶杯狐狸（优+++）
-    - parser / JS context 已修正，剩餘是 headless `path_provider` 缺件，歸 `env-path-provider`
-  - `#113` 超星网站🎃#书源.com
-    - `source-search-empty`
+- 書架
+- 發現
+- 我的
 
-- New parity fixes validated in this window:
-  - `book` / `chapter` scoped JS object bridge：
-    - 補 `book.name` / `chapter.title` 等欄位讀取
-    - 補 `book.getVariable/putVariable`、`chapter.getVariable/putVariable`
-    - 補常見欄位回寫（如 `book.type`、`chapter.url/title`）
-  - Java-style string parity：
-    - `String.prototype.replaceAll`
-    - `String.prototype.replaceFirst`
-    - `String.prototype.contains`
-    - `JavaString.replaceAll/replaceFirst/contains`
-  - Async JS rewriter：
-    - 修正 async call 參數中含 regex literal 時的括號匹配
-  - Packed script helper：
-    - 全域 `unpack(...)`
+差異結論：
 
-## Recent Window: Sources 120-139
+- `reader` 沒有 RSS tab
+- `reader` 的 app root 較薄
+- `reader` 的主頁產品線明顯比 `legado` 窄
 
-- Latest confirmed status from serial 20s windows / single-source reruns:
-  - `#120-129`: `pass=8 / skip=2 / fail=0`
-  - `#130-139`: `pass=8 / skip=2 / fail=0`
+## 2. 搜尋
 
-- Passed:
-  - `#120` 夜天连看🎃
-  - `#122` 🎃笔趣阁🎃#18
-  - `#124` 心动小说
-  - `#125` 新笔趣阁
-  - `#126` 七猫小说🎃
-  - `#127` 旧钢笔
-  - `#128` 冷冷文学
-  - `#129` 🎃若初文学🎃
-  - `#130` ❤️Woo18小说🎃
-  - `#131` ❤️圣墟小说🎃
-  - `#133` 五六中文（发现）
-  - `#135` 西瓜书屋
-  - `#136` 硬币女宝
-  - `#137` 笔趣阁
-  - `#138` 笔趣阁
-  - `#139` 笔趣阁
+### legado
 
-- Skipped:
-  - `#121` 顶点小说
-    - `env-webview`
-  - `#123` 全本同人
-    - `env-webview`
-  - `#132` 风扇枕说（日+）
-    - `source-search-empty`
-  - `#134` 爱轻写真（优+）
-    - `source-search-empty`
+對照檔：
 
-- New parity / validation fixes validated in this window:
-  - `AnalyzeRule.isUrl` 會保留 `,{"headers":...}` 這類 AnalyzeUrl 參數尾綴，不再把 JSON 選項 URL-encode。
-  - `java.put/java.get` source-scoped persistence 打通，`#126` 這類跨規則傳 headers 的書源可正常工作。
-  - JS dynamic fragments 在 async 路徑改走 `makeUpRuleAsync(...)`，`{{java.importScript(...)}}` 等片段不再落回同步執行。
-  - `importScript(...)` 以 browser-like wrapper 執行，UMD 腳本不再誤走 `require/module` 分支。
-  - 補 `java.getElement / java.getElements` JS bridge，`#135` 這類正文重排腳本可直接取 DOM 列表。
-  - 詳情頁 HTML 會回用為 TOC 首頁，`tocUrl == bookUrl` 的來源不再重打一遍詳情頁。
-  - validator 目錄驗證改用有限章節數，並同步把 `ChapterListParser` 補成 sync fast path，避免大目錄來源被審計成本誤判為 fail。
+- `ui/book/search/SearchActivity.kt`
 
-## Recent Window: Sources 140-159
+可確認：
 
-- Latest confirmed status from serial 20s windows / single-source reruns:
-  - `#140-149`: `pass=6 / skip=4 / fail=0`
-  - `#150-159`: `pass=5 / skip=5 / fail=0`
-  - `#160-169`: `pass=10 / skip=0 / fail=0`
-  - `#170-179`: `pass=5 / skip=3 / fail=2`
+- 搜尋 scope menu
+- 精準搜尋
+- 歷史
+- 搜尋結果列表
+- 書源管理入口
+- log 入口
+- RecyclerView 與更完整 menu 交互
 
-- Passed:
-  - `#141` 瀚海书阁
-  - `#142` 📖PO18文
-  - `#143` 笔趣阁2345-夜明空
-  - `#144` SHF笔趣阁
-  - `#145` po18文学壬二酸
-  - `#149` 精华书阁手机版
-  - `#152` 笔趣阁
-  - `#154` 笔趣阁
-  - `#157` 错层小说网
-  - `#158` 宠耳小说
-  - `#159` Icu
+### reader
 
-- Skipped:
-  - `#140` 英语阅读（英）
-    - `source-search-empty`
-  - `#146` ❤️飘天文学org🎃
-    - `source-search-empty`
-  - `#147` 英语阅读（英）
-    - `source-search-empty`
-  - `#148` 独步小说
-    - `env-webview`
-  - `#150` ❤️笔趣阁²
-    - `source-marked-broken`
-  - `#151` 🎃笔趣阁🎃#12
-    - `source-search-empty`
-  - `#153` ❤️天悦小说
-    - `source-search-empty`
-  - `#156` 八一
-    - `source-search-empty`
+對照檔：
 
-- Resolved:
-  - `#155` 👍 笔趣阁¹
-    - `java.connect(...).raw().request().url()` parity 已補齊。
-    - 單源回驗已可 `PASS` 完整鏈路；窗口刷新時偶發 `503`，目前應視為 `upstream-blocked` 噪音，不再當 parser canary。
-  - `#161` 🎃顶点小说🎃#4
-    - CSS 結構 pseudo parity 已補齊，`#list@dt:nth-of-type(2)~a` 這類目錄規則已可過。
-  - `#167` 悦读小说（繁体）
-    - JSON map 動態 URL 組裝與 root-array JsonPath (`$.[*]`) parity 已補齊，已可完整 PASS。
+- [features/search/search_page.dart](/home/benny/projects/reader/lib/features/search/search_page.dart:1)
+- [features/search/search_provider.dart](/home/benny/projects/reader/lib/features/search/search_provider.dart:1)
 
-- Current canaries:
-  - `#171` 全本小说quanben
-    - `toc` 階段仍拿不到可閱讀章節，訊號偏向 `jsonp` / 目錄拼接鏈。
-  - `#179` 悸花阅读
-    - 目前停在 `keyword` 階段的 URL `FormatException`，偏向 `AnalyzeUrl` / URL 組裝輸入正規化問題。
+可確認：
 
-## Recent Window: Sources 253-286
+- 全部 / 分組 / 單一書源搜尋
+- 精準搜尋
+- 搜尋歷史
+- 搜尋進度與失敗來源提示
+- 聚合來源顯示
 
-- Latest confirmed status from single-source reruns:
-  - `#253`: `PASS`
-  - `#262`: `PASS`
-  - `#270`: `PASS`
-  - `#271`: `SKIP upstream-blocked`
-  - `#282`: `PASS`
-  - `#286`: `PASS`
+差異結論：
 
-- Resolved:
-  - `#253` 全免小说（优++）
-  - `#270` ♨️ 全免小说
-    - 搜尋列表的 `bookUrl @js:` 先前被 `AnalyzeRule.getString*` 在 `Map` 輸入下錯誤短路成字面字串，導致 detail/toc 都帶著整段 JS 原文當 URL。
-    - 已補 `Map` 動態規則的 URL literal 判定，只在真正的 URL/path 字面量時短路，`@js:` 會正常執行。
-  - `#286` ❤️企鹅浏览
-    - 搜尋結果 `bookUrl` 依賴 `book.kind`，但 `BookListParser` 先算 `bookUrl`、後算 `kind`，導致 `resourceId` 永遠是空字串。
-    - 已調整搜尋列表欄位賦值順序，並補 `SearchBook.toBook()` 對 `kind/variable/latestChapter/wordCount/originOrder` 的保留。
-  - `#262` ❤️书盟小说🎃
-    - TOC 頁實際存在 `/read/...` 章節連結，問題在於 CSS regex attribute selector `a[href~=/read/\d+]` 尚未對齊 legado/Jsoup。
-    - 已補 regex attribute selector 相容層，`[attr~=regex]` 可在 compat path 中正常過濾。
-  - `#271` 阅友网络（优）
-    - 先前是 `keyword` 階段的 JS parity fail。
-    - 已補 `java.encodeURI(...)`、sync-only `evaluateAsync()` fast path，以及 JS 端 `java.randomUUID()` 實作。
-    - 單源回驗後已不再是 parser fail，目前為 `SKIP upstream-blocked`：目錄正常、章節請求到正文時命中上游 `404`。
-  - `#282` ❤️百度小说
-    - 單源回驗已可 `PASS`，不再列為 `Jsoup.connect(...).bodyAsBytes()` canary。
+- `reader` 在搜尋核心流程上已明顯對齊
+- `legado` 的 Android menu 與列表交互仍更成熟
+- `reader` 在類型與狀態模型上更明確
 
-- New parity / flow fixes validated in this window:
-  - `AnalyzeRule.getString/getStringAsync`
-    - `Map` 輸入下只對真正的 URL/path literal 做短路，不再把 `@js:` 規則當原字串返回。
-  - `BookListParser`
-    - `kind/author/...` 等欄位會先寫回 `SearchBook`，再解析 `bookUrl`，允許 `{{book.kind}}` 這類依賴前置欄位的規則正常運作。
-  - `SearchBook.toBook()`
-    - 保留 `kind / latestChapterTitle / wordCount / originOrder / variable`，避免搜尋階段解析出的關鍵資料在詳情/目錄鏈路中遺失。
-  - `BookInfoParser`
-    - 詳情規則若解析為空，不再覆蓋搜尋階段已存在的 `kind / cover / intro / latestChapter`。
-  - JS bridge
-    - `java.encodeURI / decodeURI / encodeURIComponent / decodeURIComponent`
-    - `java.randomUUID()` 改為 JS 端生成，避免 bridge 型別轉換噪音。
-  - `JsEngine.evaluateAsync`
-    - sync-only 規則改走同步 fast path，不再把純同步 `searchUrl @js:` 硬塞進 Promise 包裝。
+## 3. 探索
 
-## Completed Foundations
+### legado
 
-- 批量連網審計工具已支持 `SOURCE_START` / `SOURCE_LIMIT`。
-- 書源兼容已補上：
-  - `POST` 字串 body 預設 `application/x-www-form-urlencoded; charset=utf-8`。
-  - 相對 URL 轉絕對 URL。
-  - CSS current-element / `:root` / `@html` 多節點合併。
-  - `exploreUrl` async JS。
-  - JS `source.key/source.tag`、`Jsoup` shim、`java.getString`、`java.put`。
-  - JS `java.log` 明確回傳原值，對齊 Legado 的 branch completion 行為。
-  - JS `cache.getFile` / `cache.putFile` alias。
-  - JS `JavaImporter` / `Base64` / `GZIPInputStream` / `ByteArrayOutputStream` shim。
-  - JS `strToBytes` / `bytesToStr` / `base64DecodeToByteArray` / `gzipToString` byte-array 語義。
-  - JSON item 裸欄位規則 fallback。
-  - JsonPath 陣列展平。
-  - 搜尋列表可選欄位失敗不再整批中止。
-  - `java.get('scopeKey')` 不再被 async rewriter 誤判成網路呼叫。
-  - sync / async JS wrapper 改為保留更多 completion value 語義。
-  - CSS `:contains(...)` 與未加引號的 attribute selector 相容。
-  - JS response `header("location")`、redirect chain 與 redirect URL fallback。
-  - JS `java.getElement` / `java.getElements` bridge。
-  - JS `java.connect(...).raw().request().url()` / `code()` / `message()` / `isSuccessful()` parity。
-  - bare-origin response URL 正規化，補齊 OkHttp/Legado 末尾 `/` 語義。
-  - CSS `:nth-of-type` / `:nth-child` / `:eq` / `first|last-child` 結構 pseudo parity。
-  - CSS compat selector / compound parse 快取與 simple selector fast path，避免大目錄頁卡死。
-  - JSON 動態 URL 規則在 `Map` 輸入下直接回組裝後字串，不再誤送入 XPath。
-  - JsonPath root-array `$.[*]` 語法兼容。
-  - `##...###` 同時兼容「只取捕獲組」與「只替換第一個命中」兩種語義。
-  - audit 正文探測會跳過疑似鎖章，並從目錄前後兩端尋找一對可讀章節。
-  - XPath `@class="..."` 兼容與壞 HTML 重複引號清洗。
-  - 書籍詳情頁 HTML / TOC 首頁 HTML 回用。
-  - validator 限制大目錄章節樣本數，避免審計成本誤判。
+對照檔：
 
-## Next Queue
+- `ui/main/explore/ExploreFragment.kt`
 
-1. 優先拆 `#171` 全本小说quanben 的 `toc/jsonp` canary。
-2. 再拆 `#179` 悸花阅读 的 URL `FormatException` canary。
-3. 持續擴窗驗證 `180+`，優先抓新的真 fail canary。
-4. 收斂剩餘的 audit 關鍵詞來源。
-   - `#5` 笔趣阁：自動選詞穩定度。
-   - `#10` AAA：站點連線 / browse 選詞。
-5. 將 `#11` / `#13` / `#17` 標記為站點側失效候選，避免持續投入 parser 修補。
+可確認：
 
-## Execution Commands
+- 探索列表
+- 分組篩選
+- 搜尋列
+- 展開 / 收合
+- 直接跳搜尋
+- 編輯來源
 
-```bash
-LD_LIBRARY_PATH="/home/benny/.pub-cache/hosted/pub.dev/flutter_js-0.8.7/linux/shared:${LD_LIBRARY_PATH}" \
-SOURCE_LIMIT=10 flutter test tool/source_batch_validation_test.dart -r expanded
+### reader
 
-LD_LIBRARY_PATH="/home/benny/.pub-cache/hosted/pub.dev/flutter_js-0.8.7/linux/shared:${LD_LIBRARY_PATH}" \
-SOURCE_START=10 SOURCE_LIMIT=10 flutter test tool/source_batch_validation_test.dart -r expanded
-```
+對照檔：
+
+- [features/explore/explore_page.dart](/home/benny/projects/reader/lib/features/explore/explore_page.dart:1)
+- [features/explore/explore_provider.dart](/home/benny/projects/reader/lib/features/explore/explore_provider.dart:1)
+
+可確認：
+
+- 以書源為單位的 explore 入口
+- 分組與搜尋
+- 書源展開
+- explore show page
+
+差異結論：
+
+- 這一塊產品流已明顯對照 `legado`
+- `reader` 沒把 explore 擴成 RSS 或更泛的內容入口
+- `reader` 仍更聚焦在小說閱讀導流
+
+## 4. 書源管理
+
+### legado
+
+對照檔：
+
+- `ui/book/source/manage/BookSourceActivity.kt`
+
+可確認：
+
+- 匯入本地 / 線上 / QR
+- 分組管理
+- 多種排序
+- 批次操作列
+- 校驗流程
+- 調試
+- 單源搜尋
+- 來源啟用 / 探索開關
+
+### reader
+
+對照檔：
+
+- [features/source_manager/source_manager_page.dart](/home/benny/projects/reader/lib/features/source_manager/source_manager_page.dart:1)
+- [features/source_manager/source_manager_provider.dart](/home/benny/projects/reader/lib/features/source_manager/source_manager_provider.dart:1)
+- [core/services/check_source_service.dart](/home/benny/projects/reader/lib/core/services/check_source_service.dart:1)
+
+可確認：
+
+- 匯入 URL / 檔案 / 剪貼簿 / QR
+- 編輯、調試、單源搜尋
+- 批次啟停、批次分組、批次刪除
+- 校驗狀態列、結果面板、清理建議
+
+差異結論：
+
+- `reader` 在書源管理操作流上是目前最接近 `legado` 的區域之一
+- 但底層資料治理還沒完全對齊，因為 health 與 check state 仍是過渡設計
+- `legado` 這塊成熟度仍更高
+
+## 5. 閱讀器
+
+### legado
+
+對照檔：
+
+- `ui/book/read/ReadBookActivity.kt`
+- `ui/book/read/page/*`
+- `ui/book/read/config/*`
+
+可確認：
+
+- Activity 本體很大
+- 閱讀器周邊工具與 config dialog 很完整
+- 與 Android 系統、硬體、全文搜尋、更多工具頁整合更深
+
+### reader
+
+對照檔：
+
+- [features/reader/runtime/read_book_controller.dart](/home/benny/projects/reader/lib/features/reader/runtime/read_book_controller.dart:1)
+- [features/reader/view/read_view_runtime.dart](/home/benny/projects/reader/lib/features/reader/view/read_view_runtime.dart:1)
+- `features/reader/runtime/*.dart`
+- `features/reader/engine/*.dart`
+
+可確認：
+
+- 閱讀器主控從頁面層下沉到 runtime controller
+- 有明確的 restore / progress / navigation / display / tts 子域
+- slide / scroll 兩種正式模式
+- 有閱讀失敗換源恢復
+
+差異結論：
+
+- `reader` 在架構上比 `legado` 更乾淨
+- `legado` 在產品能力與周邊整合上更完整
+- `reader` 還沒收完 mixin 殘留與 controller 體積問題
+
+## 6. 資料層
+
+### legado
+
+從 `app/data/dao`、`app/data/entities` 可看出它有自己的資料模型與 DAO 體系。
+
+### reader
+
+由 [app_database.dart](/home/benny/projects/reader/lib/core/database/app_database.dart:1) 可直接確認：
+
+- 20 張表
+- 20 個 DAO
+- Drift schema version 8
+
+差異結論：
+
+- `reader` 資料層比 `legado` 更小、更集中
+- RSS 資料線已被正式清掉
+- 書源治理資料還沒正規化，是目前資料層最明顯缺口
+
+## 7. 本地書
+
+### legado
+
+`ui/book/import/local` 與相關 model/helper 可看出本地書與 Android 檔案流較完整。
+
+### reader
+
+從 [local_book_formats.dart](/home/benny/projects/reader/lib/core/local_book/local_book_formats.dart:1) 可直接確認目前只支援：
+
+- TXT
+- EPUB
+- UMD
+
+差異結論：
+
+- `reader` 有本地書主線
+- 但不應誤寫成已完整對齊 `legado` 的本地格式能力
+
+## 8. 明確缺席的功能線
+
+以下是從目錄與程式碼都能明確確認的差異：
+
+### legado 有，reader 沒有整條產品線
+
+- RSS
+- 多種主頁 / 書架 style
+- 更完整的 manga / audio / 多媒體內容線
+- 大量 Android-only widget、dialog、檔案與系統工具頁
+
+### reader 刻意保留但簡化
+
+- 探索
+- 書源管理
+- 本地書
+- 備份還原
+- 閱讀器設定
+
+## 9. 哪些地方是「閹割」，哪些地方是「重構」
+
+### 屬於刻意閹割
+
+- RSS 整線不做
+- 多媒體內容不做
+- Android-only 深度系統能力不做
+- 不追求把 `legado` 所有工具頁搬完
+
+### 屬於重新設計
+
+- 閱讀器 runtime 拆分
+- parser / JS / Web 書源集中到 `core/engine`
+- Drift + DAO 明確成為資料真源
+- provider 作為頁面協調層，而不是資料真源
+
+### 屬於仍未收完
+
+- 書源 health 與校驗結果資料落點
+- WebView / login recovery
+- rule 級錯誤診斷
+- 閱讀器周邊交互收尾
+- 測試環境可信度
+
+## 10. 最終判斷
+
+如果要用一句準確的話描述 `reader` 和 `legado` 的關係，應該寫成：
+
+> `reader` 是一個以 `legado` 為行為與產品流參考、但在內容範圍上明顯縮減、在架構上重新切分的 Flutter 小說閱讀器。
+
+這句話同時包含三件事：
+
+1. 它不是從零發明規則系統。
+2. 它不是完整複刻。
+3. 它也不是單純的 UI 殼。

@@ -25,7 +25,7 @@ class TTSService extends ChangeNotifier {
   bool _isPlaying = false;
   double _pitch = 1.0;
   double _volume = 1.0;
-  double _rate = 0.5;
+  double _rate = 1.0;
   String? _language;
   List<dynamic> _languages = [];
 
@@ -114,8 +114,10 @@ class TTSService extends ChangeNotifier {
     ) {
       final adjustedStart = start + _resumeOffset;
       final adjustedEnd = end + _resumeOffset;
-      if (adjustedStart == currentWordStart && adjustedEnd == currentWordEnd)
+      if (adjustedStart == currentWordStart &&
+          adjustedEnd == currentWordEnd) {
         return;
+      }
       currentSpokenText = text;
       currentWordStart = adjustedStart;
       currentWordEnd = adjustedEnd;
