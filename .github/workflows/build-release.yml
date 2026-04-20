@@ -48,6 +48,10 @@ jobs:
     name: Android Release APK
     needs: inject-version
     runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -73,6 +77,21 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Prepare Android release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "${ANDROID_KEYSTORE_BASE64}" ] || \
+             [ -z "${ANDROID_KEYSTORE_PASSWORD}" ] || \
+             [ -z "${ANDROID_KEY_ALIAS}" ] || \
+             [ -z "${ANDROID_KEY_PASSWORD}" ]; then
+            echo "::error::Missing Android signing secrets. Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD."
+            exit 1
+          fi
+          KEYSTORE_PATH="${RUNNER_TEMP}/android-release.keystore"
+          echo "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${KEYSTORE_PATH}"
+          echo "ANDROID_KEYSTORE_PATH=${KEYSTORE_PATH}" >> "${GITHUB_ENV}"
 
       - name: Build Android release APK (split per ABI)
         run: flutter build apk --split-per-abi --release

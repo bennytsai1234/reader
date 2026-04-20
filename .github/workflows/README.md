@@ -5,6 +5,46 @@
 - Android：輸出 `app-release.apk`
 - iOS：輸出 `unsigned .ipa`
 
+## Android 簽章
+
+如果你希望新版本 APK 可以直接覆蓋安裝舊版本，**每次 release 都必須使用同一把簽章 key**。
+
+目前 workflow 已改成要求固定的 Android release keystore，不再使用 runner 臨時生成的 debug keystore。請先在 GitHub repository secrets 設定：
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+`ANDROID_KEYSTORE_BASE64` 的產生方式可以用：
+
+```bash
+base64 -w 0 your-release-key.jks
+```
+
+如果你還沒有 release keystore，可以先建立一把：
+
+```bash
+keytool -genkeypair \
+  -v \
+  -keystore your-release-key.jks \
+  -alias inkpage \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+```
+
+本地若要用同一把 key 打 release，也可以在 `android/key.properties` 填：
+
+```properties
+storeFile=/abs/path/to/your-release-key.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
+```
+
+注意：一旦你決定了正式 release keystore，就應該長期固定使用它。若你之前已經安裝過不同簽章的 APK，**第一次切到這把正式 key 時仍然需要先卸載一次**；之後只要保持同一把 key，後續版本就能正常覆蓋安裝。
+
 ## 觸發方式
 
 - 手動：`Actions` -> `Build Release Artifacts` -> `Run workflow`
