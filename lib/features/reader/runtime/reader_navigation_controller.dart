@@ -23,7 +23,10 @@ class ReaderNavigationController {
 
   bool beginChapterJump(ReaderCommandReason reason) {
     if (!_commandGuard.begin(reason)) return false;
-    _suppressViewportProgressUntil = _suppressionDeadlineFor(reason, isChapter: true);
+    _suppressViewportProgressUntil = _suppressionDeadlineFor(
+      reason,
+      isChapter: true,
+    );
     return true;
   }
 
@@ -56,9 +59,7 @@ class ReaderNavigationController {
   ReaderCommandReason consumePageChangeReason() {
     final reason = _nextPageChangeReason;
     _nextPageChangeReason = ReaderCommandReason.user;
-    if (reason != ReaderCommandReason.restore) {
-      _commandGuard.clear(reason);
-    }
+    _commandGuard.clear(reason);
     return reason;
   }
 
@@ -87,7 +88,8 @@ class ReaderNavigationController {
     required Size? viewSize,
     required int visibleChapterIndex,
     required double visibleChapterLocalOffset,
-    required double Function(Size viewSize, double dtSeconds) scrollDeltaPerFrame,
+    required double Function(Size viewSize, double dtSeconds)
+    scrollDeltaPerFrame,
     required ReaderChapter? Function(int) chapterAt,
     required List<TextPage> Function(int) pagesForChapter,
     required double dtSeconds,
@@ -97,7 +99,8 @@ class ReaderNavigationController {
     if (size == null) return null;
     final chapterIndex = visibleChapterIndex;
     final runtimeChapter = chapterAt(chapterIndex);
-    final chapterHeight = runtimeChapter?.chapterHeight ??
+    final chapterHeight =
+        runtimeChapter?.chapterHeight ??
         ChapterPositionResolver.chapterHeight(pagesForChapter(chapterIndex));
     if (chapterHeight <= 0) return null;
     final delta = scrollDeltaPerFrame(size, dtSeconds);
@@ -106,11 +109,8 @@ class ReaderNavigationController {
     return (chapterIndex: chapterIndex, localOffset: nextLocalOffset);
   }
 
-  ({
-    int? chapterIndex,
-    double? localOffset,
-    bool advanceChapter,
-  })? evaluateScrollAutoPageStep({
+  ({int? chapterIndex, double? localOffset, bool advanceChapter})?
+  evaluateScrollAutoPageStep({
     required bool isAutoPaging,
     required bool isAutoPagePaused,
     required bool isLoading,
@@ -118,7 +118,8 @@ class ReaderNavigationController {
     required Size? viewSize,
     required int visibleChapterIndex,
     required double visibleChapterLocalOffset,
-    required double Function(Size viewSize, double dtSeconds) scrollDeltaPerFrame,
+    required double Function(Size viewSize, double dtSeconds)
+    scrollDeltaPerFrame,
     required ReaderChapter? Function(int) chapterAt,
     required List<TextPage> Function(int) pagesForChapter,
     required double dtSeconds,
@@ -158,8 +159,6 @@ class ReaderNavigationController {
         reason == ReaderCommandReason.userScroll) {
       return null;
     }
-    return DateTime.now().add(
-      Duration(milliseconds: isChapter ? 700 : 500),
-    );
+    return DateTime.now().add(Duration(milliseconds: isChapter ? 700 : 500));
   }
 }

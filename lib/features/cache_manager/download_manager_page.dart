@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:inkpage_reader/core/services/download_service.dart';
 import 'package:inkpage_reader/core/models/download_task.dart';
 
-/// DownloadManagerPage - 全域下載管理頁面
+/// DownloadManagerPage - 全域離線快取管理頁面
 /// (原 Android ui/book/cache/CacheActivity.kt)
 class DownloadManagerPage extends StatelessWidget {
   const DownloadManagerPage({super.key});
@@ -15,10 +15,14 @@ class DownloadManagerPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('下載管理'),
+        title: const Text('離線快取佇列'),
         actions: [
           IconButton(
-            icon: Icon(service.isPaused ? Icons.play_circle_outline : Icons.pause_circle_outline),
+            icon: Icon(
+              service.isPaused
+                  ? Icons.play_circle_outline
+                  : Icons.pause_circle_outline,
+            ),
             tooltip: service.isPaused ? '恢復全部' : '暫停全部',
             onPressed: service.togglePause,
           ),
@@ -34,17 +38,18 @@ class DownloadManagerPage extends StatelessWidget {
           ),
         ],
       ),
-      body: tasks.isEmpty
-          ? _buildEmptyState(context)
-          : ListView.separated(
-              padding: const EdgeInsets.only(bottom: 24),
-              itemCount: tasks.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final task = tasks[index];
-                return _buildTaskTile(context, service, task);
-              },
-            ),
+      body:
+          tasks.isEmpty
+              ? _buildEmptyState(context)
+              : ListView.separated(
+                padding: const EdgeInsets.only(bottom: 24),
+                itemCount: tasks.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final task = tasks[index];
+                  return _buildTaskTile(context, service, task);
+                },
+              ),
     );
   }
 
@@ -53,30 +58,52 @@ class DownloadManagerPage extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.download_done_rounded, size: 64, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1)),
+          Icon(
+            Icons.download_done_rounded,
+            size: 64,
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.1),
+          ),
           const SizedBox(height: 16),
-          Text('暫無下載任務', style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4))),
+          Text(
+            '暫無離線快取任務',
+            style: TextStyle(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTaskTile(BuildContext context, DownloadService service, DownloadTask task) {
-    final progress = task.totalCount == 0 ? 0.0 : task.successCount / task.totalCount;
+  Widget _buildTaskTile(
+    BuildContext context,
+    DownloadService service,
+    DownloadTask task,
+  ) {
+    final progress =
+        task.totalCount == 0 ? 0.0 : task.successCount / task.totalCount;
     final isRunning = task.status == 1;
     final isPaused = task.status == 2;
     final isDone = task.status == 3;
     final isError = task.status == 4;
 
     return ListTile(
-      title: Text(task.bookName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      title: Text(
+        task.bookName,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+      ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 4),
           LinearProgressIndicator(
             value: progress,
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            backgroundColor:
+                Theme.of(context).colorScheme.surfaceContainerHighest,
             minHeight: 4,
           ),
           const SizedBox(height: 4),
@@ -84,11 +111,21 @@ class DownloadManagerPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                isDone ? '下載完成' : (isError ? '下載失敗' : '${task.successCount} / ${task.totalCount} 章'),
-                style: TextStyle(fontSize: 11, color: isError ? Colors.red : Colors.grey),
+                isDone
+                    ? '快取完成'
+                    : (isError
+                        ? '快取失敗'
+                        : '${task.successCount} / ${task.totalCount} 章'),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isError ? Colors.red : Colors.grey,
+                ),
               ),
               if (isRunning)
-                const Text('正在下載...', style: TextStyle(fontSize: 11, color: Colors.blue)),
+                const Text(
+                  '正在快取...',
+                  style: TextStyle(fontSize: 11, color: Colors.blue),
+                ),
             ],
           ),
         ],
@@ -99,7 +136,11 @@ class DownloadManagerPage extends StatelessWidget {
           if (!isDone)
             IconButton(
               icon: Icon(isPaused ? Icons.play_arrow : Icons.pause, size: 20),
-              onPressed: () => isPaused ? service.startDownloads() : service.pauseTask(task.bookUrl),
+              onPressed:
+                  () =>
+                      isPaused
+                          ? service.startDownloads()
+                          : service.pauseTask(task.bookUrl),
             ),
           IconButton(
             icon: const Icon(Icons.close, size: 20),
@@ -110,4 +151,3 @@ class DownloadManagerPage extends StatelessWidget {
     );
   }
 }
-

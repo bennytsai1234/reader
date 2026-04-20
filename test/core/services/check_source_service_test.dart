@@ -29,6 +29,7 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
   List<BookChapter> chapters = [];
   String content = '';
   Exception? contentError;
+  Duration searchDelay = Duration.zero;
 
   Book? infoRequestBook;
   Book? chapterRequestBook;
@@ -45,7 +46,12 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
     bool Function(String name, String author)? filter,
     bool Function(int size)? shouldBreak,
     dynamic cancelToken,
-  }) async => searchResults;
+  }) async {
+    if (searchDelay > Duration.zero) {
+      await Future<void>.delayed(searchDelay);
+    }
+    return searchResults;
+  }
 
   @override
   Future<Book> getBookInfo(BookSource source, Book book) async {
@@ -501,4 +507,29 @@ void main() {
       expect(saved.isReadingEnabledByRuntime, isTrue);
     },
   );
+
+  test('dispose during in-flight check does not throw', () async {
+    final source = BookSource(
+      bookSourceUrl: 'source://dispose',
+      bookSourceName: '延遲校驗源',
+      searchUrl: '/search?key={{key}}',
+    );
+
+    final fakeDao = _FakeBookSourceDao()..store[source.bookSourceUrl] = source;
+    final fakeService =
+        _FakeBookSourceService()
+          ..searchDelay = const Duration(milliseconds: 10)
+          ..searchResults = <SearchBook>[];
+    final service = CheckSourceService(
+      service: fakeService,
+      sourceDao: fakeDao,
+      eventBus: AppEventBus(),
+    );
+
+    final future = service.check([source.bookSourceUrl]);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    service.dispose();
+
+    await expectLater(future, completes);
+  });
 }

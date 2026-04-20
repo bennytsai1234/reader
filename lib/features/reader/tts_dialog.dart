@@ -229,6 +229,52 @@ class TtsDialog extends StatelessWidget {
               format: (v) => '${v}x',
               onSelected: (v) => provider.setTtsPitch(v),
             ),
+            if (tts.engines.isNotEmpty || tts.voices.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              _buildSectionTitle('系統語音'),
+              const SizedBox(height: 8),
+              if (tts.engines.isNotEmpty)
+                _buildSelectorCard(
+                  context: context,
+                  label: '引擎',
+                  value: tts.selectedEngine,
+                  items: <DropdownMenuItem<String?>>[
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('系統預設'),
+                    ),
+                    ...tts.engines.map(
+                      (engine) => DropdownMenuItem<String?>(
+                        value: engine,
+                        child: Text(engine, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => tts.setEngine(value),
+                ),
+              if (tts.voices.isNotEmpty)
+                _buildSelectorCard(
+                  context: context,
+                  label: '音色',
+                  value: tts.selectedVoiceKey,
+                  items: <DropdownMenuItem<String?>>[
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('系統預設'),
+                    ),
+                    ...tts.voices.map(
+                      (voice) => DropdownMenuItem<String?>(
+                        value: tts.voiceKeyOf(voice),
+                        child: Text(
+                          tts.voiceLabelOf(voice),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => tts.setVoiceByKey(value),
+                ),
+            ],
 
             const SizedBox(height: 24),
             // 底層操作
@@ -358,6 +404,55 @@ class TtsDialog extends StatelessWidget {
                       );
                     }).toList(),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectorCard({
+    required BuildContext context,
+    required String label,
+    required String? value,
+    required List<DropdownMenuItem<String?>> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 32,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButtonFormField<String?>(
+              initialValue: value,
+              isExpanded: true,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainer,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              items: items,
+              onChanged: onChanged,
             ),
           ),
         ],

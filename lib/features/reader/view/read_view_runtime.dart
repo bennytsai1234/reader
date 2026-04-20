@@ -40,6 +40,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
   Timer? _userScrollResetTimer;
   bool _isUserScrolling = false;
   int _lastTtsScrolledStart = -1;
+  late int _lastPageTurnMode;
   late final ScrollExecutionAdapter _scrollExecution = ScrollExecutionAdapter(
     pageKeys: _pageKeys,
     onStateChanged: () {
@@ -83,6 +84,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       _contentRevealed = true;
       _fadeCtrl.value = 1.0;
     }
+    _lastPageTurnMode = widget.provider.pageTurnMode;
     widget.provider.addListener(_onProviderStateChanged);
     _itemPositionsListener.itemPositions.addListener(
       _handleItemPositionsChanged,
@@ -112,6 +114,13 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     }
 
     final p = widget.provider;
+    if (_lastPageTurnMode != p.pageTurnMode) {
+      _lastPageTurnMode = p.pageTurnMode;
+      _pageKeys.clear();
+      _isUserScrolling = false;
+      _userScrollResetTimer?.cancel();
+      widget.provider.setScrollInteractionActive(false);
+    }
     p.reconcileVisibleScrollLoads();
 
     final pendingScrollAction = _coordinator.consumePendingScrollAction(p);
@@ -122,12 +131,20 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
             chapterIndex: pendingScrollAction.chapterIndex,
             localOffset: pendingScrollAction.localOffset,
             token: pendingScrollAction.token,
+            onCompleted:
+                () => widget.provider.clearNavigationReason(
+                  pendingScrollAction.reason,
+                ),
           );
           return;
         }
         _scrollRuntimeExecutor.jumpScrollPosition(
           chapterIndex: pendingScrollAction.chapterIndex,
           localOffset: pendingScrollAction.localOffset,
+          onCompleted:
+              () => widget.provider.clearNavigationReason(
+                pendingScrollAction.reason,
+              ),
         );
       });
     }
@@ -187,8 +204,8 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         final mediaPadding = MediaQuery.paddingOf(context);
         final insetsChanged = provider.updateContentInsets(
-          top: mediaPadding.top + 8,
-          bottom: mediaPadding.bottom + 28,
+          top: mediaPadding.top + 20,
+          bottom: mediaPadding.bottom + 46,
         );
         if (insetsChanged && provider.viewSize == size && provider.isReady) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -255,10 +272,13 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
                   _handleScrollNotification(notification, provider),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
-            child: delegate.build(
-              context: context,
-              provider: provider,
-              pageController: widget.pageController,
+            child: KeyedSubtree(
+              key: ValueKey<int>(provider.pageTurnMode),
+              child: delegate.build(
+                context: context,
+                provider: provider,
+                pageController: widget.pageController,
+              ),
             ),
           ),
         );
@@ -278,7 +298,6 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     ScrollNotification notification,
     ReaderProvider provider,
   ) {
-    if (provider.pageTurnMode != PageAnim.scroll) return false;
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null) {
       _beginUserScroll(provider);
@@ -291,6 +310,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
   void _beginUserScroll(ReaderProvider provider) {
     _isUserScrolling = true;
     _userScrollResetTimer?.cancel();
+    provider.autoPageProgressNotifier.value = 0.0;
     provider.pauseAutoPage();
     provider.setScrollInteractionActive(true);
   }

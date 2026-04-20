@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../reader_provider.dart';
+import 'reader_menu_palette.dart';
 
 class ReaderTopMenu extends StatelessWidget {
   final ReaderProvider provider;
@@ -15,17 +16,24 @@ class ReaderTopMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final panelColor = provider.currentTheme.backgroundColor.withValues(
-      alpha: 0.96,
-    );
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 200),
       top: provider.showControls ? 0 : -120,
       left: 0,
       right: 0,
       child: Container(
+        decoration: const BoxDecoration(
+          color: ReaderMenuPalette.background,
+          border: Border(bottom: BorderSide(color: ReaderMenuPalette.outline)),
+          boxShadow: [
+            BoxShadow(
+              color: ReaderMenuPalette.scrim,
+              blurRadius: 18,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
         padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-        color: panelColor,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [_buildAppBar(context), _buildAdditionInfo(context)],
@@ -35,18 +43,20 @@ class ReaderTopMenu extends StatelessWidget {
   }
 
   Widget _buildAppBar(BuildContext context) {
-    final iconColor = provider.currentTheme.textColor;
     return Row(
       children: [
         IconButton(
-          icon: Icon(Icons.arrow_back, color: iconColor),
+          icon: const Icon(
+            Icons.arrow_back,
+            color: ReaderMenuPalette.foreground,
+          ),
           onPressed: onBack,
         ),
         Expanded(
           child: Text(
             provider.book.name,
-            style: TextStyle(
-              color: iconColor,
+            style: const TextStyle(
+              color: ReaderMenuPalette.foreground,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -54,7 +64,10 @@ class ReaderTopMenu extends StatelessWidget {
           ),
         ),
         IconButton(
-          icon: Icon(Icons.more_vert, color: iconColor),
+          icon: const Icon(
+            Icons.more_vert,
+            color: ReaderMenuPalette.foreground,
+          ),
           onPressed: onMore,
         ),
       ],
@@ -73,10 +86,8 @@ class ReaderTopMenu extends StatelessWidget {
               children: [
                 Text(
                   provider.currentChapterTitle,
-                  style: TextStyle(
-                    color: provider.currentTheme.textColor.withValues(
-                      alpha: 0.72,
-                    ),
+                  style: const TextStyle(
+                    color: ReaderMenuPalette.mutedForeground,
                     fontSize: 12,
                   ),
                   maxLines: 1,
@@ -85,10 +96,8 @@ class ReaderTopMenu extends StatelessWidget {
                 if (provider.currentChapterUrl.isNotEmpty)
                   Text(
                     provider.currentChapterUrl,
-                    style: TextStyle(
-                      color: provider.currentTheme.textColor.withValues(
-                        alpha: 0.45,
-                      ),
+                    style: const TextStyle(
+                      color: ReaderMenuPalette.mutedForeground,
                       fontSize: 10,
                     ),
                     maxLines: 1,
@@ -109,13 +118,14 @@ class ReaderTopMenu extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.blue.withValues(alpha: 0.8),
+        color: ReaderMenuPalette.accentMuted,
+        border: Border.all(color: ReaderMenuPalette.accent),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         provider.book.originName,
         style: const TextStyle(
-          color: Colors.white,
+          color: ReaderMenuPalette.foreground,
           fontSize: 10,
           fontWeight: FontWeight.bold,
         ),

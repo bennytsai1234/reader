@@ -2,12 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/core/config/app_config.dart';
 import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:inkpage_reader/core/engine/app_event_bus.dart';
+import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/book_source.dart';
 import 'package:inkpage_reader/core/models/bookmark.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/database/dao/read_record_dao.dart';
 import 'package:inkpage_reader/core/services/source_switch_service.dart';
 import 'package:inkpage_reader/core/services/tts_service.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
@@ -65,6 +68,7 @@ class ReadBookController extends ReaderProviderBase
   bool _pendingRepaginateForLatestViewport = false;
   bool _isSwitchingSource = false;
   String? _sourceSwitchMessage;
+  int _lastReadRecordStamp = DateTime.now().millisecondsSinceEpoch;
 
   /// 初始章節字元偏移（由呼叫方傳入，用於還原閱讀位置）
   int initialCharOffset = 0;
@@ -312,6 +316,10 @@ class ReadBookController extends ReaderProviderBase
     return _navigation.consumePageChangeReason();
   }
 
+  void clearNavigationReason(ReaderCommandReason reason) {
+    _navigation.clear(reason);
+  }
+
   bool shouldPersistForReason(ReaderCommandReason reason) {
     return _navigation.shouldPersistForReason(reason);
   }
@@ -406,6 +414,7 @@ class ReadBookController extends ReaderProviderBase
     // ── Phase 1: PREPARE (parallel data loading, no UI updates) ──
     await Future.wait([
       loadSettings(),
+      loadAutoPageSettings(),
       loadTtsSettings(),
       _loadChapters(),
       _loadSource(),
@@ -413,6 +422,7 @@ class ReadBookController extends ReaderProviderBase
     if (isDisposed) return;
 
     initContentManager();
+    onBeforeRepaginate = _prepareSettingsRepaginateAnchor;
     onSettingsChangedRepaginate = () {
       updatePaginationConfig();
       doPaginate();
@@ -715,7 +725,12 @@ class ReadBookController extends ReaderProviderBase
         state == AppLifecycleState.detached) {
       if (!isDisposed) {
         _persistSessionProgress();
+        unawaited(_flushReadRecord());
       }
+      return;
+    }
+    if (state == AppLifecycleState.resumed) {
+      _lastReadRecordStamp = DateTime.now().millisecondsSinceEpoch;
     }
   }
 
@@ -747,9 +762,7 @@ class ReadBookController extends ReaderProviderBase
   }
 
   bool shouldPromptAddToBookshelfOnExit() {
-    if (book.isInBookshelf) return false;
-    final location = resolveExitLocation();
-    return location.chapterIndex > 0 || location.charOffset > 0;
+    return !book.isInBookshelf && showAddToShelfAlert;
   }
 
   Future<void> addCurrentBookToBookshelf() async {
@@ -1045,6 +1058,7 @@ class ReadBookController extends ReaderProviderBase
   }
 
   void setChineseConvert(int val) {
+    _prepareSettingsRepaginateAnchor();
     chineseConvert = val;
     _persistSetting('chinese_convert_v2', val);
     unawaited(refreshChapterDisplayTitles());
@@ -1238,12 +1252,34 @@ class ReadBookController extends ReaderProviderBase
     );
   }
 
+  Future<void> persistExitProgress() async {
+    final location = resolveExitLocation();
+    await _persistSessionLocation(location);
+    await _flushReadRecord();
+  }
+
   void _updateSessionLocation(ReaderLocation location) {
     _sessionCoordinator.updateSessionLocation(location);
   }
 
   Future<void> _persistSessionLocation(ReaderLocation location) {
     return _sessionCoordinator.persistLocation(location);
+  }
+
+  void _prepareSettingsRepaginateAnchor() {
+    final location = _resolveModeSwitchLocation().normalized();
+    _updateSessionLocation(location);
+    _sessionCoordinator.updateVisibleLocation(location);
+    currentChapterIndex = location.chapterIndex;
+    visibleChapterIndex = location.chapterIndex;
+    final runtimeChapter = chapterAt(location.chapterIndex);
+    visibleChapterLocalOffset =
+        runtimeChapter != null
+            ? runtimeChapter.localOffsetFromCharOffset(location.charOffset)
+            : ChapterPositionResolver.charOffsetToLocalOffset(
+              pagesForChapter(location.chapterIndex),
+              location.charOffset,
+            );
   }
 
   ReaderLocation _resolveModeSwitchLocation() {
@@ -1271,6 +1307,24 @@ class ReadBookController extends ReaderProviderBase
     }
 
     return sessionLocation;
+  }
+
+  Future<void> _flushReadRecord() async {
+    if (!getIt.isRegistered<ReadRecordDao>()) return;
+    final readRecordDao = getIt<ReadRecordDao>();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final seconds = ((now - _lastReadRecordStamp) / 1000).floor();
+    _lastReadRecordStamp = now;
+    if (seconds <= 0) return;
+    try {
+      await readRecordDao.incrementReadTime(
+        bookName: book.name,
+        seconds: seconds,
+        lastRead: now,
+      );
+    } catch (error, stack) {
+      AppLog.e('閱讀記錄寫入失敗: ${book.name}', error: error, stackTrace: stack);
+    }
   }
 
   void _applyModeSwitchWithCachedContent(ReaderLocation targetLocation) {

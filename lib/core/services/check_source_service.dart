@@ -239,6 +239,7 @@ class CheckSourceService extends ChangeNotifier {
   final List<SourceCheckLogEntry> _logs = <SourceCheckLogEntry>[];
   final Map<String, SourceCheckProgress> _sourceProgress =
       <String, SourceCheckProgress>{};
+  bool _isDisposed = false;
 
   CheckSourceService({
     BookSourceService? service,
@@ -267,7 +268,7 @@ class CheckSourceService extends ChangeNotifier {
     final prefs = await _safeGetPreferences();
     if (prefs == null) return;
     _config = SourceCheckConfig.fromPreferences(prefs);
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   Future<void> updateConfig(SourceCheckConfig next) async {
@@ -296,7 +297,7 @@ class CheckSourceService extends ChangeNotifier {
       );
       await prefs.setString(PreferKey.checkSource, normalized.summary);
     }
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   Future<SourceCheckReport> check(List<String> urls) async {
@@ -311,7 +312,7 @@ class CheckSourceService extends ChangeNotifier {
     _logs.clear();
     _sourceProgress.clear();
     _appendLog('開始校驗，共 $_totalCount 個書源 (${config.summary})');
-    notifyListeners();
+    _notifyIfAlive();
 
     const maxConcurrent = 5;
     final tasks = <Future<void>>[];
@@ -328,7 +329,7 @@ class CheckSourceService extends ChangeNotifier {
             entries.add(entry);
           }
           _currentCount++;
-          notifyListeners();
+          _notifyIfAlive();
         });
         tasks.add(task);
         task.whenComplete(() => tasks.remove(task));
@@ -347,7 +348,7 @@ class CheckSourceService extends ChangeNotifier {
     _statusMsg = _lastReport.summary;
     _appendLog('校驗完成：${_lastReport.summary}');
     _eventBus.fire(AppEvent(AppEventBus.checkSourceDone, data: _lastReport));
-    notifyListeners();
+    _notifyIfAlive();
     return _lastReport;
   }
 
@@ -361,7 +362,7 @@ class CheckSourceService extends ChangeNotifier {
     _statusMsg = '正在校驗: ${source.bookSourceName}';
     _appendLog('⇒ 正在校驗 [${source.bookSourceName}] ...');
     _setSourceProgress(source, '等待校驗', isFinal: false, hasIssue: false);
-    notifyListeners();
+    _notifyIfAlive();
 
     source.removeInvalidGroups();
     source.removeErrorComment();
@@ -1247,7 +1248,7 @@ class CheckSourceService extends ChangeNotifier {
     if (!_isChecking) return;
     _isChecking = false;
     _appendLog('收到取消指令，等待目前批次結束');
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   Future<SharedPreferences?> _safeGetPreferences() async {
@@ -1259,12 +1260,13 @@ class CheckSourceService extends ChangeNotifier {
   }
 
   void _appendLog(String msg) {
+    if (_isDisposed) return;
     _logs.add(SourceCheckLogEntry(time: DateTime.now(), message: msg));
     if (_logs.length > 400) {
       _logs.removeAt(0);
     }
     _eventBus.fire(AppEvent(AppEventBus.checkSource, data: msg));
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   void _setSourceProgress(
@@ -1273,12 +1275,26 @@ class CheckSourceService extends ChangeNotifier {
     required bool isFinal,
     required bool hasIssue,
   }) {
+    if (_isDisposed) return;
     _sourceProgress[source.bookSourceUrl] = SourceCheckProgress(
       sourceName: source.bookSourceName,
       message: message,
       isFinal: isFinal,
       hasIssue: hasIssue,
     );
+  }
+
+  void _notifyIfAlive() {
+    if (_isDisposed) return;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    _isChecking = false;
+    super.dispose();
   }
 
   String? _nextReadableChapterUrl(

@@ -35,36 +35,52 @@ class StorageManagementPage extends StatelessWidget {
                         children: [
                           _buildHeader(context, provider),
                           const SizedBox(height: 24),
-                          
+
                           _buildSectionTitle(context, '下載任務'),
                           Card(
                             child: ListTile(
-                              leading: const Icon(Icons.download_for_offline_outlined),
-                              title: const Text('下載管理'),
-                              subtitle: const Text('查看並管理進行中的離線下載任務'),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const DownloadManagerPage()),
+                              leading: const Icon(
+                                Icons.download_for_offline_outlined,
                               ),
+                              title: const Text('離線快取佇列'),
+                              subtitle: const Text('查看並管理進行中的章節離線快取任務'),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap:
+                                  () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder:
+                                          (_) => const DownloadManagerPage(),
+                                    ),
+                                  ),
                             ),
                           ),
                           const SizedBox(height: 24),
 
                           _buildSectionTitle(context, '本地快取'),
-                          ...provider.entries.map((entry) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _StorageEntryCard(
-                              entry: entry,
-                              onClear: () => _confirmClearEntry(context, provider, entry),
+                          ...provider.entries.map(
+                            (entry) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _StorageEntryCard(
+                                entry: entry,
+                                onClear:
+                                    () => _confirmClearEntry(
+                                      context,
+                                      provider,
+                                      entry,
+                                    ),
+                              ),
                             ),
-                          )),
-                          
+                          ),
+
                           const SizedBox(height: 12),
                           OutlinedButton.icon(
                             icon: const Icon(Icons.delete_sweep_outlined),
                             label: const Text('清理所有快取資料'),
-                            onPressed: provider.isLoading ? null : () => _confirmClearAll(context, provider),
+                            onPressed:
+                                provider.isLoading
+                                    ? null
+                                    : () => _confirmClearAll(context, provider),
                           ),
                         ],
                       ),

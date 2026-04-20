@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:inkpage_reader/core/models/download_task.dart';
+import 'package:inkpage_reader/core/services/download/download_executor.dart';
 
 /// Tests for DownloadExecutor retry logic.
 ///
@@ -35,8 +37,11 @@ void main() {
       // In the code: if (attempt < _maxRetries - 1) { delay } else { log exhausted }
       // So on the final attempt (attempt == 2), no delay occurs, only error logging.
       const lastAttempt = maxRetries - 1;
-      expect(lastAttempt < maxRetries - 1, false,
-          reason: 'Final attempt should not trigger delay');
+      expect(
+        lastAttempt < maxRetries - 1,
+        false,
+        reason: 'Final attempt should not trigger delay',
+      );
     });
 
     test('retry attempts cover range 0 to maxRetries-1', () {
@@ -68,6 +73,38 @@ void main() {
         totalBackoff += 500 * (1 << attempt);
       }
       expect(totalBackoff, 1500);
+    });
+  });
+
+  group('downloadTaskCountsPreCachedChapters', () {
+    test('counts pre-cached chapters for contiguous tasks', () {
+      final task = DownloadTask(
+        bookUrl: 'book',
+        bookName: 'Book',
+        startChapterIndex: 2,
+        endChapterIndex: 4,
+        totalCount: 3,
+      );
+
+      expect(
+        downloadTaskCountsPreCachedChapters(task: task, chapterCountInRange: 3),
+        isTrue,
+      );
+    });
+
+    test('skips pre-cached chapters for sparse uncached selections', () {
+      final task = DownloadTask(
+        bookUrl: 'book',
+        bookName: 'Book',
+        startChapterIndex: 0,
+        endChapterIndex: 4,
+        totalCount: 3,
+      );
+
+      expect(
+        downloadTaskCountsPreCachedChapters(task: task, chapterCountInRange: 5),
+        isFalse,
+      );
     });
   });
 }

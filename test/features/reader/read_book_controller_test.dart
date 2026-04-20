@@ -478,6 +478,49 @@ void main() {
       controller.dispose();
     });
 
+    test('切換主選單時會暫停並恢復 auto page', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.toggleAutoPage();
+      expect(controller.isAutoPaging, isTrue);
+      expect(controller.isAutoPagePaused, isFalse);
+
+      controller.toggleControls();
+      expect(controller.showControls, isTrue);
+      expect(controller.isAutoPagePaused, isTrue);
+
+      controller.toggleControls();
+      expect(controller.showControls, isFalse);
+      expect(controller.isAutoPaging, isTrue);
+      expect(controller.isAutoPagePaused, isFalse);
+
+      controller.stopAutoPage();
+      controller.dispose();
+    });
+
+    test('日夜切換會在保存的白天與夜間主題之間切換', () async {
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.lastDayThemeIndex = 0;
+      controller.lastNightThemeIndex = 1;
+      controller.themeIndex = 0;
+
+      controller.toggleDayNightTheme();
+      expect(controller.themeIndex, 1);
+      expect(controller.willToggleToDarkTheme, isFalse);
+
+      controller.toggleDayNightTheme();
+      expect(controller.themeIndex, 0);
+      expect(controller.willToggleToDarkTheme, isTrue);
+
+      controller.dispose();
+    });
+
     test('app pause 前會 flush 目前 slide session progress', () async {
       _fakeChaptersFromDao = [
         BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),

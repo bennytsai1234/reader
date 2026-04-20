@@ -114,6 +114,7 @@ class SourceManagerProvider with ChangeNotifier {
   @override
   void dispose() {
     checkService.removeListener(_handleCheckServiceChanged);
+    checkService.cancel();
     checkService.dispose();
     super.dispose();
   }
@@ -201,6 +202,12 @@ class SourceManagerProvider with ChangeNotifier {
     } else {
       _selectedUrls.addAll(sources.map((s) => s.bookSourceUrl));
     }
+    notifyListeners();
+  }
+
+  void clearSelection() {
+    if (_selectedUrls.isEmpty) return;
+    _selectedUrls.clear();
     notifyListeners();
   }
 

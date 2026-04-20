@@ -63,6 +63,7 @@ void main() {
               provider: provider,
               showPhotoView: (_, __) {},
               onEdit: () {},
+              onCacheOffline: () {},
               showSourceOptions: (_, __) {},
               navigateToReader: (_, __, ___, ____) {},
               showChangeSource: (_, __) {},
@@ -74,8 +75,46 @@ void main() {
 
       expect(find.widgetWithText(FilledButton, '開始閱讀'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, '放入書架'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, '離線快取'), findsOneWidget);
       expect(find.byIcon(Icons.menu_book_rounded), findsOneWidget);
       expect(find.byIcon(Icons.library_add), findsOneWidget);
     },
   );
+
+  testWidgets('BookInfoHeader hides offline cache action for local books', (
+    tester,
+  ) async {
+    final provider = BookDetailProvider(
+      AggregatedSearchBook(
+        book: SearchBook(
+          bookUrl: 'file:///books/demo.txt',
+          name: '本地書',
+          author: '作者乙',
+          origin: 'local',
+          originName: '本地',
+        ),
+        sources: const <String>['本地'],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: BookInfoHeader(
+            book: provider.book,
+            provider: provider,
+            showPhotoView: (_, __) {},
+            onEdit: () {},
+            onCacheOffline: () {},
+            showSourceOptions: (_, __) {},
+            navigateToReader: (_, __, ___, ____) {},
+            showChangeSource: (_, __) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('離線快取'), findsNothing);
+  });
 }

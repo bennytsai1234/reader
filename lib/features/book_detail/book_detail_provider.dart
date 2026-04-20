@@ -9,14 +9,37 @@ import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/models/book_source.dart';
 import 'package:inkpage_reader/core/models/search_book.dart';
 import 'package:inkpage_reader/core/services/book_source_service.dart';
+import 'package:inkpage_reader/core/services/download_service.dart';
 import 'package:inkpage_reader/core/engine/app_event_bus.dart';
 import 'package:inkpage_reader/core/di/injection.dart';
 
+class OfflineCacheQueueResult {
+  const OfflineCacheQueueResult._({
+    required this.queuedChapterCount,
+    required this.message,
+  });
+
+  final int queuedChapterCount;
+  final String message;
+
+  factory OfflineCacheQueueResult.queued(int count) {
+    return OfflineCacheQueueResult._(
+      queuedChapterCount: count,
+      message: '已加入離線快取佇列，共 $count 章',
+    );
+  }
+
+  factory OfflineCacheQueueResult.blocked(String message) {
+    return OfflineCacheQueueResult._(queuedChapterCount: 0, message: message);
+  }
+}
+
 class BookDetailProvider extends ChangeNotifier {
-  final BookDao _bookDao = getIt<BookDao>();
-  final ChapterDao _chapterDao = getIt<ChapterDao>();
-  final BookSourceDao _sourceDao = getIt<BookSourceDao>();
-  final BookSourceService _service = BookSourceService();
+  final BookDao _bookDao;
+  final ChapterDao _chapterDao;
+  final BookSourceDao _sourceDao;
+  final BookSourceService _service;
+  DownloadService? _downloadService;
 
   late Book _book;
   List<BookChapter> _allChapters = [];
@@ -34,6 +57,9 @@ class BookDetailProvider extends ChangeNotifier {
   int get totalChapterCount => _allChapters.length;
   bool get isLoading => _isLoading;
   bool get isInBookshelf => _isInBookshelf;
+  bool get supportsOfflineCache => _book.origin != 'local';
+  DownloadService get _resolvedDownloadService =>
+      _downloadService ??= DownloadService();
 
   String _searchQuery = '';
   bool _isReversed = false;
@@ -41,7 +67,18 @@ class BookDetailProvider extends ChangeNotifier {
 
   Timer? _debounce;
 
-  BookDetailProvider(AggregatedSearchBook searchBook) {
+  BookDetailProvider(
+    AggregatedSearchBook searchBook, {
+    BookDao? bookDao,
+    ChapterDao? chapterDao,
+    BookSourceDao? sourceDao,
+    BookSourceService? service,
+    DownloadService? downloadService,
+  }) : _bookDao = bookDao ?? getIt<BookDao>(),
+       _chapterDao = chapterDao ?? getIt<ChapterDao>(),
+       _sourceDao = sourceDao ?? getIt<BookSourceDao>(),
+       _service = service ?? BookSourceService(),
+       _downloadService = downloadService {
     _book =
         searchBook.book is Book
             ? searchBook.book as Book
@@ -123,6 +160,98 @@ class BookDetailProvider extends ChangeNotifier {
       }
     }
     _applyFilter();
+  }
+
+  Future<OfflineCacheQueueResult> queueDownloadAll() async {
+    return _queueOfflineCache(
+      resolveChapters: (_) => List<BookChapter>.from(_allChapters),
+      emptyMessage: '目前沒有可離線快取的章節',
+    );
+  }
+
+  Future<OfflineCacheQueueResult> queueDownloadFromCurrent() async {
+    return _queueOfflineCache(
+      resolveChapters: (_) {
+        final startIndex = book.durChapterIndex.clamp(0, _allChapters.length);
+        return _allChapters
+            .where((chapter) => chapter.index >= startIndex)
+            .toList();
+      },
+      emptyMessage: '目前進度之後沒有可離線快取的章節',
+    );
+  }
+
+  Future<OfflineCacheQueueResult> queueDownloadUncached() async {
+    return _queueOfflineCache(
+      resolveChapters:
+          (cachedIndices) =>
+              _allChapters
+                  .where((chapter) => !cachedIndices.contains(chapter.index))
+                  .toList(),
+      emptyMessage: '目前沒有新的章節需要離線快取',
+    );
+  }
+
+  Future<OfflineCacheQueueResult> _queueOfflineCache({
+    required List<BookChapter> Function(Set<int> cachedIndices) resolveChapters,
+    required String emptyMessage,
+  }) async {
+    final blockedReason = await _prepareOfflineCacheQueue();
+    if (blockedReason != null) {
+      return OfflineCacheQueueResult.blocked(blockedReason);
+    }
+
+    final cachedIndices = await _chapterDao.getCachedChapterIndices(
+      _book.bookUrl,
+    );
+    final chapters = resolveChapters(cachedIndices);
+    if (chapters.isEmpty) {
+      return OfflineCacheQueueResult.blocked(emptyMessage);
+    }
+
+    await _resolvedDownloadService.addDownloadTask(_book, chapters);
+    return OfflineCacheQueueResult.queued(chapters.length);
+  }
+
+  Future<String?> _prepareOfflineCacheQueue() async {
+    if (!supportsOfflineCache) {
+      return '這本書已經在裝置內，不需要再加入離線快取。';
+    }
+
+    if (_currentSource == null) {
+      await _loadSource();
+    }
+    final source = _currentSource;
+    if (source == null) {
+      return '目前找不到書源，請先換源後再試。';
+    }
+    if (!source.isReadingEnabledByRuntime) {
+      return _sourceIssueMessage ?? '目前來源無法提供正文，請先換源後再試。';
+    }
+
+    if (_allChapters.isEmpty) {
+      await _loadChapters();
+    }
+    if (_allChapters.isEmpty) {
+      return _sourceIssueMessage ?? '目前沒有可離線快取的章節。';
+    }
+
+    var bookshelfChanged = false;
+    if (!_isInBookshelf) {
+      _isInBookshelf = true;
+      _book.isInBookshelf = true;
+      bookshelfChanged = true;
+    }
+
+    await _bookDao.upsert(_book);
+    await _chapterDao.insertChapters(_allChapters);
+
+    if (bookshelfChanged) {
+      AppEventBus().fire(AppEventBus.upBookshelf);
+      notifyListeners();
+    }
+
+    return null;
   }
 
   void setSearchQuery(String q) {

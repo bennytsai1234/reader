@@ -9,6 +9,7 @@ class BookInfoHeader extends StatelessWidget {
   final BookDetailProvider provider;
   final Function(BuildContext, String) showPhotoView;
   final VoidCallback onEdit;
+  final VoidCallback onCacheOffline;
   final Function(BuildContext, Book) showSourceOptions;
   final Function(BuildContext, Book, int, List<BookChapter>) navigateToReader;
   final Function(BuildContext, BookDetailProvider) showChangeSource;
@@ -19,6 +20,7 @@ class BookInfoHeader extends StatelessWidget {
     required this.provider,
     required this.showPhotoView,
     required this.onEdit,
+    required this.onCacheOffline,
     required this.showSourceOptions,
     required this.navigateToReader,
     required this.showChangeSource,
@@ -139,9 +141,29 @@ class BookInfoHeader extends StatelessWidget {
                   ),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: () => showChangeSource(context, provider),
-                      child: const Text('換源', style: TextStyle(fontSize: 12)),
+                    child: Wrap(
+                      spacing: 4,
+                      children: [
+                        TextButton(
+                          onPressed: () => showChangeSource(context, provider),
+                          child: const Text(
+                            '換源',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        if (provider.supportsOfflineCache)
+                          TextButton.icon(
+                            onPressed: onCacheOffline,
+                            icon: const Icon(
+                              Icons.download_for_offline_outlined,
+                              size: 16,
+                            ),
+                            label: const Text(
+                              '離線快取',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],

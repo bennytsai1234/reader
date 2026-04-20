@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/core/constant/prefer_key.dart';
 import 'package:inkpage_reader/core/services/tts_service.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_auto_page_coordinator.dart';
 import 'reader_provider_base.dart';
@@ -19,8 +21,14 @@ mixin ReaderAutoPageMixin
   double get autoPageSpeed => _autoPageCoordinator.speed; // 單位：秒/頁
   bool get isAutoPagePaused => _autoPageCoordinator.isPaused;
 
+  Future<void> loadAutoPageSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final speed = (prefs.getInt(PreferKey.autoReadSpeed) ?? 10).clamp(1, 120);
+    _autoPageCoordinator.speed = speed.toDouble();
+  }
+
   double scrollDeltaPerFrame(Size viewSize, double dtSeconds) {
-    return (viewSize.height / autoPageSpeed.clamp(1.0, 600.0)) * dtSeconds;
+    return (viewSize.height / autoPageSpeed.clamp(1.0, 120.0)) * dtSeconds;
   }
 
   void attachAutoPageTicker(Ticker Function(TickerCallback) createTicker) {
@@ -68,7 +76,7 @@ mixin ReaderAutoPageMixin
 
   void _onAutoPageTick(double dtSeconds) {
     if (pageTurnMode != PageAnim.scroll) {
-      final delta = dtSeconds / autoPageSpeed.clamp(1.0, 600.0);
+      final delta = dtSeconds / autoPageSpeed.clamp(1.0, 120.0);
       autoPageProgressNotifier.value += delta;
       if (autoPageProgressNotifier.value >= 1.0) {
         autoPageProgressNotifier.value = 0.0;
@@ -107,7 +115,11 @@ mixin ReaderAutoPageMixin
   }
 
   void setAutoPageSpeed(double speed) {
-    _autoPageCoordinator.speed = speed;
+    final normalized = speed.clamp(1.0, 120.0).roundToDouble();
+    _autoPageCoordinator.speed = normalized;
+    SharedPreferences.getInstance().then(
+      (prefs) => prefs.setInt(PreferKey.autoReadSpeed, normalized.round()),
+    );
     notifyListeners();
   }
 

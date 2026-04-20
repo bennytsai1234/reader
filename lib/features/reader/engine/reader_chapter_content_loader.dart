@@ -133,6 +133,8 @@ class ReaderChapterContentLoader {
         ),
       );
       if (raw.isNotEmpty) {
+        await chapterDao.insertChapters(<BookChapter>[chapter]);
+        await chapterDao.saveContent(chapter.url, raw);
         return raw;
       }
       return '章節內容為空 (可能解析規則有誤)';

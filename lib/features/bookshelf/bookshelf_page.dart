@@ -37,217 +37,231 @@ class _BookshelfPageState extends State<BookshelfPage> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<BookshelfProvider>();
-    return Scaffold(
-      appBar: AppBar(
-        title:
-            _isMultiSelect
-                ? Text('已選擇 ${_selectedUrls.length} 本')
-                : const Text('書架'),
-        leading:
-            _isMultiSelect
-                ? IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed:
-                      () => setState(() {
-                        _isMultiSelect = false;
-                        _selectedUrls.clear();
-                      }),
-                )
-                : null,
-        actions:
-            _isMultiSelect
-                ? [
-                  IconButton(
-                    icon: const Icon(Icons.drive_file_move_outlined),
-                    tooltip: '移入分組',
-                    onPressed: () async {
-                      final success = await showDialog<bool>(
-                        context: context,
-                        builder:
-                            (ctx) => GroupSelectDialog(bookUrls: _selectedUrls),
-                      );
-                      if (success == true) {
-                        setState(() {
-                          _isMultiSelect = false;
-                          _selectedUrls.clear();
-                        });
-                      }
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: '刪除',
-                    onPressed: () => _showDeleteConfirm(context, provider),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.select_all),
-                    tooltip: '全選',
+    return PopScope<void>(
+      canPop: !_isMultiSelect,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || !_isMultiSelect) return;
+        setState(() {
+          _isMultiSelect = false;
+          _selectedUrls.clear();
+        });
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title:
+              _isMultiSelect
+                  ? Text('已選擇 ${_selectedUrls.length} 本')
+                  : const Text('書架'),
+          leading:
+              _isMultiSelect
+                  ? IconButton(
+                    icon: const Icon(Icons.close),
                     onPressed:
                         () => setState(() {
-                          if (_selectedUrls.length == provider.books.length) {
-                            _selectedUrls.clear();
-                          } else {
-                            _selectedUrls.addAll(
-                              provider.books.map((b) => b.bookUrl),
-                            );
-                          }
+                          _isMultiSelect = false;
+                          _selectedUrls.clear();
                         }),
-                  ),
-                ]
-                : [
-                  IconButton(
-                    icon: const Icon(Icons.search),
-                    onPressed:
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SearchPage()),
-                        ),
-                  ),
-
-                  PopupMenuButton<String>(
-                    itemBuilder:
-                        (context) => [
-                          PopupMenuItem(
-                            value: 'grid',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.view_quilt_outlined,
-                                  size: 20,
-                                  color: Theme.of(context).iconTheme.color,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(provider.isGridView ? '列表視圖' : '網格視圖'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'add_local',
-                            child: Row(
-                              children: [
-                                Icon(Icons.file_open_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('添加本地'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'add_url',
-                            child: Row(
-                              children: [
-                                Icon(Icons.link, size: 20),
-                                SizedBox(width: 12),
-                                Text('添加網址'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'manage',
-                            child: Row(
-                              children: [
-                                Icon(Icons.format_list_bulleted, size: 20),
-                                SizedBox(width: 12),
-                                Text('書架管理'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'group_manage',
-                            child: Row(
-                              children: [
-                                Icon(Icons.groups_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('分組管理'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuDivider(),
-                          const PopupMenuItem(
-                            value: 'import',
-                            child: Row(
-                              children: [
-                                Icon(Icons.file_download_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('匯入書架'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'export',
-                            child: Row(
-                              children: [
-                                Icon(Icons.file_upload_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('匯出書架'),
-                              ],
-                            ),
-                          ),
-                        ],
-                    onSelected: (value) async {
-                      switch (value) {
-                        case 'grid':
-                          provider.setGridView(!provider.isGridView);
-                          break;
-                        case 'add_local':
-                          final result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions:
-                                kSupportedLocalBookExtensions.toList()..sort(),
-                          );
-                          if (result != null &&
-                              result.files.single.path != null) {
-                            if (!context.mounted) break;
-                            await _importLocalBook(
-                              context,
-                              provider,
-                              result.files.single.path!,
-                            );
-                          }
-                          break;
-                        case 'add_url':
-                          await _showAddUrlDialog(context, provider);
-                          break;
-                        case 'manage':
+                  )
+                  : null,
+          actions:
+              _isMultiSelect
+                  ? [
+                    IconButton(
+                      icon: const Icon(Icons.drive_file_move_outlined),
+                      tooltip: '移入分組',
+                      onPressed: () async {
+                        final success = await showDialog<bool>(
+                          context: context,
+                          builder:
+                              (ctx) =>
+                                  GroupSelectDialog(bookUrls: _selectedUrls),
+                        );
+                        if (success == true) {
                           setState(() {
-                            _isMultiSelect = true;
+                            _isMultiSelect = false;
+                            _selectedUrls.clear();
                           });
-                          break;
-                        case 'group_manage':
-                          await Navigator.push(
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      tooltip: '刪除',
+                      onPressed: () => _showDeleteConfirm(context, provider),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.select_all),
+                      tooltip: '全選',
+                      onPressed:
+                          () => setState(() {
+                            if (_selectedUrls.length == provider.books.length) {
+                              _selectedUrls.clear();
+                            } else {
+                              _selectedUrls.addAll(
+                                provider.books.map((b) => b.bookUrl),
+                              );
+                            }
+                          }),
+                    ),
+                  ]
+                  : [
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed:
+                          () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const GroupManagePage(),
+                              builder: (_) => const SearchPage(),
                             ),
-                          );
-                          break;
-                        case 'import':
-                          await _handleBookshelfImport(context);
-                          break;
-                        case 'export':
-                          await _handleBookshelfExport(context, provider);
-                          break;
-                      }
-                    },
-                  ),
-                ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child:
-                provider.isLoading && provider.books.isEmpty
-                    ? const Center(child: CircularProgressIndicator())
-                    : provider.books.isEmpty
-                    ? const Center(child: Text('書架空空如也，去搜尋看看吧'))
-                    : RefreshIndicator(
-                      onRefresh: () => provider.refreshBookshelf(),
-                      child:
-                          provider.isGridView
-                              ? _buildGridView(provider)
-                              : _buildListView(provider),
+                          ),
                     ),
-          ),
-        ],
+
+                    PopupMenuButton<String>(
+                      itemBuilder:
+                          (context) => [
+                            PopupMenuItem(
+                              value: 'grid',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.view_quilt_outlined,
+                                    size: 20,
+                                    color: Theme.of(context).iconTheme.color,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(provider.isGridView ? '列表視圖' : '網格視圖'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'add_local',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.file_open_outlined, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('添加本地'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'add_url',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.link, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('添加網址'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'manage',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.format_list_bulleted, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('書架管理'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'group_manage',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.groups_outlined, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('分組管理'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuDivider(),
+                            const PopupMenuItem(
+                              value: 'import',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.file_download_outlined, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('匯入書架'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'export',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.file_upload_outlined, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('匯出書架'),
+                                ],
+                              ),
+                            ),
+                          ],
+                      onSelected: (value) async {
+                        switch (value) {
+                          case 'grid':
+                            provider.setGridView(!provider.isGridView);
+                            break;
+                          case 'add_local':
+                            final result = await FilePicker.platform.pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions:
+                                  kSupportedLocalBookExtensions.toList()
+                                    ..sort(),
+                            );
+                            if (result != null &&
+                                result.files.single.path != null) {
+                              if (!context.mounted) break;
+                              await _importLocalBook(
+                                context,
+                                provider,
+                                result.files.single.path!,
+                              );
+                            }
+                            break;
+                          case 'add_url':
+                            await _showAddUrlDialog(context, provider);
+                            break;
+                          case 'manage':
+                            setState(() {
+                              _isMultiSelect = true;
+                            });
+                            break;
+                          case 'group_manage':
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const GroupManagePage(),
+                              ),
+                            );
+                            break;
+                          case 'import':
+                            await _handleBookshelfImport(context);
+                            break;
+                          case 'export':
+                            await _handleBookshelfExport(context, provider);
+                            break;
+                        }
+                      },
+                    ),
+                  ],
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child:
+                  provider.isLoading && provider.books.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : provider.books.isEmpty
+                      ? const Center(child: Text('書架空空如也，去搜尋看看吧'))
+                      : RefreshIndicator(
+                        onRefresh: () => provider.refreshBookshelf(),
+                        child:
+                            provider.isGridView
+                                ? _buildGridView(provider)
+                                : _buildListView(provider),
+                      ),
+            ),
+          ],
+        ),
       ),
     );
   }

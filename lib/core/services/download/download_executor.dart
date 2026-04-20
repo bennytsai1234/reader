@@ -7,6 +7,13 @@ import 'package:inkpage_reader/core/models/download_task.dart';
 import 'package:inkpage_reader/core/engine/app_event_bus.dart';
 import 'package:inkpage_reader/core/services/app_log_service.dart';
 
+bool downloadTaskCountsPreCachedChapters({
+  required DownloadTask task,
+  required int chapterCountInRange,
+}) {
+  return task.totalCount >= chapterCountInRange;
+}
+
 /// DownloadService 的任務執行邏輯擴展
 mixin DownloadExecutor on DownloadBase, DownloadScheduler {
   @override
@@ -24,7 +31,7 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
       if (source == null) {
         throw Exception('書源不存在');
       }
-      
+
       var chapters = await chapterDao.getChapters(task.bookUrl);
       if (chapters.isEmpty) {
         chapters = await sourceService.getChapterList(source, book);
@@ -41,16 +48,37 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
         task = newTask;
       }
 
-      final toDownload = chapters.where((c) => c.index >= task.startChapterIndex && c.index <= task.endChapterIndex).toList();
+      final toDownload =
+          chapters
+              .where(
+                (c) =>
+                    c.index >= task.startChapterIndex &&
+                    c.index <= task.endChapterIndex,
+              )
+              .toList();
+      final countsPreCachedChapters = downloadTaskCountsPreCachedChapters(
+        task: task,
+        chapterCountInRange: toDownload.length,
+      );
       var poolCount = 0;
       for (var chapter in toDownload) {
         if (!isDownloading || task.status == 2) {
           break;
         }
         await checkPause();
-        
+
         if (await chapterDao.hasContent(chapter.url)) {
-          task.successCount++;
+          if (countsPreCachedChapters) {
+            task.successCount++;
+          }
+          task.currentChapterIndex = chapter.index;
+          await downloadDao.updateProgress(
+            task.bookUrl,
+            currentChapterIndex: chapter.index,
+            successCount: task.successCount,
+            errorCount: task.errorCount,
+          );
+          update();
           continue;
         }
 
@@ -67,7 +95,12 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
           }
           poolCount--;
           task.currentChapterIndex = chapter.index;
-          downloadDao.updateProgress(task.bookUrl, currentChapterIndex: chapter.index, successCount: task.successCount, errorCount: task.errorCount);
+          downloadDao.updateProgress(
+            task.bookUrl,
+            currentChapterIndex: chapter.index,
+            successCount: task.successCount,
+            errorCount: task.errorCount,
+          );
           update();
         });
       }
@@ -82,7 +115,11 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
         AppEventBus().fire(AppEventBus.upBookshelf, data: task.bookUrl);
       }
     } catch (e, stack) {
-      AppLog.e('Download task failed for ${task.bookName}: $e', error: e, stackTrace: stack);
+      AppLog.e(
+        'Download task failed for ${task.bookName}: $e',
+        error: e,
+        stackTrace: stack,
+      );
       if (task.status != 2) {
         task.status = 4;
         await downloadDao.updateProgress(task.bookUrl, status: 4);
@@ -93,7 +130,12 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
 
   static const int _maxRetries = 3;
 
-  Future<bool> _downloadChapter(Book book, dynamic source, DownloadTask task, BookChapter chapter) async {
+  Future<bool> _downloadChapter(
+    Book book,
+    dynamic source,
+    DownloadTask task,
+    BookChapter chapter,
+  ) async {
     for (var attempt = 0; attempt < _maxRetries; attempt++) {
       try {
         final content = await sourceService.getContent(source, book, chapter);
@@ -103,19 +145,23 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
         }
         return false;
       } catch (e, stack) {
-        AppLog.w('Chapter download failed (attempt ${attempt + 1}/$_maxRetries) '
-            '- book: ${task.bookName}, chapter: ${chapter.title}: $e');
+        AppLog.w(
+          'Chapter download failed (attempt ${attempt + 1}/$_maxRetries) '
+          '- book: ${task.bookName}, chapter: ${chapter.title}: $e',
+        );
         if (attempt < _maxRetries - 1) {
           final delay = Duration(milliseconds: 500 * (1 << attempt));
           await Future.delayed(delay);
         } else {
-          AppLog.e('Chapter download exhausted retries '
-              '- book: ${task.bookName}, chapter: ${chapter.title}',
-              error: e, stackTrace: stack);
+          AppLog.e(
+            'Chapter download exhausted retries '
+            '- book: ${task.bookName}, chapter: ${chapter.title}',
+            error: e,
+            stackTrace: stack,
+          );
         }
       }
     }
     return false;
   }
 }
-

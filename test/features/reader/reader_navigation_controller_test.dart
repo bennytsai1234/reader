@@ -57,10 +57,7 @@ void main() {
       final nav = ReaderNavigationController();
 
       expect(nav.beginSlideJump(ReaderCommandReason.autoPage), isTrue);
-      expect(
-        nav.consumePendingSlideJumpReason(),
-        ReaderCommandReason.autoPage,
-      );
+      expect(nav.consumePendingSlideJumpReason(), ReaderCommandReason.autoPage);
       expect(nav.consumePageChangeReason(), ReaderCommandReason.autoPage);
     });
 
@@ -115,6 +112,17 @@ void main() {
       expect(pageChangeReason, ReaderCommandReason.restore);
       expect(nav.shouldPersistForReason(pageChangeReason), isFalse);
       expect(nav.shouldPersistVisiblePosition(DateTime.now()), isFalse);
+    });
+
+    test('restore 消費完成後會釋放 guard，讓 autoPage 可接手', () {
+      final nav = ReaderNavigationController();
+
+      expect(nav.beginSlideJump(ReaderCommandReason.restore), isTrue);
+      expect(nav.consumePendingSlideJumpReason(), ReaderCommandReason.restore);
+      expect(nav.consumePageChangeReason(), ReaderCommandReason.restore);
+
+      expect(nav.beginSlideJump(ReaderCommandReason.autoPage), isTrue);
+      expect(nav.activeCommandReason, ReaderCommandReason.autoPage);
     });
   });
 }

@@ -58,12 +58,11 @@ class _FakeReaderProvider extends ReaderProvider {
   bool knownEmpty = false;
 
   _FakeReaderProvider()
-      : super(
-          book: Book(bookUrl: 'book', name: 'Book', origin: 'local'),
-        );
+    : super(book: Book(bookUrl: 'book', name: 'Book', origin: 'local'));
 
   @override
-  bool isKnownEmptyChapter(int index) => knownEmpty && index == currentChapterIndex;
+  bool isKnownEmptyChapter(int index) =>
+      knownEmpty && index == currentChapterIndex;
 }
 
 void _setupDi() {
@@ -89,23 +88,24 @@ void main() {
     _setupDi();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('flutter_tts'),
-      (call) async => null,
-    );
+          const MethodChannel('flutter_tts'),
+          (call) async => null,
+        );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('com.ryanheise.audio_service.methods'),
-      (call) async => null,
-    );
+          const MethodChannel('com.ryanheise.audio_service.methods'),
+          (call) async => null,
+        );
   });
 
   group('ReadViewRuntimeCoordinator', () {
     const coordinator = ReadViewRuntimeCoordinator();
 
     test('載入中時回傳 loading state', () {
-      final provider = _FakeReaderProvider()
-        ..lifecycle = ReaderLifecycle.loading
-        ..pageTurnMode = PageAnim.slide;
+      final provider =
+          _FakeReaderProvider()
+            ..lifecycle = ReaderLifecycle.loading
+            ..pageTurnMode = PageAnim.slide;
 
       final state = coordinator.resolveViewportState(
         provider,
@@ -118,10 +118,11 @@ void main() {
     });
 
     test('無章節時回傳暫無章節', () {
-      final provider = _FakeReaderProvider()
-        ..lifecycle = ReaderLifecycle.ready
-        ..pageTurnMode = PageAnim.slide
-        ..viewSize = const Size(300, 500);
+      final provider =
+          _FakeReaderProvider()
+            ..lifecycle = ReaderLifecycle.ready
+            ..pageTurnMode = PageAnim.slide
+            ..viewSize = const Size(300, 500);
 
       final state = coordinator.resolveViewportState(
         provider,
@@ -134,14 +135,13 @@ void main() {
     });
 
     test('已知空章節時回傳本章暫無內容', () {
-      final provider = _FakeReaderProvider()
-        ..lifecycle = ReaderLifecycle.ready
-        ..pageTurnMode = PageAnim.slide
-        ..viewSize = const Size(300, 500)
-        ..chapters = [
-          BookChapter(title: 'c0', index: 0, bookUrl: 'book'),
-        ]
-        ..knownEmpty = true;
+      final provider =
+          _FakeReaderProvider()
+            ..lifecycle = ReaderLifecycle.ready
+            ..pageTurnMode = PageAnim.slide
+            ..viewSize = const Size(300, 500)
+            ..chapters = [BookChapter(title: 'c0', index: 0, bookUrl: 'book')]
+            ..knownEmpty = true;
 
       final state = coordinator.resolveViewportState(
         provider,
@@ -154,13 +154,12 @@ void main() {
     });
 
     test('非 loading 且無可見資料時回傳暫無可顯示頁面', () {
-      final provider = _FakeReaderProvider()
-        ..lifecycle = ReaderLifecycle.ready
-        ..pageTurnMode = PageAnim.scroll
-        ..viewSize = const Size(300, 500)
-        ..chapters = [
-          BookChapter(title: 'c0', index: 0, bookUrl: 'book'),
-        ];
+      final provider =
+          _FakeReaderProvider()
+            ..lifecycle = ReaderLifecycle.ready
+            ..pageTurnMode = PageAnim.scroll
+            ..viewSize = const Size(300, 500)
+            ..chapters = [BookChapter(title: 'c0', index: 0, bookUrl: 'book')];
 
       final state = coordinator.resolveViewportState(
         provider,
@@ -169,6 +168,24 @@ void main() {
 
       expect(state.showLoading, isFalse);
       expect(state.message, '暫無可顯示頁面');
+      provider.dispose();
+    });
+
+    test('scroll pending jump 會保留原始命令 reason', () {
+      final provider = _FakeReaderProvider()..pageTurnMode = PageAnim.scroll;
+
+      provider.requestJumpToChapter(
+        chapterIndex: 2,
+        localOffset: 48,
+        reason: ReaderCommandReason.settingsRepaginate,
+      );
+      final action = coordinator.consumePendingScrollAction(provider);
+
+      expect(action, isNotNull);
+      expect(action!.chapterIndex, 2);
+      expect(action.localOffset, 48);
+      expect(action.isRestore, isFalse);
+      expect(action.reason, ReaderCommandReason.settingsRepaginate);
       provider.dispose();
     });
   });

@@ -50,50 +50,55 @@ class _ExplorePageContentState extends State<_ExplorePageContent> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('發現'),
+        titleSpacing: 12,
+        toolbarHeight: 58,
+        title: _buildSearchBar(provider, theme),
         actions: [
           if (provider.groups.isNotEmpty)
-            PopupMenuButton<String?>(
-              icon: const Icon(Icons.filter_list),
-              tooltip: '按分組篩選',
-              onSelected: (group) {
-                _searchController.clear();
-                provider.setGroupFilter(group);
-              },
-              itemBuilder: (ctx) {
-                final items = <PopupMenuEntry<String?>>[
-                  PopupMenuItem<String?>(
-                    value: null,
-                    child: _buildCheckedMenuRow(
-                      theme,
-                      checked: provider.selectedGroup == null,
-                      text: '全部',
-                    ),
-                  ),
-                ];
-                items.addAll(
-                  provider.groups.map((group) {
-                    return PopupMenuItem<String?>(
-                      value: group,
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: PopupMenuButton<String?>(
+                icon: Icon(
+                  Icons.tune_rounded,
+                  color:
+                      provider.selectedGroup == null
+                          ? null
+                          : theme.colorScheme.primary,
+                ),
+                tooltip: '按分組篩選',
+                onSelected: (group) {
+                  FocusScope.of(context).unfocus();
+                  _searchController.clear();
+                  provider.setGroupFilter(group);
+                },
+                itemBuilder: (ctx) {
+                  final items = <PopupMenuEntry<String?>>[
+                    PopupMenuItem<String?>(
+                      value: null,
                       child: _buildCheckedMenuRow(
                         theme,
-                        checked: provider.selectedGroup == group,
-                        text: group,
+                        checked: provider.selectedGroup == null,
+                        text: '全部',
                       ),
-                    );
-                  }),
-                );
-                return items;
-              },
+                    ),
+                  ];
+                  items.addAll(
+                    provider.groups.map((group) {
+                      return PopupMenuItem<String?>(
+                        value: group,
+                        child: _buildCheckedMenuRow(
+                          theme,
+                          checked: provider.selectedGroup == group,
+                          text: group,
+                        ),
+                      );
+                    }),
+                  );
+                  return items;
+                },
+              ),
             ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: _buildSearchBar(provider, theme),
-          ),
-        ),
       ),
       body: _buildSourceList(provider, theme),
     );
@@ -121,43 +126,43 @@ class _ExplorePageContentState extends State<_ExplorePageContent> {
   }
 
   Widget _buildSearchBar(ExploreProvider provider, ThemeData theme) {
-    return TextField(
-      controller: _searchController,
-      onChanged: provider.setSearchQuery,
-      textInputAction: TextInputAction.search,
-      style: const TextStyle(fontSize: 14),
-      decoration: InputDecoration(
-        hintText:
-            provider.selectedGroup == null
-                ? '搜索發現書源'
-                : '分組: ${provider.selectedGroup}',
-        prefixIcon: const Icon(Icons.search, size: 20),
-        suffixIcon:
-            _searchController.text.isEmpty && provider.selectedGroup == null
-                ? null
-                : IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: () {
-                    _searchController.clear();
-                    if (provider.selectedGroup != null) {
-                      provider.setGroupFilter(null);
-                    } else {
-                      provider.setSearchQuery('');
-                    }
-                  },
-                ),
-        isDense: true,
-        filled: true,
-        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.7,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 10,
+    final inputBackground = theme.colorScheme.surfaceContainerHighest;
+    final inputHint = theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: inputBackground.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: provider.setSearchQuery,
+        textInputAction: TextInputAction.search,
+        style: const TextStyle(fontSize: 14),
+        decoration: InputDecoration(
+          hintText:
+              provider.selectedGroup == null
+                  ? '搜尋發現書源'
+                  : '搜尋 ${provider.selectedGroup} 分組書源',
+          hintStyle: TextStyle(color: inputHint, fontSize: 13),
+          border: InputBorder.none,
+          prefixIcon: const Icon(Icons.search_rounded, size: 18),
+          suffixIcon:
+              _searchController.text.isEmpty && provider.selectedGroup == null
+                  ? null
+                  : IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () {
+                      _searchController.clear();
+                      if (provider.selectedGroup != null) {
+                        provider.setGroupFilter(null);
+                      } else {
+                        provider.setSearchQuery('');
+                      }
+                    },
+                  ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
         ),
       ),
     );
@@ -318,55 +323,66 @@ class _ExplorePageContentState extends State<_ExplorePageContent> {
   ) {
     return Padding(
       padding: const EdgeInsets.all(8),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children:
-            provider.expandedKinds.map((kind) {
-              final isError = kind.title.startsWith('ERROR:');
-              final background =
-                  isError
-                      ? Colors.red.withValues(alpha: 0.08)
-                      : theme.colorScheme.primaryContainer.withValues(
-                        alpha: 0.42,
-                      );
-              final borderColor =
-                  isError
-                      ? Colors.red.withValues(alpha: 0.2)
-                      : theme.colorScheme.outlineVariant;
-              final textColor =
-                  isError ? Colors.red.shade700 : theme.colorScheme.onSurface;
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          mainAxisExtent: 56,
+        ),
+        itemCount: provider.expandedKinds.length,
+        itemBuilder: (context, index) {
+          final kind = provider.expandedKinds[index];
+          final isError = kind.title.startsWith('ERROR:');
+          final background =
+              isError
+                  ? Colors.red.withValues(alpha: 0.08)
+                  : theme.colorScheme.primaryContainer.withValues(alpha: 0.42);
+          final borderColor =
+              isError
+                  ? Colors.red.withValues(alpha: 0.2)
+                  : theme.colorScheme.outlineVariant;
+          final textColor =
+              isError ? Colors.red.shade700 : theme.colorScheme.onSurface;
 
-              return Material(
-                color: background,
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    if (isError) {
-                      _showKindError(context, kind);
-                      return;
-                    }
-                    if (kind.url == null || kind.url!.isEmpty) return;
-                    _navigateToExploreShow(source, kind);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: Text(
-                      kind.title,
-                      style: TextStyle(fontSize: 12, color: textColor),
-                    ),
+          return Material(
+            color: background,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                if (isError) {
+                  _showKindError(context, kind);
+                  return;
+                }
+                if (kind.url == null || kind.url!.isEmpty) return;
+                _navigateToExploreShow(source, kind);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  kind.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontSize: 11,
+                    height: 1.15,
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              );
-            }).toList(),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

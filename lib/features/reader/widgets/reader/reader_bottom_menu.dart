@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../reader_provider.dart';
+import 'reader_menu_palette.dart';
 
 class ReaderBottomMenu extends StatelessWidget {
   final ReaderProvider provider;
@@ -27,9 +28,6 @@ class ReaderBottomMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final panelColor = provider.currentTheme.backgroundColor.withValues(
-      alpha: 0.96,
-    );
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 200),
       bottom: provider.showControls ? 0 : -250,
@@ -46,7 +44,17 @@ class ReaderBottomMenu extends StatelessWidget {
               0,
               MediaQuery.of(context).padding.bottom + 8,
             ),
-            color: panelColor,
+            decoration: const BoxDecoration(
+              color: ReaderMenuPalette.background,
+              border: Border(top: BorderSide(color: ReaderMenuPalette.outline)),
+              boxShadow: [
+                BoxShadow(
+                  color: ReaderMenuPalette.scrim,
+                  blurRadius: 18,
+                  offset: Offset(0, -6),
+                ),
+              ],
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -71,14 +79,14 @@ class ReaderBottomMenu extends StatelessWidget {
           _floatingFab(Icons.search, '搜尋', onSearch ?? () {}),
           _floatingFab(
             Icons.auto_stories_outlined,
-            '自動翻頁',
+            provider.isAutoPaging ? '自動翻頁設定' : '開始自動翻頁',
             onAutoPage,
             active: provider.isAutoPaging,
           ),
           _floatingFab(Icons.find_replace, '替換規則', onReplaceRule ?? () {}),
           _floatingFab(
-            provider.themeIndex == 1 ? Icons.wb_sunny : Icons.nightlight_round,
-            '日夜切換',
+            provider.dayNightToggleIcon,
+            provider.dayNightToggleTooltip,
             onToggleDayNight,
           ),
         ],
@@ -95,10 +103,10 @@ class ReaderBottomMenu extends StatelessWidget {
     return FloatingActionButton.small(
       heroTag: null,
       onPressed: onTap,
-      backgroundColor: provider.currentTheme.backgroundColor.withValues(
-        alpha: 0.92,
-      ),
-      foregroundColor: active ? Colors.blue : provider.currentTheme.textColor,
+      tooltip: tooltip,
+      backgroundColor: ReaderMenuPalette.backgroundElevated,
+      foregroundColor:
+          active ? ReaderMenuPalette.accent : ReaderMenuPalette.foreground,
       child: Icon(icon),
     );
   }
@@ -126,10 +134,8 @@ class ReaderBottomMenu extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 4),
               child: Text(
                 displayTitle,
-                style: TextStyle(
-                  color: provider.currentTheme.textColor.withValues(
-                    alpha: 0.72,
-                  ),
+                style: const TextStyle(
+                  color: ReaderMenuPalette.mutedForeground,
                   fontSize: 11,
                 ),
                 maxLines: 1,
@@ -143,10 +149,10 @@ class ReaderBottomMenu extends StatelessWidget {
                     provider.currentChapterIndex > 0
                         ? provider.prevChapter
                         : null,
-                child: Text(
+                child: const Text(
                   '上一章',
                   style: TextStyle(
-                    color: provider.currentTheme.textColor,
+                    color: ReaderMenuPalette.foreground,
                     fontSize: 14,
                   ),
                 ),
@@ -178,8 +184,8 @@ class ReaderBottomMenu extends StatelessWidget {
                         chapterCount <= 1
                             ? null
                             : (v) => provider.onScrubEnd(v.toInt()),
-                    activeColor: Colors.blue,
-                    inactiveColor: provider.currentTheme.textColor.withValues(
+                    activeColor: ReaderMenuPalette.accent,
+                    inactiveColor: ReaderMenuPalette.mutedForeground.withValues(
                       alpha: 0.24,
                     ),
                   ),
@@ -190,10 +196,10 @@ class ReaderBottomMenu extends StatelessWidget {
                     provider.currentChapterIndex < chapterCount - 1
                         ? provider.nextChapter
                         : null,
-                child: Text(
+                child: const Text(
                   '下一章',
                   style: TextStyle(
-                    color: provider.currentTheme.textColor,
+                    color: ReaderMenuPalette.foreground,
                     fontSize: 14,
                   ),
                 ),
@@ -227,12 +233,12 @@ class ReaderBottomMenu extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: provider.currentTheme.textColor, size: 22),
+            Icon(icon, color: ReaderMenuPalette.foreground, size: 22),
             const SizedBox(height: 6),
             Text(
               label,
-              style: TextStyle(
-                color: provider.currentTheme.textColor,
+              style: const TextStyle(
+                color: ReaderMenuPalette.foreground,
                 fontSize: 11,
               ),
             ),

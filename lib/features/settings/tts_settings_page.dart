@@ -37,26 +37,6 @@ class TtsSettingsPage extends StatelessWidget {
               ),
 
               const Divider(),
-              _buildSectionTitle('進階控制'),
-              SwitchListTile(
-                title: const Text('朗讀時保持喚醒'),
-                subtitle: const Text('朗讀期間防止系統休眠'),
-                value: settings.readAloudWakeLock,
-                onChanged: (v) => settings.setReadAloudWakeLock(v),
-              ),
-              SwitchListTile(
-                title: const Text('媒體按鍵控制'),
-                subtitle: const Text('使用耳機或媒體按鍵控制朗讀'),
-                value: settings.readAloudByMediaButton,
-                onChanged: (v) => settings.setReadAloudByMediaButton(v),
-              ),
-              SwitchListTile(
-                title: const Text('通話時暫停朗讀'),
-                value: settings.pauseReadAloudWhilePhoneCalls,
-                onChanged: (v) => settings.setPauseReadAloudWhilePhoneCalls(v),
-              ),
-
-              const Divider(),
               _buildSectionTitle('語音引擎'),
               ListTile(
                 title: const Text('HTTP TTS 管理'),

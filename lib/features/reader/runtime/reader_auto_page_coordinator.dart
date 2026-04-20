@@ -3,7 +3,7 @@ import 'package:flutter/scheduler.dart';
 class ReaderAutoPageCoordinator {
   bool isActive = false;
   bool isPaused = false;
-  double speed = 30.0;
+  double speed = 10.0;
 
   Ticker? _ticker;
   Duration _lastTickTime = Duration.zero;

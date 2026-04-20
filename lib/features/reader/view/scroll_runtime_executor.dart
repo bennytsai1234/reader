@@ -46,6 +46,7 @@ class ScrollRuntimeExecutor {
   void jumpScrollPosition({
     required int chapterIndex,
     required double localOffset,
+    VoidCallback? onCompleted,
   }) {
     if (!itemScrollController.isAttached) return;
     itemScrollController.jumpTo(index: chapterIndex, alignment: 0);
@@ -57,6 +58,7 @@ class ScrollRuntimeExecutor {
         animate: false,
         topPadding: provider.contentTopInset,
       );
+      onCompleted?.call();
     });
   }
 
@@ -64,6 +66,7 @@ class ScrollRuntimeExecutor {
     required int chapterIndex,
     required double localOffset,
     required int token,
+    VoidCallback? onCompleted,
     int retries = 20,
   }) {
     scrollRestoreRunner.run(
@@ -77,7 +80,10 @@ class ScrollRuntimeExecutor {
       ensureChapterVisible: () {
         itemScrollController.jumpTo(index: chapterIndex, alignment: 0);
       },
-      completeRestore: () => completeScrollRestore(token),
+      completeRestore: () {
+        completeScrollRestore(token);
+        onCompleted?.call();
+      },
       scrollToChapterLocalOffset: ({
         required int chapterIndex,
         required double localOffset,

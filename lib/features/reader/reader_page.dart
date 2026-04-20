@@ -262,10 +262,16 @@ class _ReaderPageState extends State<ReaderPage> {
                 () => ReaderSettingsSheets.showInterfaceSettings(context, p),
             onSettings: () => ReaderSettingsSheets.showMoreSettings(context, p),
             onAutoPage: () async {
-              if (!p.isAutoPaging) p.toggleAutoPage();
+              if (!p.isAutoPaging) {
+                p.toggleAutoPage();
+                if (p.showControls) {
+                  p.toggleControls();
+                }
+                return;
+              }
               await AutoReadDialog.show(context);
             },
-            onToggleDayNight: () => p.setTheme(p.themeIndex == 1 ? 0 : 1),
+            onToggleDayNight: p.toggleDayNightTheme,
             onSearch: () {
               p.toggleControls();
               Navigator.push(
@@ -296,12 +302,15 @@ class _ReaderPageState extends State<ReaderPage> {
 
     _isHandlingExit = true;
     try {
-      if (!p.shouldPromptAddToBookshelfOnExit()) {
+      final shouldPrompt = p.shouldPromptAddToBookshelfOnExit();
+      await p.persistExitProgress();
+      if (!shouldPrompt) {
         if (mounted) {
           navigator.pop();
         }
         return;
       }
+      if (!context.mounted) return;
       final addToBookshelf = await _showAddToBookshelfDialog(context, p.book);
       if (!mounted) return;
       if (addToBookshelf == true) {
@@ -342,45 +351,57 @@ class _ReaderPageState extends State<ReaderPage> {
         bottom: 0,
         left: 0,
         right: 0,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            0,
-            16,
-            MediaQuery.of(context).padding.bottom + 8,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                p.currentTheme.backgroundColor.withValues(alpha: 0.0),
+                p.currentTheme.backgroundColor.withValues(alpha: 0.88),
+              ],
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  p.book.name,
-                  style: TextStyle(
-                    color: p.currentTheme.textColor.withValues(alpha: 0.4),
-                    fontSize: 10,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              20,
+              16,
+              MediaQuery.of(context).padding.bottom + 10,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    p.book.name,
+                    style: TextStyle(
+                      color: p.currentTheme.textColor.withValues(alpha: 0.5),
+                      fontSize: 10,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-              Text(
-                p.displayPageLabel,
-                style: TextStyle(
-                  color: p.currentTheme.textColor.withValues(alpha: 0.4),
-                  fontSize: 10,
-                ),
-              ),
-              SizedBox(
-                width: 60,
-                child: Text(
-                  p.displayChapterPercentLabel,
-                  textAlign: TextAlign.right,
+                Text(
+                  p.displayPageLabel,
                   style: TextStyle(
-                    color: p.currentTheme.textColor.withValues(alpha: 0.4),
+                    color: p.currentTheme.textColor.withValues(alpha: 0.5),
                     fontSize: 10,
                   ),
                 ),
-              ),
-            ],
+                SizedBox(
+                  width: 60,
+                  child: Text(
+                    p.displayChapterPercentLabel,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: p.currentTheme.textColor.withValues(alpha: 0.5),
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );

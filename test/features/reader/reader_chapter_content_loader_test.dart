@@ -15,11 +15,27 @@ class _FakeChapterDao extends Fake implements ChapterDao {
 
   final Map<String, String> _contents;
   int getContentCallCount = 0;
+  int saveContentCallCount = 0;
+  int insertChaptersCallCount = 0;
 
   @override
   Future<String?> getContent(String url) async {
     getContentCallCount++;
     return _contents[url];
+  }
+
+  @override
+  Future<void> insertChapters(List<BookChapter> chapters) async {
+    insertChaptersCallCount++;
+    for (final chapter in chapters) {
+      _contents.putIfAbsent(chapter.url, () => '');
+    }
+  }
+
+  @override
+  Future<void> saveContent(String url, String content) async {
+    saveContentCallCount++;
+    _contents[url] = content;
   }
 }
 
@@ -149,6 +165,12 @@ void main() {
       expect(chapterDao.getContentCallCount, 1);
       expect(sourceDao.lookupCount, 1);
       expect(service.getContentCallCount, 1);
+      expect(chapterDao.insertChaptersCallCount, 1);
+      expect(chapterDao.saveContentCallCount, 1);
+      expect(
+        chapterDao.getContent('https://example.com/c1'),
+        completion('遠端正文'),
+      );
       expect(service.lastNextChapterUrl, 'https://example.com/c2');
     });
   });

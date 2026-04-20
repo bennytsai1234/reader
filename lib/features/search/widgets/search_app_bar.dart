@@ -30,25 +30,33 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
     final theme = Theme.of(context);
     final scopeDisplay =
         provider.scopeLoaded ? provider.searchScope.display : '載入中...';
+    final inputBackground = theme.colorScheme.surfaceContainerHighest;
+    final inputForeground = theme.colorScheme.onSurface;
+    final inputHint = theme.colorScheme.onSurfaceVariant;
 
     return AppBar(
       titleSpacing: 0,
       title: Row(
         children: [
           Expanded(
-            child: TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: '搜尋書名或作者',
-                border: InputBorder.none,
-                hintStyle: TextStyle(
-                  color: theme.colorScheme.onPrimary.withValues(alpha: 0.6),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: inputBackground,
+                borderRadius: BorderRadius.circular(12),
               ),
-              style: TextStyle(color: theme.colorScheme.onPrimary),
-              textInputAction: TextInputAction.search,
-              onSubmitted: onSearch,
+              child: TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  hintText: '搜尋書名或作者',
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: inputHint),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                ),
+                style: TextStyle(color: inputForeground),
+                textInputAction: TextInputAction.search,
+                onSubmitted: onSearch,
+              ),
             ),
           ),
         ],
@@ -69,8 +77,8 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                     fontSize: 12,
                     color:
                         provider.searchScope.isAll
-                            ? theme.colorScheme.onPrimary.withValues(alpha: 0.7)
-                            : theme.colorScheme.onPrimary,
+                            ? theme.colorScheme.onSurface.withValues(alpha: 0.7)
+                            : theme.colorScheme.onSurface,
                     fontWeight:
                         provider.searchScope.isAll
                             ? FontWeight.normal
@@ -80,7 +88,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                 Icon(
                   Icons.arrow_drop_down,
                   size: 16,
-                  color: theme.colorScheme.onPrimary.withValues(alpha: 0.7),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ],
             ),

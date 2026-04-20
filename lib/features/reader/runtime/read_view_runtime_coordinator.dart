@@ -9,6 +9,7 @@ typedef PendingScrollAction =
       double localOffset,
       int token,
       bool isRestore,
+      ReaderCommandReason reason,
     });
 
 class ReadViewRuntimeCoordinator {
@@ -30,6 +31,7 @@ class ReadViewRuntimeCoordinator {
         localOffset: pendingChapterJump.localOffset,
         token: -1,
         isRestore: false,
+        reason: pendingChapterJump.reason,
       );
     }
 
@@ -40,6 +42,7 @@ class ReadViewRuntimeCoordinator {
       localOffset: pendingRestore.localOffset,
       token: provider.pendingScrollRestoreToken,
       isRestore: true,
+      reason: ReaderCommandReason.restore,
     );
   }
 
@@ -93,9 +96,10 @@ class ReadViewRuntimeCoordinator {
       return const ReaderViewportState.message('暫無章節');
     }
 
-    final targetChapterIndex = provider.pageTurnMode == PageAnim.scroll
-        ? provider.visibleChapterIndex
-        : provider.currentChapterIndex;
+    final targetChapterIndex =
+        provider.pageTurnMode == PageAnim.scroll
+            ? provider.visibleChapterIndex
+            : provider.currentChapterIndex;
     if (provider.isKnownEmptyChapter(targetChapterIndex)) {
       return const ReaderViewportState.message('本章暫無內容');
     }

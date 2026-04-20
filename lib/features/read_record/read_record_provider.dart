@@ -54,11 +54,24 @@ class ReadRecordProvider extends ChangeNotifier {
     await loadRecords();
   }
 
-  String formatDuration(int minutes) {
-    if (minutes < 60) return '$minutes 分鐘';
-    final hours = minutes ~/ 60;
-    final mins = minutes % 60;
-    return '$hours 小時 $mins 分鐘';
+  String formatDuration(int seconds) {
+    if (seconds <= 0) return '0 秒';
+
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final remainingSeconds = seconds % 60;
+    final parts = <String>[];
+
+    if (hours > 0) {
+      parts.add('$hours 小時');
+    }
+    if (minutes > 0) {
+      parts.add('$minutes 分鐘');
+    }
+    if (remainingSeconds > 0 || parts.isEmpty) {
+      parts.add('$remainingSeconds 秒');
+    }
+
+    return parts.join(' ');
   }
 }
-

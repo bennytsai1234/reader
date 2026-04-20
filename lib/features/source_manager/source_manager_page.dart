@@ -38,124 +38,136 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     final nav = Navigator.of(context);
     return Consumer<SourceManagerProvider>(
       builder: (context, provider, child) {
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('書源管理'),
-            actions: [
-              SourceManagerMenus.buildSortMenu(context, provider),
-              SourceManagerMenus.buildGroupMenu(
-                context,
-                provider,
-                onManageGroups:
-                    () => nav.push(
-                      MaterialPageRoute(
-                        builder: (_) => const SourceGroupManagePage(),
+        return PopScope<void>(
+          canPop: provider.selectedUrls.isEmpty,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || provider.selectedUrls.isEmpty) return;
+            provider.clearSelection();
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('書源管理'),
+              actions: [
+                SourceManagerMenus.buildSortMenu(context, provider),
+                SourceManagerMenus.buildGroupMenu(
+                  context,
+                  provider,
+                  onManageGroups:
+                      () => nav.push(
+                        MaterialPageRoute(
+                          builder: (_) => const SourceGroupManagePage(),
+                        ),
                       ),
-                    ),
-              ),
-              SourceManagerMenus.buildMoreMenu(
-                context,
-                provider,
-                onImportUrl: () => _showImportDialog(context, true),
-                onImportFile: () => _importFromFile(context),
-                onImportClipboard: () => _importFromClipboard(context),
-                onScanQr: () => _scanQrCode(context, provider),
-                onManageGroups:
-                    () => nav.push(
-                      MaterialPageRoute(
-                        builder: (_) => const SourceGroupManagePage(),
-                      ),
-                    ),
-                onNewSource:
-                    () => nav.push(
-                      MaterialPageRoute(
-                        builder: (_) => const SourceEditorPage(),
-                      ),
-                    ),
-                onCheckAllSources:
-                    () => SourceManagerDialogs.showCheckConfigDialog(
-                      context,
-                      provider,
-                      checkAll: true,
-                    ),
-                onClearInvalid:
-                    (p) => SourceManagerDialogs.confirmClearInvalid(context, p),
-                onDeleteNonNovel:
-                    (p) =>
-                        SourceManagerDialogs.confirmDeleteNonNovel(context, p),
-                onShowLastCheckResults:
-                    (p) => SourceManagerDialogs.showCheckResults(context, p),
-              ),
-            ],
-          ),
-          body: Column(
-            children: [
-              if (provider.checkService.isChecking ||
-                  provider.hasLastCheckReport)
-                SourceCheckStatusBar(
-                  provider: provider,
-                  onTap: () {
-                    if (provider.checkService.isChecking) {
-                      SourceManagerDialogs.showCheckLog(context, provider);
-                      return;
-                    }
-                    SourceManagerDialogs.showCheckResults(context, provider);
-                  },
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: '搜尋書源名稱、網址',
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon:
-                        _searchController.text.isNotEmpty
-                            ? IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
-                              onPressed: () {
-                                _searchController.clear();
-                                provider.setSearchQuery('');
-                              },
-                            )
-                            : null,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                SourceManagerMenus.buildMoreMenu(
+                  context,
+                  provider,
+                  onImportUrl: () => _showImportDialog(context, true),
+                  onImportFile: () => _importFromFile(context),
+                  onImportClipboard: () => _importFromClipboard(context),
+                  onScanQr: () => _scanQrCode(context, provider),
+                  onManageGroups:
+                      () => nav.push(
+                        MaterialPageRoute(
+                          builder: (_) => const SourceGroupManagePage(),
+                        ),
+                      ),
+                  onNewSource:
+                      () => nav.push(
+                        MaterialPageRoute(
+                          builder: (_) => const SourceEditorPage(),
+                        ),
+                      ),
+                  onCheckAllSources:
+                      () => SourceManagerDialogs.showCheckConfigDialog(
+                        context,
+                        provider,
+                        checkAll: true,
+                      ),
+                  onClearInvalid:
+                      (p) =>
+                          SourceManagerDialogs.confirmClearInvalid(context, p),
+                  onDeleteNonNovel:
+                      (p) => SourceManagerDialogs.confirmDeleteNonNovel(
+                        context,
+                        p,
+                      ),
+                  onShowLastCheckResults:
+                      (p) => SourceManagerDialogs.showCheckResults(context, p),
+                ),
+              ],
+            ),
+            body: Column(
+              children: [
+                if (provider.checkService.isChecking ||
+                    provider.hasLastCheckReport)
+                  SourceCheckStatusBar(
+                    provider: provider,
+                    onTap: () {
+                      if (provider.checkService.isChecking) {
+                        SourceManagerDialogs.showCheckLog(context, provider);
+                        return;
+                      }
+                      SourceManagerDialogs.showCheckResults(context, provider);
+                    },
                   ),
-                  onChanged: provider.setSearchQuery,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: '搜尋書源名稱、網址',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      suffixIcon:
+                          _searchController.text.isNotEmpty
+                              ? IconButton(
+                                icon: const Icon(Icons.clear, size: 18),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  provider.setSearchQuery('');
+                                },
+                              )
+                              : null,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onChanged: provider.setSearchQuery,
+                  ),
                 ),
-              ),
-              Expanded(child: _buildMainContent(provider)),
-            ],
-          ),
-          // 始終顯示 SelectActionBar (對標 legado)
-          bottomNavigationBar: SelectActionBar(
-            provider: provider,
-            onEnable: () => provider.batchSetEnabled(true),
-            onDisable: () => provider.batchSetEnabled(false),
-            onAddGroup: () => _showAddGroupDialog(context, provider),
-            onRemoveGroup: () => _showRemoveGroupDialog(context, provider),
-            onEnableExplore: () => provider.batchSetEnabledExplore(true),
-            onDisableExplore: () => provider.batchSetEnabledExplore(false),
-            onSelectInterval: provider.checkSelectedInterval,
-            onMoveToTop: () => provider.moveSelectedToTop(),
-            onMoveToBottom: () => provider.moveSelectedToBottom(),
-            onExport: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              await provider.exportSelected();
-              if (!mounted) return;
-              messenger.showSnackBar(const SnackBar(content: Text('已複製至剪貼簿')));
-            },
-            onShare: () => provider.shareSelectedSources(),
-            onCheckSource: () {
-              SourceManagerDialogs.showCheckConfigDialog(context, provider);
-            },
-            onDelete: () {
-              _confirmDeleteSelected(context, provider);
-            },
+                Expanded(child: _buildMainContent(provider)),
+              ],
+            ),
+            // 始終顯示 SelectActionBar (對標 legado)
+            bottomNavigationBar: SelectActionBar(
+              provider: provider,
+              onEnable: () => provider.batchSetEnabled(true),
+              onDisable: () => provider.batchSetEnabled(false),
+              onAddGroup: () => _showAddGroupDialog(context, provider),
+              onRemoveGroup: () => _showRemoveGroupDialog(context, provider),
+              onEnableExplore: () => provider.batchSetEnabledExplore(true),
+              onDisableExplore: () => provider.batchSetEnabledExplore(false),
+              onSelectInterval: provider.checkSelectedInterval,
+              onMoveToTop: () => provider.moveSelectedToTop(),
+              onMoveToBottom: () => provider.moveSelectedToBottom(),
+              onExport: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                await provider.exportSelected();
+                if (!mounted) return;
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('已複製至剪貼簿')),
+                );
+              },
+              onShare: () => provider.shareSelectedSources(),
+              onCheckSource: () {
+                SourceManagerDialogs.showCheckConfigDialog(context, provider);
+              },
+              onDelete: () {
+                _confirmDeleteSelected(context, provider);
+              },
+            ),
           ),
         );
       },

@@ -7,6 +7,8 @@ import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/models/search_book.dart';
+import 'package:inkpage_reader/core/services/book_source_service.dart';
+import 'package:inkpage_reader/core/services/download_service.dart';
 import 'package:inkpage_reader/features/book_detail/book_detail_provider.dart';
 
 // ---------------------------------------------------------------------------
@@ -40,36 +42,85 @@ class _FakeChapterDao extends Fake implements ChapterDao {
   }
 
   @override
+  Future<Set<int>> getCachedChapterIndices(String bookUrl) async {
+    return (_store[bookUrl] ?? const <BookChapter>[])
+        .where((chapter) => (chapter.content ?? '').isNotEmpty)
+        .map((chapter) => chapter.index)
+        .toSet();
+  }
+
+  @override
   Future<void> deleteContentByBook(String bookUrl) async {}
 }
 
 class _FakeSourceDao extends Fake implements BookSourceDao {
+  _FakeSourceDao([this.source]);
+
+  final BookSource? source;
+
   @override
-  Future<BookSource?> getByUrl(String url) async => null;
+  Future<BookSource?> getByUrl(String url) async => source;
+}
+
+class _FakeBookSourceService extends Fake implements BookSourceService {
+  _FakeBookSourceService({this.chapterList = const <BookChapter>[]});
+
+  final List<BookChapter> chapterList;
+
+  @override
+  Future<Book> getBookInfo(BookSource source, Book book) async => book;
+
+  @override
+  Future<List<BookChapter>> getChapterList(
+    BookSource source,
+    Book book, {
+    int? chapterLimit,
+  }) async {
+    return chapterList;
+  }
+}
+
+class _FakeDownloadService extends Fake implements DownloadService {
+  Book? queuedBook;
+  List<BookChapter> queuedChapters = <BookChapter>[];
+  int addDownloadTaskCallCount = 0;
+
+  @override
+  Future<void> addDownloadTask(Book book, List<BookChapter> chapters) async {
+    addDownloadTaskCallCount++;
+    queuedBook = book;
+    queuedChapters = List<BookChapter>.from(chapters);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // 測試輔助
 // ---------------------------------------------------------------------------
 
-AggregatedSearchBook _makeSearchBook({String url = 'http://book.com'}) {
+AggregatedSearchBook _makeSearchBook({
+  String url = 'http://book.com',
+  String origin = 'origin',
+  String originName = '書源',
+}) {
   final sb = SearchBook(
     bookUrl: url,
     name: '測試書',
     author: '作者',
-    origin: 'origin',
-    originName: '書源',
+    origin: origin,
+    originName: originName,
   );
   return AggregatedSearchBook(book: sb, sources: ['書源']);
 }
 
-List<BookChapter> _makeChapters(int n) => List.generate(
+List<BookChapter> _makeChapters(int n, {Set<int> cachedIndices = const {}}) =>
+    List.generate(
       n,
       (i) => BookChapter(
         url: 'chapter_$i',
         title: '第 $i 章',
         bookUrl: 'http://book.com',
         index: i,
+        content: cachedIndices.contains(i) ? 'cached-$i' : null,
       ),
     );
 
@@ -88,13 +139,22 @@ void main() {
 
   Future<BookDetailProvider> makeProvider({
     String url = 'http://book.com',
+    String origin = 'origin',
     List<BookChapter> chapters = const [],
+    BookSource? source,
+    BookSourceService? service,
+    DownloadService? downloadService,
   }) async {
     final chapterDao = GetIt.instance<ChapterDao>() as _FakeChapterDao;
     if (chapters.isNotEmpty) {
       await chapterDao.insertChapters(chapters);
     }
-    final p = BookDetailProvider(_makeSearchBook(url: url));
+    final p = BookDetailProvider(
+      _makeSearchBook(url: url, origin: origin),
+      sourceDao: _FakeSourceDao(source),
+      service: service ?? _FakeBookSourceService(chapterList: chapters),
+      downloadService: downloadService,
+    );
     await Future.delayed(Duration.zero); // 等 _init() async 完成
     return p;
   }
@@ -167,6 +227,79 @@ void main() {
     test('totalChapterCount 正確回傳數量', () async {
       final p = await makeProvider(chapters: _makeChapters(7));
       expect(p.totalChapterCount, 7);
+    });
+  });
+
+  group('BookDetailProvider - 離線快取佇列', () {
+    test('queueDownloadAll 會先補齊書架狀態後加入離線快取', () async {
+      final downloadService = _FakeDownloadService();
+      final chapters = _makeChapters(3);
+      final provider = await makeProvider(
+        chapters: chapters,
+        source: BookSource(bookSourceUrl: 'origin', bookSourceName: '測試書源'),
+        downloadService: downloadService,
+      );
+
+      final result = await provider.queueDownloadAll();
+
+      expect(result.queuedChapterCount, 3);
+      expect(result.message, '已加入離線快取佇列，共 3 章');
+      expect(downloadService.addDownloadTaskCallCount, 1);
+      expect(downloadService.queuedChapters, hasLength(3));
+      expect(provider.isInBookshelf, isTrue);
+      expect(
+        await (GetIt.instance<BookDao>() as _FakeBookDao).getByUrl(
+          'http://book.com',
+        ),
+        isNotNull,
+      );
+    });
+
+    test('queueDownloadUncached 只會加入未快取章節', () async {
+      final downloadService = _FakeDownloadService();
+      final provider = await makeProvider(
+        chapters: _makeChapters(5, cachedIndices: <int>{1, 3}),
+        source: BookSource(bookSourceUrl: 'origin', bookSourceName: '測試書源'),
+        downloadService: downloadService,
+      );
+
+      final result = await provider.queueDownloadUncached();
+
+      expect(result.queuedChapterCount, 3);
+      expect(
+        downloadService.queuedChapters.map((chapter) => chapter.index).toList(),
+        <int>[0, 2, 4],
+      );
+    });
+
+    test('queueDownloadAll 會在缺少書源時阻擋離線快取', () async {
+      final downloadService = _FakeDownloadService();
+      final provider = await makeProvider(
+        chapters: _makeChapters(2),
+        downloadService: downloadService,
+      );
+
+      final result = await provider.queueDownloadAll();
+
+      expect(result.queuedChapterCount, 0);
+      expect(result.message, '目前找不到書源，請先換源後再試。');
+      expect(downloadService.addDownloadTaskCallCount, 0);
+      expect(provider.isInBookshelf, isFalse);
+    });
+
+    test('queueDownloadAll 會略過本地書籍的離線快取任務', () async {
+      final downloadService = _FakeDownloadService();
+      final provider = await makeProvider(
+        origin: 'local',
+        chapters: _makeChapters(2),
+        downloadService: downloadService,
+      );
+
+      final result = await provider.queueDownloadAll();
+
+      expect(result.queuedChapterCount, 0);
+      expect(result.message, '這本書已經在裝置內，不需要再加入離線快取。');
+      expect(downloadService.addDownloadTaskCallCount, 0);
     });
   });
 }
