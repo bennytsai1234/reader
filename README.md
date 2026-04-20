@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/bennytsai1234/reader/releases/tag/v0.2.10"><img src="https://img.shields.io/github/v/release/bennytsai1234/reader?display_name=tag&label=release&color=C7783B" alt="Release"></a>
+  <a href="https://github.com/bennytsai1234/reader/releases/tag/v0.2.11"><img src="https://img.shields.io/github/v/release/bennytsai1234/reader?display_name=tag&label=release&color=C7783B" alt="Release"></a>
   <a href="https://github.com/bennytsai1234/reader/actions/workflows/dart.yml"><img src="https://img.shields.io/github/actions/workflow/status/bennytsai1234/reader/dart.yml?branch=main&label=ci&color=4E7A5D" alt="CI"></a>
   <img src="https://img.shields.io/badge/flutter-3.x-2E7BCF" alt="Flutter">
   <img src="https://img.shields.io/badge/dart-3.7+-1E9AA7" alt="Dart">
