@@ -350,8 +350,9 @@ class ReadAloudController extends ChangeNotifier {
   }
 
   void _onTtsProgressUpdate() {
-    if (!_tts.isPlaying || _session == null || _session!.offsetMap.isEmpty)
+    if (!_tts.isPlaying || _session == null || _session!.offsetMap.isEmpty) {
       return;
+    }
     final rawStart = _tts.currentWordStart;
     final rawEnd = _tts.currentWordEnd;
     if (rawStart < 0) return;
