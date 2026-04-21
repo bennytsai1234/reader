@@ -81,10 +81,7 @@ class ReaderChapterContentLoader {
       processedContent: bookContent.content,
       chineseConvertType: chineseConvertType,
     );
-    return FetchResult(
-      content: '$convertedTitle\n$convertedContent',
-      displayTitle: convertedTitle,
-    );
+    return FetchResult(content: convertedContent, displayTitle: convertedTitle);
   }
 
   void resetProcessingContext() {

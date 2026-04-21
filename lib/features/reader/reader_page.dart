@@ -15,6 +15,7 @@ import 'view/read_view_runtime.dart';
 import 'tts_dialog.dart';
 import 'auto_read_dialog.dart';
 import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/features/reader/reader_layout.dart';
 import 'package:inkpage_reader/features/reader/view/slide_page_controller.dart';
 
 class ReaderPage extends StatefulWidget {
@@ -341,9 +342,10 @@ class _ReaderPageState extends State<ReaderPage> {
           child: Padding(
             padding: EdgeInsets.fromLTRB(
               16,
-              20,
+              kReaderPermanentInfoTopPadding,
               16,
-              MediaQuery.of(context).padding.bottom + 10,
+              MediaQuery.of(context).padding.bottom +
+                  kReaderPermanentInfoBottomSpacing,
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -40,7 +40,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
   final Map<String, GlobalKey> _pageKeys = {};
   Timer? _userScrollResetTimer;
   bool _isUserScrolling = false;
-  int _lastTtsScrolledStart = -1;
+  int _lastTtsFollowOffset = -1;
   late int _lastPageTurnMode;
   late final ScrollExecutionAdapter _scrollExecution = ScrollExecutionAdapter(
     pageKeys: _pageKeys,
@@ -159,13 +159,15 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
 
     if (_coordinator.shouldFollowTts(
       p,
-      lastTtsScrolledStart: _lastTtsScrolledStart,
+      lastTtsFollowOffset: _lastTtsFollowOffset,
       isUserScrolling: _isUserScrolling,
     )) {
-      _lastTtsScrolledStart = p.ttsStart;
+      _lastTtsFollowOffset = _currentTtsFollowOffset(p);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _scrollRuntimeExecutor.scrollToTtsHighlight();
       });
+    } else if (_currentTtsFollowOffset(p) < 0) {
+      _lastTtsFollowOffset = -1;
     }
 
     setState(() {});
@@ -227,6 +229,12 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       return focusLine - item.itemTrailingEdge;
     }
     return 0.0;
+  }
+
+  int _currentTtsFollowOffset(ReaderProvider provider) {
+    return provider.ttsWordStart >= 0
+        ? provider.ttsWordStart
+        : provider.ttsStart;
   }
 
   @override

@@ -148,6 +148,7 @@ mixin ReaderTtsMixin
   ReaderTtsFollowTarget? evaluateTtsFollowTarget({
     required double viewportHeight,
   }) {
+    final followOffset = ttsWordStart >= 0 ? ttsWordStart : ttsStart;
     final chapterIndex =
         ttsChapterIndex >= 0 ? ttsChapterIndex : currentChapterIndex;
     final runtimeChapter =
@@ -159,16 +160,16 @@ mixin ReaderTtsMixin
 
     if (((runtimeChapter == null && pages.isEmpty) ||
             (runtimeChapter != null && runtimeChapter.isEmpty)) ||
-        ttsStart < 0) {
+        followOffset < 0) {
       return null;
     }
 
     final rawLocalOffset =
         runtimeChapter != null
-            ? runtimeChapter.resolveScrollAnchor(ttsStart).localOffset
+            ? runtimeChapter.resolveScrollAnchor(followOffset).localOffset
             : ChapterPositionResolver.charOffsetToLocalOffset(
               pages.cast(),
-              ttsStart,
+              followOffset,
             );
 
     final chapterHeight =

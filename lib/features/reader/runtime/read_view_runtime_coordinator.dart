@@ -48,12 +48,14 @@ class ReadViewRuntimeCoordinator {
 
   bool shouldFollowTts(
     ReaderProvider provider, {
-    required int lastTtsScrolledStart,
+    required int lastTtsFollowOffset,
     required bool isUserScrolling,
   }) {
+    final followOffset =
+        provider.ttsWordStart >= 0 ? provider.ttsWordStart : provider.ttsStart;
     return provider.pageTurnMode == PageAnim.scroll &&
-        provider.ttsStart >= 0 &&
-        provider.ttsStart != lastTtsScrolledStart &&
+        followOffset >= 0 &&
+        followOffset != lastTtsFollowOffset &&
         !isUserScrolling;
   }
 

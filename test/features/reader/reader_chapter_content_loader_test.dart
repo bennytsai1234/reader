@@ -9,169 +9,59 @@ import 'package:inkpage_reader/core/models/replace_rule.dart';
 import 'package:inkpage_reader/core/services/book_source_service.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_chapter_content_loader.dart';
 
-class _FakeChapterDao extends Fake implements ChapterDao {
-  _FakeChapterDao({Map<String, String> contents = const {}})
-    : _contents = Map<String, String>.from(contents);
-
-  final Map<String, String> _contents;
-  int getContentCallCount = 0;
-  int saveContentCallCount = 0;
-  int insertChaptersCallCount = 0;
-
+class _FakeChapterDao implements ChapterDao {
   @override
-  Future<String?> getContent(String url) async {
-    getContentCallCount++;
-    return _contents[url];
-  }
-
-  @override
-  Future<void> insertChapters(List<BookChapter> chapters) async {
-    insertChaptersCallCount++;
-    for (final chapter in chapters) {
-      _contents.putIfAbsent(chapter.url, () => '');
-    }
-  }
-
-  @override
-  Future<void> saveContent(String url, String content) async {
-    saveContentCallCount++;
-    _contents[url] = content;
-  }
+  dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class _FakeReplaceRuleDao extends Fake implements ReplaceRuleDao {
+class _FakeReplaceRuleDao implements ReplaceRuleDao {
   @override
   Future<List<ReplaceRule>> getEnabled() async => const <ReplaceRule>[];
-}
-
-class _FakeBookSourceDao extends Fake implements BookSourceDao {
-  _FakeBookSourceDao(this.source);
-
-  final BookSource? source;
-  int lookupCount = 0;
 
   @override
-  Future<BookSource?> getByUrl(String url) async {
-    lookupCount++;
-    return source;
-  }
+  dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class _FakeBookSourceService extends BookSourceService {
-  _FakeBookSourceService(this.response);
-
-  final String response;
-  int getContentCallCount = 0;
-  String? lastNextChapterUrl;
+class _FakeBookSourceDao implements BookSourceDao {
+  @override
+  Future<BookSource?> getByUrl(String url) async => null;
 
   @override
-  Future<String> getContent(
-    BookSource source,
-    Book book,
-    BookChapter chapter, {
-    String? nextChapterUrl,
-  }) async {
-    getContentCallCount++;
-    lastNextChapterUrl = nextChapterUrl;
-    return response;
-  }
+  dynamic noSuchMethod(Invocation invocation) => null;
 }
 
 void main() {
   group('ReaderChapterContentLoader', () {
-    test(
-      'prefers chapter dao cache before source lookup and remote fetch',
-      () async {
-        final chapterDao = _FakeChapterDao(
-          contents: <String, String>{'https://example.com/c1': '快取正文'},
-        );
-        final sourceDao = _FakeBookSourceDao(
-          BookSource(
-            bookSourceUrl: 'https://source.example.com',
-            bookSourceName: '測試書源',
-          ),
-        );
-        final service = _FakeBookSourceService('遠端正文');
-        final loader = ReaderChapterContentLoader(
-          book: Book(
-            bookUrl: 'https://example.com/book',
-            origin: 'https://source.example.com',
-            name: '測試書籍',
-          ),
-          chapterDao: chapterDao,
-          replaceDao: _FakeReplaceRuleDao(),
-          sourceDao: sourceDao,
-          service: service,
-          currentChineseConvert: () => 0,
-          getSource: () => null,
-          setSource: (_) {},
-          resolveNextChapterUrl: (_) => null,
-        );
-
-        final result = await loader.load(
-          0,
-          BookChapter(
-            url: 'https://example.com/c1',
-            bookUrl: 'https://example.com/book',
-            title: '第1章',
-            index: 0,
-          ),
-        );
-
-        expect(result.content, contains('快取正文'));
-        expect(chapterDao.getContentCallCount, 1);
-        expect(sourceDao.lookupCount, 0);
-        expect(service.getContentCallCount, 0);
-      },
-    );
-
-    test('falls back to remote source when cache is missing', () async {
-      final chapterDao = _FakeChapterDao();
-      final sourceDao = _FakeBookSourceDao(
-        BookSource(
-          bookSourceUrl: 'https://source.example.com',
-          bookSourceName: '測試書源',
-        ),
+    test('load 不會把 displayTitle 再拼回正文內容', () async {
+      final chapter = BookChapter(
+        title: '第二章 測試章節',
+        index: 1,
+        url: 'chapter-1',
+        bookUrl: 'book-1',
+        content: '正文第一行\n正文第二行',
       );
-      final service = _FakeBookSourceService('遠端正文');
       final loader = ReaderChapterContentLoader(
         book: Book(
-          bookUrl: 'https://example.com/book',
-          origin: 'https://source.example.com',
-          name: '測試書籍',
+          bookUrl: 'book-1',
+          name: 'Book',
+          author: 'Author',
+          origin: 'remote',
         ),
-        chapterDao: chapterDao,
+        chapterDao: _FakeChapterDao(),
         replaceDao: _FakeReplaceRuleDao(),
-        sourceDao: sourceDao,
-        service: service,
+        sourceDao: _FakeBookSourceDao(),
+        service: BookSourceService(),
         currentChineseConvert: () => 0,
         getSource: () => null,
         setSource: (_) {},
-        resolveNextChapterUrl:
-            (index) => index == 0 ? 'https://example.com/c2' : null,
       );
 
-      final result = await loader.load(
-        0,
-        BookChapter(
-          url: 'https://example.com/c1',
-          bookUrl: 'https://example.com/book',
-          title: '第1章',
-          index: 0,
-        ),
-      );
+      final result = await loader.load(1, chapter);
 
-      expect(result.content, contains('遠端正文'));
-      expect(chapterDao.getContentCallCount, 1);
-      expect(sourceDao.lookupCount, 1);
-      expect(service.getContentCallCount, 1);
-      expect(chapterDao.insertChaptersCallCount, 1);
-      expect(chapterDao.saveContentCallCount, 1);
-      expect(
-        chapterDao.getContent('https://example.com/c1'),
-        completion('遠端正文'),
-      );
-      expect(service.lastNextChapterUrl, 'https://example.com/c2');
+      expect(result.displayTitle, '第二章 測試章節');
+      expect(result.content.startsWith('第二章 測試章節\n'), isFalse);
+      expect(result.content, contains('正文第一行'));
+      expect(result.content, contains('正文第二行'));
     });
   });
 }

@@ -56,6 +56,8 @@ class _FakeBookmarkDao implements BookmarkDao {
 
 class _FakeReaderProvider extends ReaderProvider {
   bool knownEmpty = false;
+  int fakeTtsStart = -1;
+  int fakeTtsWordStart = -1;
 
   _FakeReaderProvider()
     : super(book: Book(bookUrl: 'book', name: 'Book', origin: 'local'));
@@ -63,6 +65,12 @@ class _FakeReaderProvider extends ReaderProvider {
   @override
   bool isKnownEmptyChapter(int index) =>
       knownEmpty && index == currentChapterIndex;
+
+  @override
+  int get ttsStart => fakeTtsStart;
+
+  @override
+  int get ttsWordStart => fakeTtsWordStart;
 }
 
 void _setupDi() {
@@ -186,6 +194,40 @@ void main() {
       expect(action.localOffset, 48);
       expect(action.isRestore, isFalse);
       expect(action.reason, ReaderCommandReason.settingsRepaginate);
+      provider.dispose();
+    });
+
+    test('scroll TTS follow 會優先使用 ttsWordStart 作為去重鍵', () {
+      final provider =
+          _FakeReaderProvider()
+            ..pageTurnMode = PageAnim.scroll
+            ..fakeTtsStart = 100
+            ..fakeTtsWordStart = 108;
+
+      final shouldFollow = coordinator.shouldFollowTts(
+        provider,
+        lastTtsFollowOffset: 100,
+        isUserScrolling: false,
+      );
+
+      expect(shouldFollow, isTrue);
+      provider.dispose();
+    });
+
+    test('使用者拖動期間不會觸發 scroll TTS follow', () {
+      final provider =
+          _FakeReaderProvider()
+            ..pageTurnMode = PageAnim.scroll
+            ..fakeTtsStart = 120
+            ..fakeTtsWordStart = 132;
+
+      final shouldFollow = coordinator.shouldFollowTts(
+        provider,
+        lastTtsFollowOffset: 80,
+        isUserScrolling: true,
+      );
+
+      expect(shouldFollow, isFalse);
       provider.dispose();
     });
   });
