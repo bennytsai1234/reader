@@ -56,7 +56,7 @@ class ScrollRuntimeExecutor {
         chapterIndex: chapterIndex,
         localOffset: localOffset,
         animate: false,
-        topPadding: provider.contentTopInset,
+        topPadding: provider.scrollViewportTopInset,
       );
       onCompleted?.call();
     });
@@ -93,7 +93,7 @@ class ScrollRuntimeExecutor {
           chapterIndex: chapterIndex,
           localOffset: localOffset,
           animate: animate,
-          topPadding: provider.contentTopInset,
+          topPadding: provider.scrollViewportTopInset,
         );
       },
       ensureChapterCached: (targetChapterIndex) {

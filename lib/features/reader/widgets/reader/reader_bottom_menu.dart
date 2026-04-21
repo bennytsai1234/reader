@@ -28,43 +28,52 @@ class ReaderBottomMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 200),
-      bottom: provider.showControls ? 0 : -250,
+    return Positioned(
+      bottom: 0,
       left: 0,
       right: 0,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildFloatingButtons(context),
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              0,
-              8,
-              0,
-              MediaQuery.of(context).padding.bottom + 8,
-            ),
-            decoration: const BoxDecoration(
-              color: ReaderMenuPalette.background,
-              border: Border(top: BorderSide(color: ReaderMenuPalette.outline)),
-              boxShadow: [
-                BoxShadow(
-                  color: ReaderMenuPalette.scrim,
-                  blurRadius: 18,
-                  offset: Offset(0, -6),
+      child: IgnorePointer(
+        ignoring: !provider.showControls,
+        child: AnimatedSlide(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          offset: provider.showControls ? Offset.zero : const Offset(0, 1.15),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildFloatingButtons(context),
+              Container(
+                padding: EdgeInsets.fromLTRB(
+                  0,
+                  8,
+                  0,
+                  MediaQuery.of(context).padding.bottom + 8,
                 ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildChapterSlider(context),
-                const SizedBox(height: 8),
-                _buildMainActions(),
-              ],
-            ),
+                decoration: const BoxDecoration(
+                  color: ReaderMenuPalette.background,
+                  border: Border(
+                    top: BorderSide(color: ReaderMenuPalette.outline),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: ReaderMenuPalette.scrim,
+                      blurRadius: 18,
+                      offset: Offset(0, -6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildChapterSlider(context),
+                    const SizedBox(height: 8),
+                    _buildMainActions(),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

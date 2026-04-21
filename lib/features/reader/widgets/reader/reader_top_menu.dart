@@ -16,27 +16,36 @@ class ReaderTopMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 200),
-      top: provider.showControls ? 0 : -120,
+    return Positioned(
+      top: 0,
       left: 0,
       right: 0,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: ReaderMenuPalette.background,
-          border: Border(bottom: BorderSide(color: ReaderMenuPalette.outline)),
-          boxShadow: [
-            BoxShadow(
-              color: ReaderMenuPalette.scrim,
-              blurRadius: 18,
-              offset: Offset(0, 6),
+      child: IgnorePointer(
+        ignoring: !provider.showControls,
+        child: AnimatedSlide(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          offset: provider.showControls ? Offset.zero : const Offset(0, -1.15),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: ReaderMenuPalette.background,
+              border: Border(
+                bottom: BorderSide(color: ReaderMenuPalette.outline),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: ReaderMenuPalette.scrim,
+                  blurRadius: 18,
+                  offset: Offset(0, 6),
+                ),
+              ],
             ),
-          ],
-        ),
-        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [_buildAppBar(context), _buildAdditionInfo(context)],
+            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [_buildAppBar(context), _buildAdditionInfo(context)],
+            ),
+          ),
         ),
       ),
     );

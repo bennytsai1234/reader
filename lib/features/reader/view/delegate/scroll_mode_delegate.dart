@@ -40,57 +40,57 @@ class ScrollModeDelegate extends PageModeDelegate {
       letterSpacing: provider.letterSpacing,
     );
 
-    return ScrollablePositionedList.builder(
-      itemCount: provider.chapters.length,
-      itemScrollController: itemScrollController,
-      itemPositionsListener: itemPositionsListener,
-      initialScrollIndex:
-          provider.chapters.isEmpty
-              ? 0
-              : provider.currentChapterIndex
-                  .clamp(0, provider.chapters.length - 1)
-                  .toInt(),
-      initialAlignment:
-          provider.visibleChapterAlignment.clamp(0.0, 1.0).toDouble(),
-      physics: const BouncingScrollPhysics(),
-      itemBuilder: (_, chapterIndex) {
-        final runtimeChapter = provider.chapterAt(chapterIndex);
-        var pages = runtimeChapter?.pages;
+    return Padding(
+      padding: EdgeInsets.only(
+        top: provider.scrollViewportTopInset,
+        bottom: provider.scrollViewportBottomInset,
+      ),
+      child: ScrollablePositionedList.builder(
+        itemCount: provider.chapters.length,
+        itemScrollController: itemScrollController,
+        itemPositionsListener: itemPositionsListener,
+        initialScrollIndex:
+            provider.chapters.isEmpty
+                ? 0
+                : provider.currentChapterIndex
+                    .clamp(0, provider.chapters.length - 1)
+                    .toInt(),
+        initialAlignment:
+            provider.visibleChapterAlignment.clamp(0.0, 1.0).toDouble(),
+        physics: const BouncingScrollPhysics(),
+        itemBuilder: (_, chapterIndex) {
+          final runtimeChapter = provider.chapterAt(chapterIndex);
+          var pages = runtimeChapter?.pages;
 
-        // Fast path: eagerly paginate for local books to avoid placeholder flash
-        if ((pages == null || pages.isEmpty) &&
-            provider.book.origin == 'local') {
-          // trySyncPaginate is actually async, but we fire-and-forget here
-          // and rely on the notifyListeners callback to rebuild with real pages
-          unawaited(provider.trySyncPaginate(chapterIndex));
-        }
+          // Fast path: eagerly paginate for local books to avoid placeholder flash
+          if ((pages == null || pages.isEmpty) &&
+              provider.book.origin == 'local') {
+            // trySyncPaginate is actually async, but we fire-and-forget here
+            // and rely on the notifyListeners callback to rebuild with real pages
+            unawaited(provider.trySyncPaginate(chapterIndex));
+          }
 
-        if (pages == null || pages.isEmpty) {
-          final estimatedHeight = _estimateChapterHeight(
-            provider,
-            chapterIndex,
-          );
+          if (pages == null || pages.isEmpty) {
+            final estimatedHeight = _estimateChapterHeight(
+              provider,
+              chapterIndex,
+            );
+            return Container(
+              color: provider.currentTheme.backgroundColor,
+              height: estimatedHeight,
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: provider.currentTheme.textColor.withValues(alpha: 0.3),
+                ),
+              ),
+            );
+          }
           return Container(
             color: provider.currentTheme.backgroundColor,
-            height: estimatedHeight,
-            alignment: Alignment.center,
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: provider.currentTheme.textColor.withValues(alpha: 0.3),
-              ),
-            ),
-          );
-        }
-        return Container(
-          color: provider.currentTheme.backgroundColor,
-          child: Padding(
-            padding: EdgeInsets.only(
-              top: provider.contentTopInset,
-              bottom: provider.contentBottomInset,
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -119,9 +119,9 @@ class ScrollModeDelegate extends PageModeDelegate {
                   ),
               ],
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -134,11 +134,15 @@ class ScrollModeDelegate extends PageModeDelegate {
         heights.add(ChapterPositionResolver.chapterHeight(neighborPages));
       }
     }
-    final insetPadding = provider.contentTopInset + provider.contentBottomInset;
+    final viewportHeight =
+        ((provider.viewSize?.height ?? 600.0) -
+                provider.contentTopInset -
+                provider.contentBottomInset)
+            .clamp(1.0, double.infinity)
+            .toDouble();
     if (heights.isEmpty) {
-      return (provider.viewSize?.height ?? 600.0) + insetPadding;
+      return viewportHeight;
     }
-    return heights.reduce((double a, double b) => a + b) / heights.length +
-        insetPadding;
+    return heights.reduce((double a, double b) => a + b) / heights.length;
   }
 }

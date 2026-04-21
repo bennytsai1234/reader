@@ -45,6 +45,8 @@ abstract class ReaderProviderBase extends ChangeNotifier {
   Size? viewSize;
   double contentTopInset = 0.0;
   double contentBottomInset = 0.0;
+  double scrollViewportTopInset = 0.0;
+  double scrollViewportBottomInset = 0.0;
 
   final Map<int, List<TextPage>> _chapterPagesCache = {};
   Map<int, List<TextPage>> get chapterPagesCache => _chapterPagesCache;
@@ -113,6 +115,21 @@ abstract class ReaderProviderBase extends ChangeNotifier {
     }
     contentTopInset = normalizedTop;
     contentBottomInset = normalizedBottom;
+    return true;
+  }
+
+  bool updateScrollViewportInsets({
+    required double top,
+    required double bottom,
+  }) {
+    final normalizedTop = top < 0 ? 0.0 : top;
+    final normalizedBottom = bottom < 0 ? 0.0 : bottom;
+    if ((scrollViewportTopInset - normalizedTop).abs() < 0.5 &&
+        (scrollViewportBottomInset - normalizedBottom).abs() < 0.5) {
+      return false;
+    }
+    scrollViewportTopInset = normalizedTop;
+    scrollViewportBottomInset = normalizedBottom;
     return true;
   }
 

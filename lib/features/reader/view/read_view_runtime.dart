@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/features/reader/reader_layout.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:inkpage_reader/features/reader/reader_provider.dart';
 import 'package:inkpage_reader/features/reader/runtime/read_view_runtime_coordinator.dart';
@@ -189,7 +190,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     final viewportHeight = context.size?.height ?? 1.0;
     final rawLocalOffset = ((0.5 - focusItem.itemLeadingEdge) * viewportHeight)
         .clamp(0.0, double.infinity);
-    final localOffset = (rawLocalOffset - p.contentTopInset).clamp(
+    final localOffset = (rawLocalOffset - p.scrollViewportTopInset).clamp(
       0.0,
       double.infinity,
     );
@@ -235,11 +236,20 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         final mediaPadding = MediaQuery.paddingOf(context);
-        final insetsChanged = provider.updateContentInsets(
-          top: 0,
-          bottom: mediaPadding.bottom + 46,
+        final contentTopInset = mediaPadding.top + kReaderContentTopSpacing;
+        final contentBottomInset =
+            mediaPadding.bottom + kReaderPermanentInfoReservedHeight;
+        final contentInsetsChanged = provider.updateContentInsets(
+          top: contentTopInset,
+          bottom: contentBottomInset,
         );
-        if (insetsChanged && provider.viewSize == size && provider.isReady) {
+        final scrollInsetsChanged = provider.updateScrollViewportInsets(
+          top: contentTopInset,
+          bottom: contentBottomInset,
+        );
+        if ((contentInsetsChanged || scrollInsetsChanged) &&
+            provider.viewSize == size &&
+            provider.isReady) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               provider.doPaginate();
