@@ -7,12 +7,32 @@ class SettingComponents {
     required double min,
     required double max,
     required Function(double) onChanged,
+    Function(double)? onChangeEnd,
+    int? divisions,
   }) {
     return Row(
       children: [
-        SizedBox(width: 65, child: Text(label, style: const TextStyle(fontSize: 12))),
-        Expanded(child: Slider(value: value, min: min, max: max, onChanged: onChanged)),
-        SizedBox(width: 35, child: Text(value.toStringAsFixed(1), style: const TextStyle(fontSize: 11, color: Colors.grey))),
+        SizedBox(
+          width: 65,
+          child: Text(label, style: const TextStyle(fontSize: 12)),
+        ),
+        Expanded(
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
+          ),
+        ),
+        SizedBox(
+          width: 35,
+          child: Text(
+            value.toStringAsFixed(1),
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+        ),
       ],
     );
   }
@@ -32,4 +52,3 @@ class SettingComponents {
     );
   }
 }
-

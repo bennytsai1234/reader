@@ -20,11 +20,13 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 class ReadViewRuntime extends StatefulWidget {
   final ReaderProvider provider;
   final PageController pageController;
+  final GestureTapUpCallback? onContentTapUp;
 
   const ReadViewRuntime({
     super.key,
     required this.provider,
     required this.pageController,
+    this.onContentTapUp,
   });
 
   @override
@@ -277,18 +279,22 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
                 )
                 : const PageModeDelegate();
 
-        final content = NotificationListener<ScrollNotification>(
-          onNotification:
-              (notification) =>
-                  _handleScrollNotification(notification, provider),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: KeyedSubtree(
-              key: ValueKey<int>(provider.pageTurnMode),
-              child: delegate.build(
-                context: context,
-                provider: provider,
-                pageController: widget.pageController,
+        final content = GestureDetector(
+          behavior: HitTestBehavior.deferToChild,
+          onTapUp: widget.onContentTapUp,
+          child: NotificationListener<ScrollNotification>(
+            onNotification:
+                (notification) =>
+                    _handleScrollNotification(notification, provider),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: KeyedSubtree(
+                key: ValueKey<int>(provider.pageTurnMode),
+                child: delegate.build(
+                  context: context,
+                  provider: provider,
+                  pageController: widget.pageController,
+                ),
               ),
             ),
           ),

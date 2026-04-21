@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/core/config/app_config.dart';
 import 'package:inkpage_reader/core/constant/prefer_key.dart';
 import 'package:inkpage_reader/core/services/tts_service.dart';
 import 'package:inkpage_reader/shared/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'reader_prefs_repository.dart';
 import 'reader_provider_base.dart';
 
 /// ReaderProvider 的設置管理擴展
 mixin ReaderSettingsMixin on ReaderProviderBase {
+  final ReaderPrefsRepository readerPrefsRepository =
+      const ReaderPrefsRepository();
   double fontSize = 18.0;
   double lineHeight = 1.5;
   double paragraphSpacing = 1.0;
@@ -21,6 +27,9 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
   int chineseConvert = 0;
   int pageTurnMode = 1; // 預設平移（PageAnim.slide=1）
   bool showAddToShelfAlert = true;
+  bool showReadTitleAddition = true;
+  bool readBarStyleFollowPage = false;
+  bool selectText = true;
 
   /// 設定變更時的回調，由 ReaderProvider 注入
   /// 觸發分頁快取清除 + 重新分頁
@@ -28,21 +37,26 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
   VoidCallback? onBeforeRepaginate;
 
   Future<void> loadSettings() async {
+    final snapshot = await readerPrefsRepository.load();
     final p = await SharedPreferences.getInstance();
-    fontSize = p.getDouble(PreferKey.readerFontSize) ?? 18.0;
-    lineHeight = p.getDouble(PreferKey.readerLineHeight) ?? 1.5;
-    paragraphSpacing = p.getDouble(PreferKey.readerParagraphSpacing) ?? 1.0;
-    textIndent = p.getInt(PreferKey.readerTextIndent) ?? 2;
-    themeIndex = p.getInt(PreferKey.readerThemeIndex) ?? 0;
-    brightness = p.getDouble(PreferKey.readerBrightness) ?? 1.0;
-    pageTurnMode = p.getInt(PreferKey.readerPageTurnMode) ?? 1;
+    fontSize = snapshot.fontSize;
+    lineHeight = snapshot.lineHeight;
+    paragraphSpacing = snapshot.paragraphSpacing;
+    letterSpacing = snapshot.letterSpacing;
+    textIndent = snapshot.textIndent;
+    textFullJustify = snapshot.textFullJustify;
+    themeIndex = snapshot.themeIndex;
+    brightness = snapshot.brightness;
+    pageTurnMode = snapshot.pageTurnMode;
     AppConfig.readerPageAnim = pageTurnMode;
-    chineseConvert = p.getInt(PreferKey.readerChineseConvert) ?? 0;
-    showAddToShelfAlert = p.getBool(PreferKey.showAddToShelfAlert) ?? true;
-    lastDayThemeIndex =
-        p.getInt('reader_day_theme_index') ?? _fallbackDayThemeIndex();
-    lastNightThemeIndex =
-        p.getInt('reader_night_theme_index') ?? _fallbackNightThemeIndex();
+    chineseConvert = snapshot.chineseConvert;
+    showAddToShelfAlert = snapshot.showAddToShelfAlert;
+    showReadTitleAddition = snapshot.showReadTitleAddition;
+    readBarStyleFollowPage = snapshot.readBarStyleFollowPage;
+    selectText = snapshot.selectText;
+    clickActions = List<int>.from(snapshot.clickActions);
+    lastDayThemeIndex = snapshot.lastDayThemeIndex;
+    lastNightThemeIndex = snapshot.lastNightThemeIndex;
     _normalizeDayNightThemeIndexes();
 
     final ttsRate = p.getDouble(PreferKey.readerTtsRate) ?? 1.0;
@@ -52,73 +66,76 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
     TTSService().setRate(ttsRate);
     TTSService().setPitch(ttsPitch);
     if (ttsLang != null) TTSService().setLanguage(ttsLang);
-
-    final actionsStr =
-        p.getString(PreferKey.readerClickActions) ?? '0,0,0,0,0,0,0,0,0';
-    clickActions = actionsStr.split(',').map((e) => int.parse(e)).toList();
     notifyListeners();
   }
 
   Future<void> saveSetting(String k, dynamic v) async {
     final p = await SharedPreferences.getInstance();
-    final fk = 'reader_$k';
+    final key = switch (k) {
+      'tts_mode' => 'reader_tts_mode',
+      'tts_rate' => PreferKey.readerTtsRate,
+      'tts_pitch' => PreferKey.readerTtsPitch,
+      'tts_language' => PreferKey.readerTtsLanguage,
+      _ => null,
+    };
+    if (key == null) return;
     if (v is double) {
-      await p.setDouble(fk, v);
+      await p.setDouble(key, v);
     } else if (v is int) {
-      await p.setInt(fk, v);
+      await p.setInt(key, v);
     } else if (v is bool) {
-      await p.setBool(fk, v);
+      await p.setBool(key, v);
     } else if (v is String) {
-      await p.setString(fk, v);
+      await p.setString(key, v);
     }
   }
 
   void setFontSize(double s) {
     fontSize = s;
-    saveSetting('font_size', s);
+    unawaited(readerPrefsRepository.saveFontSize(s));
     _triggerRepaginate();
   }
 
   void setLineHeight(double v) {
     lineHeight = v;
-    saveSetting('line_height', v);
+    unawaited(readerPrefsRepository.saveLineHeight(v));
     _triggerRepaginate();
   }
 
   void setParagraphSpacing(double v) {
     paragraphSpacing = v;
-    saveSetting('paragraph_spacing', v);
+    unawaited(readerPrefsRepository.saveParagraphSpacing(v));
     _triggerRepaginate();
   }
 
   void setLetterSpacing(double v) {
     letterSpacing = v;
-    saveSetting('letter_spacing', v);
+    unawaited(readerPrefsRepository.saveLetterSpacing(v));
     _triggerRepaginate();
   }
 
   void setTextFullJustify(bool v) {
     textFullJustify = v;
-    saveSetting('text_full_justify', v);
+    unawaited(readerPrefsRepository.saveTextFullJustify(v));
     _triggerRepaginate();
   }
 
   void setTextIndent(int v) {
     textIndent = v;
-    saveSetting('text_indent', v);
+    unawaited(readerPrefsRepository.saveTextIndent(v));
     _triggerRepaginate();
   }
 
   void setPageTurnMode(int v) {
     pageTurnMode = v;
     AppConfig.readerPageAnim = v;
-    saveSetting('page_turn_mode', v);
+    unawaited(readerPrefsRepository.savePageTurnMode(v));
     notifyListeners();
   }
 
   void setTheme(int i) {
     themeIndex = i;
-    saveSetting('theme_index', i);
+    unawaited(readerPrefsRepository.saveThemeIndex(i));
     _rememberDayNightThemeIndex(i);
     notifyListeners();
   }
@@ -158,7 +175,25 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
 
   void setBrightness(double v) {
     brightness = v;
-    saveSetting('brightness', v);
+    unawaited(readerPrefsRepository.saveBrightness(v));
+    notifyListeners();
+  }
+
+  void setShowReadTitleAddition(bool value) {
+    showReadTitleAddition = value;
+    unawaited(readerPrefsRepository.saveShowReadTitleAddition(value));
+    notifyListeners();
+  }
+
+  void setReadBarStyleFollowPage(bool value) {
+    readBarStyleFollowPage = value;
+    unawaited(readerPrefsRepository.saveReadBarStyleFollowPage(value));
+    notifyListeners();
+  }
+
+  void setSelectText(bool value) {
+    selectText = value;
+    unawaited(readerPrefsRepository.saveSelectText(value));
     notifyListeners();
   }
 
@@ -170,10 +205,10 @@ mixin ReaderSettingsMixin on ReaderProviderBase {
   void _rememberDayNightThemeIndex(int index) {
     if (_isThemeDark(index)) {
       lastNightThemeIndex = index;
-      saveSetting('night_theme_index', index);
+      unawaited(readerPrefsRepository.saveNightThemeIndex(index));
     } else {
       lastDayThemeIndex = index;
-      saveSetting('day_theme_index', index);
+      unawaited(readerPrefsRepository.saveDayThemeIndex(index));
     }
   }
 

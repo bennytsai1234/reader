@@ -68,6 +68,97 @@ class PageViewWidget extends StatelessWidget {
       alpha: 0.6,
     );
 
+    final content = Stack(
+      children: [
+        // 1. 文字繪製層
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTapUp: (details) {
+              if (onLineTap == null) return;
+              // 扣除 paddingTop 後，判斷點擊落在哪一行
+              final tapY = details.localPosition.dy - currentPaddingTop;
+              for (int i = 0; i < page.lines.length; i++) {
+                final line = page.lines[i];
+                if (tapY >= line.lineTop && tapY < line.lineBottom) {
+                  onLineTap!(i);
+                  break;
+                }
+              }
+            },
+            child:
+                needsScanLine
+                    ? ValueListenableBuilder<double>(
+                      valueListenable: provider.autoPageProgressNotifier,
+                      builder:
+                          (_, progress, __) => CustomPaint(
+                            painter: _TextPagePainter(
+                              page: page,
+                              nextPage: nextPage,
+                              contentStyle: contentStyle,
+                              titleStyle: titleStyle,
+                              paddingLeft: paddingLeft,
+                              paddingTop: currentPaddingTop,
+                              isAutoPaging: true,
+                              autoPageProgress: progress,
+                              scanLineColor: scanLineColor,
+                              pageBackgroundColor: pageBackgroundColor,
+                              ttsStart: ttsStart,
+                              ttsEnd: ttsEnd,
+                              ttsWordStart: ttsWordStart,
+                              ttsWordEnd: ttsWordEnd,
+                              ttsChapterIndex: ttsChapterIndex,
+                            ),
+                          ),
+                    )
+                    : CustomPaint(
+                      painter: _TextPagePainter(
+                        page: page,
+                        contentStyle: contentStyle,
+                        titleStyle: titleStyle,
+                        paddingLeft: paddingLeft,
+                        paddingTop: currentPaddingTop,
+                        isAutoPaging: false,
+                        autoPageProgress: 0.0,
+                        ttsStart: ttsStart,
+                        ttsEnd: ttsEnd,
+                        ttsWordStart: ttsWordStart,
+                        ttsWordEnd: ttsWordEnd,
+                        ttsChapterIndex: ttsChapterIndex,
+                      ),
+                    ),
+          ),
+        ),
+        // 2. 圖片互動層 (原 Android：支援點擊查看圖片)
+        ...page.lines.where((l) => l.image != null).map((line) {
+          final img = line.image!;
+          return Positioned(
+            left: provider.textPadding + img.left,
+            top: currentPaddingTop + line.lineTop,
+            width: img.width,
+            height: img.height,
+            child: GestureDetector(
+              onTap: () => _showImageDialog(context, img.url),
+              child: CachedNetworkImage(
+                imageUrl: img.url,
+                fit: BoxFit.contain,
+                placeholder:
+                    (context, url) =>
+                        const Center(child: CircularProgressIndicator()),
+                errorWidget:
+                    (context, url, error) =>
+                        const Icon(Icons.broken_image, color: Colors.grey),
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+
+    if (!provider.selectText) {
+      return content;
+    }
+
     return SelectionArea(
       contextMenuBuilder: (context, selectableRegionState) {
         return AdaptiveTextSelectionToolbar.buttonItems(
@@ -75,92 +166,7 @@ class PageViewWidget extends StatelessWidget {
           buttonItems: selectableRegionState.contextMenuButtonItems,
         );
       },
-      child: Stack(
-        children: [
-          // 1. 文字繪製層
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTapUp: (details) {
-                if (onLineTap == null) return;
-                // 扣除 paddingTop 後，判斷點擊落在哪一行
-                final tapY = details.localPosition.dy - currentPaddingTop;
-                for (int i = 0; i < page.lines.length; i++) {
-                  final line = page.lines[i];
-                  if (tapY >= line.lineTop && tapY < line.lineBottom) {
-                    onLineTap!(i);
-                    break;
-                  }
-                }
-              },
-              child:
-                  needsScanLine
-                      ? ValueListenableBuilder<double>(
-                        valueListenable: provider.autoPageProgressNotifier,
-                        builder:
-                            (_, progress, __) => CustomPaint(
-                              painter: _TextPagePainter(
-                                page: page,
-                                nextPage: nextPage,
-                                contentStyle: contentStyle,
-                                titleStyle: titleStyle,
-                                paddingLeft: paddingLeft,
-                                paddingTop: currentPaddingTop,
-                                isAutoPaging: true,
-                                autoPageProgress: progress,
-                                scanLineColor: scanLineColor,
-                                pageBackgroundColor: pageBackgroundColor,
-                                ttsStart: ttsStart,
-                                ttsEnd: ttsEnd,
-                                ttsWordStart: ttsWordStart,
-                                ttsWordEnd: ttsWordEnd,
-                                ttsChapterIndex: ttsChapterIndex,
-                              ),
-                            ),
-                      )
-                      : CustomPaint(
-                        painter: _TextPagePainter(
-                          page: page,
-                          contentStyle: contentStyle,
-                          titleStyle: titleStyle,
-                          paddingLeft: paddingLeft,
-                          paddingTop: currentPaddingTop,
-                          isAutoPaging: false,
-                          autoPageProgress: 0.0,
-                          ttsStart: ttsStart,
-                          ttsEnd: ttsEnd,
-                          ttsWordStart: ttsWordStart,
-                          ttsWordEnd: ttsWordEnd,
-                          ttsChapterIndex: ttsChapterIndex,
-                        ),
-                      ),
-            ),
-          ),
-          // 2. 圖片互動層 (原 Android：支援點擊查看圖片)
-          ...page.lines.where((l) => l.image != null).map((line) {
-            final img = line.image!;
-            return Positioned(
-              left: provider.textPadding + img.left,
-              top: currentPaddingTop + line.lineTop,
-              width: img.width,
-              height: img.height,
-              child: GestureDetector(
-                onTap: () => _showImageDialog(context, img.url),
-                child: CachedNetworkImage(
-                  imageUrl: img.url,
-                  fit: BoxFit.contain,
-                  placeholder:
-                      (context, url) =>
-                          const Center(child: CircularProgressIndicator()),
-                  errorWidget:
-                      (context, url, error) =>
-                          const Icon(Icons.broken_image, color: Colors.grey),
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
+      child: content,
     );
   }
 

@@ -199,8 +199,12 @@ class PreferKey {
   static const String readerFontSize = 'reader_font_size';
   static const String readerLineHeight = 'reader_line_height';
   static const String readerParagraphSpacing = 'reader_paragraph_spacing';
+  static const String readerLetterSpacing = 'reader_letter_spacing';
   static const String readerTextIndent = 'reader_text_indent';
+  static const String readerTextFullJustify = 'reader_text_full_justify';
   static const String readerThemeIndex = 'reader_theme_index';
+  static const String readerDayThemeIndex = 'reader_day_theme_index';
+  static const String readerNightThemeIndex = 'reader_night_theme_index';
   static const String readerBrightness = 'reader_brightness';
   static const String readerPageTurnMode = 'reader_page_turn_mode';
   static const String readerChineseConvert = 'reader_chinese_convert_v2';

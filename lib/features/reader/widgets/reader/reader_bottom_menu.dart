@@ -28,6 +28,12 @@ class ReaderBottomMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final menuStyle = ReaderMenuStyle.resolve(
+      context: context,
+      followPageStyle: provider.readBarStyleFollowPage,
+      pageBackgroundColor: provider.currentTheme.backgroundColor,
+      pageTextColor: provider.currentTheme.textColor,
+    );
     return Positioned(
       bottom: 0,
       left: 0,
@@ -41,7 +47,7 @@ class ReaderBottomMenu extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildFloatingButtons(context),
+              _buildFloatingButtons(context, menuStyle),
               Container(
                 padding: EdgeInsets.fromLTRB(
                   0,
@@ -49,25 +55,23 @@ class ReaderBottomMenu extends StatelessWidget {
                   0,
                   MediaQuery.of(context).padding.bottom + 8,
                 ),
-                decoration: const BoxDecoration(
-                  color: ReaderMenuPalette.background,
-                  border: Border(
-                    top: BorderSide(color: ReaderMenuPalette.outline),
-                  ),
+                decoration: BoxDecoration(
+                  color: menuStyle.background,
+                  border: Border(top: BorderSide(color: menuStyle.outline)),
                   boxShadow: [
                     BoxShadow(
-                      color: ReaderMenuPalette.scrim,
+                      color: menuStyle.scrim,
                       blurRadius: 18,
-                      offset: Offset(0, -6),
+                      offset: const Offset(0, -6),
                     ),
                   ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildChapterSlider(context),
+                    _buildChapterSlider(context, menuStyle),
                     const SizedBox(height: 8),
-                    _buildMainActions(),
+                    _buildMainActions(menuStyle),
                   ],
                 ),
               ),
@@ -79,49 +83,64 @@ class ReaderBottomMenu extends StatelessWidget {
   }
 
   /// 懸浮按鈕組 (對標 Android ll_floating_button)
-  Widget _buildFloatingButtons(BuildContext context) {
+  Widget _buildFloatingButtons(
+    BuildContext context,
+    ReaderMenuStyle menuStyle,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _floatingFab(Icons.search, '搜尋', onSearch ?? () {}),
           _floatingFab(
-            Icons.auto_stories_outlined,
-            provider.isAutoPaging ? '自動翻頁設定' : '開始自動翻頁',
-            onAutoPage,
+            icon: Icons.search,
+            tooltip: '搜尋',
+            onTap: onSearch ?? () {},
+            menuStyle: menuStyle,
+          ),
+          _floatingFab(
+            icon: Icons.auto_stories_outlined,
+            tooltip: provider.isAutoPaging ? '自動翻頁設定' : '開始自動翻頁',
+            onTap: onAutoPage,
+            menuStyle: menuStyle,
             active: provider.isAutoPaging,
           ),
-          _floatingFab(Icons.find_replace, '替換規則', onReplaceRule ?? () {}),
           _floatingFab(
-            provider.dayNightToggleIcon,
-            provider.dayNightToggleTooltip,
-            onToggleDayNight,
+            icon: Icons.find_replace,
+            tooltip: '替換規則',
+            onTap: onReplaceRule ?? () {},
+            menuStyle: menuStyle,
+          ),
+          _floatingFab(
+            icon: provider.dayNightToggleIcon,
+            tooltip: provider.dayNightToggleTooltip,
+            onTap: onToggleDayNight,
+            menuStyle: menuStyle,
           ),
         ],
       ),
     );
   }
 
-  Widget _floatingFab(
-    IconData icon,
-    String tooltip,
-    VoidCallback onTap, {
+  Widget _floatingFab({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    required ReaderMenuStyle menuStyle,
     bool active = false,
   }) {
     return FloatingActionButton.small(
       heroTag: null,
       onPressed: onTap,
       tooltip: tooltip,
-      backgroundColor: ReaderMenuPalette.backgroundElevated,
-      foregroundColor:
-          active ? ReaderMenuPalette.accent : ReaderMenuPalette.foreground,
+      backgroundColor: menuStyle.backgroundElevated,
+      foregroundColor: active ? menuStyle.accent : menuStyle.foreground,
       child: Icon(icon),
     );
   }
 
   /// 章節導航條 (對標 Android 導航 Seeking)
-  Widget _buildChapterSlider(BuildContext context) {
+  Widget _buildChapterSlider(BuildContext context, ReaderMenuStyle menuStyle) {
     final chapterCount = provider.chapters.length;
     final maxVal = (chapterCount <= 1 ? 0 : chapterCount - 1).toDouble();
     final displayIndex =
@@ -143,8 +162,8 @@ class ReaderBottomMenu extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 4),
               child: Text(
                 displayTitle,
-                style: const TextStyle(
-                  color: ReaderMenuPalette.mutedForeground,
+                style: TextStyle(
+                  color: menuStyle.mutedForeground,
                   fontSize: 11,
                 ),
                 maxLines: 1,
@@ -158,13 +177,10 @@ class ReaderBottomMenu extends StatelessWidget {
                     provider.currentChapterIndex > 0
                         ? () => provider.prevChapter(fromEnd: false)
                         : null,
-                child: const Text(
-                  '上一章',
-                  style: TextStyle(
-                    color: ReaderMenuPalette.foreground,
-                    fontSize: 14,
-                  ),
+                style: TextButton.styleFrom(
+                  foregroundColor: menuStyle.foreground,
                 ),
+                child: const Text('上一章', style: TextStyle(fontSize: 14)),
               ),
               Expanded(
                 child: SliderTheme(
@@ -193,8 +209,8 @@ class ReaderBottomMenu extends StatelessWidget {
                         chapterCount <= 1
                             ? null
                             : (v) => provider.onScrubEnd(v.toInt()),
-                    activeColor: ReaderMenuPalette.accent,
-                    inactiveColor: ReaderMenuPalette.mutedForeground.withValues(
+                    activeColor: menuStyle.accent,
+                    inactiveColor: menuStyle.mutedForeground.withValues(
                       alpha: 0.24,
                     ),
                   ),
@@ -205,13 +221,10 @@ class ReaderBottomMenu extends StatelessWidget {
                     provider.currentChapterIndex < chapterCount - 1
                         ? provider.nextChapter
                         : null,
-                child: const Text(
-                  '下一章',
-                  style: TextStyle(
-                    color: ReaderMenuPalette.foreground,
-                    fontSize: 14,
-                  ),
+                style: TextButton.styleFrom(
+                  foregroundColor: menuStyle.foreground,
                 ),
+                child: const Text('下一章', style: TextStyle(fontSize: 14)),
               ),
             ],
           ),
@@ -221,19 +234,24 @@ class ReaderBottomMenu extends StatelessWidget {
   }
 
   /// 主操作按鈕組 (對標 Android 底部四圖示)
-  Widget _buildMainActions() {
+  Widget _buildMainActions(ReaderMenuStyle menuStyle) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _menuIcon(Icons.list, '目錄', onOpenDrawer),
-        _menuIcon(Icons.record_voice_over, '朗讀', onTts),
-        _menuIcon(Icons.color_lens, '介面', onInterface),
-        _menuIcon(Icons.settings, '設定', onSettings),
+        _menuIcon(Icons.list, '目錄', onOpenDrawer, menuStyle),
+        _menuIcon(Icons.record_voice_over, '朗讀', onTts, menuStyle),
+        _menuIcon(Icons.color_lens, '介面', onInterface, menuStyle),
+        _menuIcon(Icons.settings, '設定', onSettings, menuStyle),
       ],
     );
   }
 
-  Widget _menuIcon(IconData icon, String label, VoidCallback onTap) {
+  Widget _menuIcon(
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+    ReaderMenuStyle menuStyle,
+  ) {
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -242,14 +260,11 @@ class ReaderBottomMenu extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: ReaderMenuPalette.foreground, size: 22),
+            Icon(icon, color: menuStyle.foreground, size: 22),
             const SizedBox(height: 6),
             Text(
               label,
-              style: const TextStyle(
-                color: ReaderMenuPalette.foreground,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: menuStyle.foreground, fontSize: 11),
             ),
           ],
         ),

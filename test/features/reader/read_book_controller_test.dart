@@ -1,7 +1,8 @@
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/core/constant/prefer_key.dart';
 import 'package:inkpage_reader/core/database/dao/book_dao.dart';
 import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
 import 'package:inkpage_reader/core/database/dao/bookmark_dao.dart';
@@ -13,9 +14,13 @@ import 'package:inkpage_reader/core/models/book_source.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/models/replace_rule.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/engine/page_view_widget.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
+import 'package:inkpage_reader/features/reader/reader_provider.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/read_book_controller.dart';
+import 'package:inkpage_reader/features/reader/widgets/reader/reader_top_menu.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ── Fake DAOs ────────────────────────────────────────────────────────────────
@@ -254,6 +259,27 @@ void main() {
       final controller = ReadBookController(book: _makeBook());
       controller.dispose();
       expect(() => controller.loadingChapters.isEmpty, returnsNormally);
+    });
+
+    test('reader-specific 排版與 shell 偏好會從同一組 prefs 還原', () async {
+      SharedPreferences.setMockInitialValues({
+        PreferKey.readerLetterSpacing: 1.25,
+        PreferKey.readerTextFullJustify: false,
+        PreferKey.showReadTitleAddition: false,
+        PreferKey.readBarStyleFollowPage: true,
+        PreferKey.textSelectAble: false,
+      });
+
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(controller.letterSpacing, 1.25);
+      expect(controller.textFullJustify, isFalse);
+      expect(controller.showReadTitleAddition, isFalse);
+      expect(controller.readBarStyleFollowPage, isTrue);
+      expect(controller.selectText, isFalse);
+
+      controller.dispose();
     });
 
     test('slide 模式章首 restore 會定位到目標章第一頁，不會跳回全域第 0 頁', () async {
@@ -521,6 +547,66 @@ void main() {
       controller.dispose();
     });
 
+    test('scroll 模式下一頁會按 viewport 步進，不直接切章', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+        BookChapter(title: 'c1', index: 1, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.scroll;
+      controller.viewSize = const Size(400, 400);
+      controller.scrollViewportTopInset = 40;
+      controller.scrollViewportBottomInset = 40;
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.chapterPagesCache[1] = _buildPages(1, [0, 8, 16], title: 'c1');
+      controller.refreshChapterRuntime(0);
+      controller.refreshChapterRuntime(1);
+      controller.visibleChapterIndex = 0;
+      controller.currentChapterIndex = 0;
+      controller.visibleChapterLocalOffset = 40;
+
+      controller.nextPage();
+
+      final pending = controller.consumePendingChapterJump();
+      expect(pending, isNotNull);
+      expect(pending!.chapterIndex, 0);
+      expect(pending.localOffset, closeTo(321.6, 0.1));
+      expect(pending.reason, ReaderCommandReason.userScroll);
+      controller.dispose();
+    });
+
+    test('scroll 模式跨章下一頁會保留剩餘 offset', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+        BookChapter(title: 'c1', index: 1, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.scroll;
+      controller.viewSize = const Size(400, 400);
+      controller.scrollViewportTopInset = 40;
+      controller.scrollViewportBottomInset = 40;
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.chapterPagesCache[1] = _buildPages(1, [0, 8, 16], title: 'c1');
+      controller.refreshChapterRuntime(0);
+      controller.refreshChapterRuntime(1);
+      controller.visibleChapterIndex = 0;
+      controller.currentChapterIndex = 0;
+      controller.visibleChapterLocalOffset = 380;
+
+      controller.nextPage();
+
+      final pending = controller.consumePendingChapterJump();
+      expect(pending, isNotNull);
+      expect(pending!.chapterIndex, 1);
+      expect(pending.localOffset, closeTo(241.6, 0.1));
+      expect(pending.reason, ReaderCommandReason.userScroll);
+      controller.dispose();
+    });
+
     test('app pause 前會 flush 目前 slide session progress', () async {
       _fakeChaptersFromDao = [
         BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
@@ -649,5 +735,89 @@ void main() {
       expect(_FakeChapterDao.insertedBatches.single, hasLength(1));
       controller.dispose();
     });
+  });
+
+  testWidgets('PageViewWidget 會依 selectText 開關 SelectionArea', (tester) async {
+    final controller = ReaderProvider(book: _makeBook());
+    await tester.pump(const Duration(milliseconds: 10));
+    final page = _buildPages(0, [0], title: 'c0').single;
+
+    controller.selectText = false;
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ReaderProvider>.value(
+        value: controller,
+        child: MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 480,
+            child: PageViewWidget(
+              page: page,
+              contentStyle: const TextStyle(fontSize: 18),
+              titleStyle: const TextStyle(fontSize: 22),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(SelectionArea), findsNothing);
+
+    controller.setSelectText(true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(SelectionArea), findsOneWidget);
+    controller.dispose();
+  });
+
+  testWidgets('showReadTitleAddition 會控制 top menu 的章節附加資訊', (tester) async {
+    final book = _makeBook().copyWith(originName: '測試來源');
+    final controller = ReaderProvider(
+      book: book,
+      initialChapters: [
+        BookChapter(
+          title: '章節標題',
+          index: 0,
+          url: 'chapter-0',
+          bookUrl: book.bookUrl,
+        ),
+      ],
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+    controller.showControls = true;
+    controller.currentChapterIndex = 0;
+    controller.showReadTitleAddition = false;
+    expect(controller.currentChapterTitle, '章節標題');
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ReaderProvider>.value(
+        value: controller,
+        child: MaterialApp(
+          home: Stack(
+            children: [
+              Consumer<ReaderProvider>(
+                builder:
+                    (context, provider, child) => ReaderTopMenu(
+                      provider: provider,
+                      onBack: () {},
+                      onMore: () {},
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('章節標題'), findsNothing);
+    expect(find.text('測試來源'), findsNothing);
+
+    controller.setShowReadTitleAddition(true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('章節標題'), findsOneWidget);
+    expect(find.text('測試來源'), findsOneWidget);
+    controller.dispose();
   });
 }

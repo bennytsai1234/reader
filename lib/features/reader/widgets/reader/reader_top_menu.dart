@@ -16,6 +16,12 @@ class ReaderTopMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final menuStyle = ReaderMenuStyle.resolve(
+      context: context,
+      followPageStyle: provider.readBarStyleFollowPage,
+      pageBackgroundColor: provider.currentTheme.backgroundColor,
+      pageTextColor: provider.currentTheme.textColor,
+    );
     return Positioned(
       top: 0,
       left: 0,
@@ -27,23 +33,25 @@ class ReaderTopMenu extends StatelessWidget {
           curve: Curves.easeOut,
           offset: provider.showControls ? Offset.zero : const Offset(0, -1.15),
           child: Container(
-            decoration: const BoxDecoration(
-              color: ReaderMenuPalette.background,
-              border: Border(
-                bottom: BorderSide(color: ReaderMenuPalette.outline),
-              ),
+            decoration: BoxDecoration(
+              color: menuStyle.background,
+              border: Border(bottom: BorderSide(color: menuStyle.outline)),
               boxShadow: [
                 BoxShadow(
-                  color: ReaderMenuPalette.scrim,
+                  color: menuStyle.scrim,
                   blurRadius: 18,
-                  offset: Offset(0, 6),
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
             padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: [_buildAppBar(context), _buildAdditionInfo(context)],
+              children: [
+                _buildAppBar(context, menuStyle),
+                if (provider.showReadTitleAddition)
+                  _buildAdditionInfo(context, menuStyle),
+              ],
             ),
           ),
         ),
@@ -51,32 +59,25 @@ class ReaderTopMenu extends StatelessWidget {
     );
   }
 
-  Widget _buildAppBar(BuildContext context) {
+  Widget _buildAppBar(BuildContext context, ReaderMenuStyle menuStyle) {
     return Row(
       children: [
         IconButton(
-          icon: const Icon(
-            Icons.arrow_back,
-            color: ReaderMenuPalette.foreground,
-          ),
+          icon: Icon(Icons.arrow_back, color: menuStyle.foreground),
           onPressed: onBack,
         ),
         Expanded(
           child: Text(
             provider.book.name,
             style: const TextStyle(
-              color: ReaderMenuPalette.foreground,
               fontSize: 18,
               fontWeight: FontWeight.bold,
-            ),
+            ).copyWith(color: menuStyle.foreground),
             overflow: TextOverflow.ellipsis,
           ),
         ),
         IconButton(
-          icon: const Icon(
-            Icons.more_vert,
-            color: ReaderMenuPalette.foreground,
-          ),
+          icon: Icon(Icons.more_vert, color: menuStyle.foreground),
           onPressed: onMore,
         ),
       ],
@@ -84,7 +85,7 @@ class ReaderTopMenu extends StatelessWidget {
   }
 
   /// 頂部附加資訊 (對標 Android title_bar_addition)
-  Widget _buildAdditionInfo(BuildContext context) {
+  Widget _buildAdditionInfo(BuildContext context, ReaderMenuStyle menuStyle) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
@@ -95,8 +96,8 @@ class ReaderTopMenu extends StatelessWidget {
               children: [
                 Text(
                   provider.currentChapterTitle,
-                  style: const TextStyle(
-                    color: ReaderMenuPalette.mutedForeground,
+                  style: TextStyle(
+                    color: menuStyle.mutedForeground,
                     fontSize: 12,
                   ),
                   maxLines: 1,
@@ -105,8 +106,8 @@ class ReaderTopMenu extends StatelessWidget {
                 if (provider.currentChapterUrl.isNotEmpty)
                   Text(
                     provider.currentChapterUrl,
-                    style: const TextStyle(
-                      color: ReaderMenuPalette.mutedForeground,
+                    style: TextStyle(
+                      color: menuStyle.mutedForeground,
                       fontSize: 10,
                     ),
                     maxLines: 1,
@@ -116,25 +117,25 @@ class ReaderTopMenu extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          _buildSourceTag(context),
+          _buildSourceTag(context, menuStyle),
         ],
       ),
     );
   }
 
   /// 書源標籤 (對標 Android tv_source_action)
-  Widget _buildSourceTag(BuildContext context) {
+  Widget _buildSourceTag(BuildContext context, ReaderMenuStyle menuStyle) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: ReaderMenuPalette.accentMuted,
-        border: Border.all(color: ReaderMenuPalette.accent),
+        color: menuStyle.accentMuted,
+        border: Border.all(color: menuStyle.accent),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         provider.book.originName,
-        style: const TextStyle(
-          color: ReaderMenuPalette.foreground,
+        style: TextStyle(
+          color: menuStyle.foreground,
           fontSize: 10,
           fontWeight: FontWeight.bold,
         ),

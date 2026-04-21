@@ -606,7 +606,7 @@ class ReadBookController extends ReaderProviderBase
     final targetLocation = _resolveModeSwitchLocation();
     pageTurnMode = v;
     AppConfig.readerPageAnim = v;
-    saveSetting('page_turn_mode', v);
+    unawaited(readerPrefsRepository.savePageTurnMode(v));
     _updateSessionLocation(targetLocation);
     _sessionCoordinator.updateVisibleLocation(targetLocation);
     currentChapterIndex = targetLocation.chapterIndex;
@@ -700,6 +700,24 @@ class ReadBookController extends ReaderProviderBase
   }
 
   @override
+  void nextPage({ReaderCommandReason reason = ReaderCommandReason.user}) {
+    if (pageTurnMode != PageAnim.scroll) {
+      super.nextPage(reason: reason);
+      return;
+    }
+    unawaited(_stepScrollPage(forward: true, reason: reason));
+  }
+
+  @override
+  void prevPage({ReaderCommandReason reason = ReaderCommandReason.user}) {
+    if (pageTurnMode != PageAnim.scroll) {
+      super.prevPage(reason: reason);
+      return;
+    }
+    unawaited(_stepScrollPage(forward: false, reason: reason));
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _persistSessionProgress();
@@ -746,11 +764,19 @@ class ReadBookController extends ReaderProviderBase
     return null;
   }
 
-  ReadingTheme get currentTheme =>
-      AppTheme.readingThemes[themeIndex.clamp(
-        0,
-        AppTheme.readingThemes.length - 1,
-      )];
+  ReadingTheme get currentTheme {
+    if (AppTheme.readingThemes.isEmpty) {
+      return ReadingTheme(
+        name: '預設',
+        backgroundColor: const Color(0xFFFFFFFF),
+        textColor: const Color(0xFF1A1A1A),
+      );
+    }
+    return AppTheme.readingThemes[themeIndex.clamp(
+      0,
+      AppTheme.readingThemes.length - 1,
+    )];
+  }
 
   String get currentChapterTitle => displayChapterTitleAt(currentChapterIndex);
   String get currentChapterUrl =>
@@ -1017,7 +1043,7 @@ class ReadBookController extends ReaderProviderBase
   void setChineseConvert(int val) {
     _prepareSettingsRepaginateAnchor();
     chineseConvert = val;
-    _persistSetting('chinese_convert_v2', val);
+    unawaited(readerPrefsRepository.saveChineseConvert(val));
     unawaited(refreshChapterDisplayTitles());
     resetContentLifecycle(refreshPaginationConfig: true);
     unawaited(
@@ -1030,7 +1056,8 @@ class ReadBookController extends ReaderProviderBase
 
   void setClickAction(int zone, int action) {
     clickActions[zone] = action;
-    _updateSettingAndNotify('click_actions', clickActions.join(','));
+    unawaited(readerPrefsRepository.saveClickActions(clickActions));
+    notifyListeners();
   }
 
   List<TextPage> buildSlideRuntimePages() {
@@ -1067,15 +1094,6 @@ class ReadBookController extends ReaderProviderBase
       visibleChapterIndex: visibleChapterIndex,
       visibleChapterLocalOffset: visibleChapterLocalOffset,
     );
-  }
-
-  void _persistSetting(String key, dynamic value) {
-    saveSetting(key, value);
-  }
-
-  void _updateSettingAndNotify(String key, dynamic value) {
-    _persistSetting(key, value);
-    notifyListeners();
   }
 
   /// 根據 charOffset / pageIndex 解析目標位置並觸發跳轉。
@@ -1164,6 +1182,122 @@ class ReadBookController extends ReaderProviderBase
 
   ReaderLocation _resolveModeSwitchLocation() {
     return _sessionRuntime.resolveModeSwitchLocation(_currentSessionContext());
+  }
+
+  Future<void> _stepScrollPage({
+    required bool forward,
+    required ReaderCommandReason reason,
+  }) async {
+    if (chapters.isEmpty) return;
+
+    var target = _resolveScrollViewportStepTarget(forward: forward);
+    if (target == null) {
+      final neighborIndex =
+          forward ? visibleChapterIndex + 1 : visibleChapterIndex - 1;
+      if (neighborIndex >= 0 && neighborIndex < chapters.length) {
+        await ensureChapterCached(
+          neighborIndex,
+          silent: false,
+          prioritize: true,
+          preloadRadius: 1,
+        );
+        if (isDisposed) return;
+        target = _resolveScrollViewportStepTarget(forward: forward);
+      }
+    }
+
+    if (target == null) {
+      if (forward) {
+        await nextChapter(reason: reason);
+      } else {
+        await prevChapter(fromEnd: false, reason: reason);
+      }
+      return;
+    }
+
+    final effectiveReason =
+        reason == ReaderCommandReason.user
+            ? ReaderCommandReason.userScroll
+            : reason;
+    jumpToChapterLocalOffset(
+      chapterIndex: target.chapterIndex,
+      localOffset: target.localOffset,
+      alignment: 0.0,
+      reason: effectiveReason,
+    );
+    notifyListeners();
+  }
+
+  ({int chapterIndex, double localOffset})? _resolveScrollViewportStepTarget({
+    required bool forward,
+  }) {
+    final step = _scrollViewportStepSize();
+    if (step <= 0 || chapters.isEmpty) return null;
+
+    var targetChapterIndex = visibleChapterIndex.clamp(0, chapters.length - 1);
+    var targetLocalOffset = visibleChapterLocalOffset;
+    var remaining = step;
+
+    while (remaining > 0.5) {
+      final chapterHeight = _chapterHeightFor(targetChapterIndex);
+      if (chapterHeight <= 0) return null;
+
+      if (forward) {
+        final available = (chapterHeight - targetLocalOffset).clamp(
+          0.0,
+          double.infinity,
+        );
+        if (remaining <= available ||
+            targetChapterIndex >= chapters.length - 1) {
+          return (
+            chapterIndex: targetChapterIndex,
+            localOffset: (targetLocalOffset + remaining).clamp(
+              0.0,
+              chapterHeight,
+            ),
+          );
+        }
+        remaining -= available;
+        targetChapterIndex += 1;
+        targetLocalOffset = 0.0;
+        continue;
+      }
+
+      if (remaining <= targetLocalOffset || targetChapterIndex <= 0) {
+        return (
+          chapterIndex: targetChapterIndex,
+          localOffset: (targetLocalOffset - remaining).clamp(
+            0.0,
+            chapterHeight,
+          ),
+        );
+      }
+
+      remaining -= targetLocalOffset;
+      targetChapterIndex -= 1;
+      targetLocalOffset = _chapterHeightFor(targetChapterIndex);
+      if (targetLocalOffset <= 0) return null;
+    }
+
+    return (chapterIndex: targetChapterIndex, localOffset: targetLocalOffset);
+  }
+
+  double _scrollViewportStepSize() {
+    final size = viewSize;
+    if (size == null) return 0.0;
+    final viewportHeight =
+        (size.height - scrollViewportTopInset - scrollViewportBottomInset)
+            .clamp(1.0, double.infinity)
+            .toDouble();
+    return viewportHeight * 0.88;
+  }
+
+  double _chapterHeightFor(int chapterIndex) {
+    final runtimeChapter = chapterAt(chapterIndex);
+    if (runtimeChapter != null) {
+      return runtimeChapter.chapterHeight;
+    }
+    return ChapterPositionResolver.chapterHeight(pagesForChapter(chapterIndex));
   }
 
   void _dispatchViewportCommand(ReaderViewportCommand command) {

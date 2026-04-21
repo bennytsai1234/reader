@@ -186,29 +186,23 @@ class _ReaderPageState extends State<ReaderPage> {
             key: ValueKey(_controllerGeneration),
             provider: p,
             pageController: _pageCtrl,
+            onContentTapUp:
+                p.showControls
+                    ? null
+                    : (details) => _handleTap(
+                      details.localPosition,
+                      MediaQuery.sizeOf(context),
+                      p,
+                    ),
           ),
 
           if (((p.pageTurnMode == PageAnim.scroll &&
                       p.chapterPagesCache.isNotEmpty) ||
                   (p.pageTurnMode != PageAnim.scroll &&
                       p.slidePages.isNotEmpty)) &&
-              !p.isLoading)
+              !p.isLoading &&
+              p.showReadTitleAddition)
             _buildPermanentInfo(context, p),
-
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: p.showControls,
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTapUp:
-                    (d) => _handleTap(
-                      d.localPosition,
-                      MediaQuery.sizeOf(context),
-                      p,
-                    ),
-              ),
-            ),
-          ),
 
           if (p.showControls)
             Positioned.fill(

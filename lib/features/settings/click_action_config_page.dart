@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:inkpage_reader/core/constant/prefer_key.dart';
+import 'package:inkpage_reader/features/reader/models/reader_tap_action.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_prefs_repository.dart';
 
 class ClickActionConfigPage extends StatefulWidget {
   const ClickActionConfigPage({super.key});
@@ -11,19 +10,10 @@ class ClickActionConfigPage extends StatefulWidget {
 }
 
 class _ClickActionConfigPageState extends State<ClickActionConfigPage> {
-  static const Map<int, String> _actionNames = <int, String>{
-    0: '喚起選單',
-    1: '下一頁',
-    2: '上一頁',
-    3: '下一章',
-    4: '上一章',
-    5: '朗讀',
-    7: '書籤',
-  };
-  static const List<int> _defaultActions = <int>[0, 0, 0, 0, 0, 0, 0, 0, 0];
+  final ReaderPrefsRepository _prefsRepository = const ReaderPrefsRepository();
 
   bool _isLoading = true;
-  List<int> _actions = List<int>.from(_defaultActions);
+  List<int> _actions = ReaderTapAction.defaultGrid();
 
   @override
   void initState() {
@@ -32,40 +22,21 @@ class _ClickActionConfigPageState extends State<ClickActionConfigPage> {
   }
 
   Future<void> _loadActions() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(PreferKey.readerClickActions);
-    final parsed = _parseActions(stored);
+    final snapshot = await _prefsRepository.load();
     if (!mounted) return;
     setState(() {
-      _actions = parsed;
+      _actions = snapshot.clickActions;
       _isLoading = false;
     });
   }
 
-  List<int> _parseActions(String? stored) {
-    if (stored == null || stored.trim().isEmpty) {
-      return List<int>.from(_defaultActions);
-    }
-    final values =
-        stored
-            .split(',')
-            .map((item) => int.tryParse(item.trim()))
-            .whereType<int>()
-            .toList();
-    if (values.length != 9) {
-      return List<int>.from(_defaultActions);
-    }
-    return values;
-  }
-
   Future<void> _saveActions() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(PreferKey.readerClickActions, _actions.join(','));
+    await _prefsRepository.saveClickActions(_actions);
   }
 
   Future<void> _resetActions() async {
     setState(() {
-      _actions = List<int>.from(_defaultActions);
+      _actions = ReaderTapAction.defaultGrid();
     });
     await _saveActions();
   }
@@ -137,7 +108,9 @@ class _ClickActionConfigPageState extends State<ClickActionConfigPage> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      _actionNames[_actions[index]] ?? '無功能',
+                                      ReaderTapAction.fromCode(
+                                        _actions[index],
+                                      ).label,
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
@@ -169,12 +142,12 @@ class _ClickActionConfigPageState extends State<ClickActionConfigPage> {
               child: ListView(
                 shrinkWrap: true,
                 children:
-                    _actionNames.entries.map((entry) {
+                    ReaderTapAction.values.map((entry) {
                       return ListTile(
-                        title: Text(entry.value),
+                        title: Text(entry.label),
                         onTap: () async {
                           Navigator.pop(ctx);
-                          await _updateAction(index, entry.key);
+                          await _updateAction(index, entry.code);
                         },
                       );
                     }).toList(),

@@ -1,100 +1,101 @@
 # 貢獻指南
 
-感謝你對墨頁 Inkpage 的關注。以下說明如何有效地參與貢獻。
+這份文件只描述目前 `main` 的實際開發方式。
 
-## 開始之前
+## 先讀哪些文件
 
-- 閱讀 [README.md](README.md) 了解專案定位
-- 閱讀 [docs/architecture.md](docs/architecture.md) 了解模組邊界
-- 確認你的 Flutter SDK 版本符合 `pubspec.yaml` 中的 `sdk: ^3.7.0`
+- [README.md](README.md)
+- [docs/architecture.md](docs/architecture.md)
+- 如果要改閱讀器：
+  - [docs/reader_runtime.md](docs/reader_runtime.md)
+  - [docs/reader_spec.md](docs/reader_spec.md)
 
-## 回報問題
+## 環境需求
 
-在開 Issue 前，請先搜尋是否已有相同問題。使用 Issue 模板填寫：
+- Flutter `stable`
+- Dart `^3.7.0`
+- 可運行 `flutter analyze`
+- Linux / macOS / Windows 任一可用 Flutter 開發環境
 
-- **Bug 回報**：提供複現步驟、預期行為、實際行為、裝置資訊與日誌
-- **功能請求**：說明使用情境，以及為什麼現有功能無法滿足
-
-> 目前專案的長期目標是**優化 8 項基礎功能**，暫不接受新功能的功能請求。詳見 [docs/roadmap.md](docs/roadmap.md)。
-
-## 開發環境設定
+## 本地初始化
 
 ```bash
-# 1. Fork & Clone
 git clone https://github.com/<your-username>/reader.git
 cd reader
-
-# 2. 安裝依賴
 flutter pub get
-
-# 3. 生成 Drift 程式碼（修改 table 定義後必跑）
 flutter pub run build_runner build --delete-conflicting-outputs
-
-# 4. 確認環境
-flutter doctor
 flutter analyze
-flutter test
+tool/flutter_test_with_quickjs.sh
 ```
 
-## 提交 Pull Request
+## 變更前後的最低驗證
 
-### 分支命名
+### 一般功能
 
-| 類型 | 格式 | 範例 |
-|------|------|------|
-| 修復 bug | `fix/<簡短描述>` | `fix/tts-highlight-clear` |
-| 重構 | `refactor/<模組>` | `refactor/reader-coordinator` |
-| 文件 | `docs/<主題>` | `docs/database-schema` |
-| 測試 | `test/<對象>` | `test/chapter-content-manager` |
-
-### PR 規範
-
-1. **一個 PR 只做一件事** — 不要把重構與修復混在同一個 PR
-2. **必須通過 CI**：`flutter analyze` 零問題、`flutter test` 全數通過
-3. **附上測試**：修復 bug 請附回歸測試；新邏輯請附單元測試
-4. **描述清楚變更動機**：PR 說明要讓 reviewer 能在不看程式碼的情況下理解為什麼要改
-
-### 提交訊息格式
-
-遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hant/):
-
-```
-<type>(<scope>): <short summary>
-
-[optional body]
+```bash
+flutter analyze
+tool/flutter_test_with_quickjs.sh
 ```
 
-類型：`feat` / `fix` / `refactor` / `test` / `docs` / `chore`
+### 只改閱讀器
 
-範例：
-```
-fix(reader): clear highlight immediately when TTS chapter ends
-
-Prevents stale highlight persisting on screen when the chapter
-finishes but the next chapter hasn't started yet.
+```bash
+flutter analyze
+flutter test test/features/reader
 ```
 
-## 程式碼規範
+### 改 Drift schema / DAO
 
-- 遵循 `analysis_options.yaml` 的 lint 規則，不得關閉警告
-- 狀態管理一律使用 Provider，**禁止引入第二套**
-- DB 操作統一走 DAO；UI 不直接碰 DAO、檔案路徑或平台 API
-- `await` 後使用 `context` 前必加 `if (!mounted) return;`
-- 不加不必要的 docstring、type annotation 或 comment — 只在邏輯不自明時才加
-- 路徑統一經 `core/storage/AppStoragePaths`
-
-## 常見問題
-
-**Q: 修改了 Drift table 定義，build_runner 要怎麼跑？**
 ```bash
 flutter pub run build_runner build --delete-conflicting-outputs
+flutter analyze
+tool/flutter_test_with_quickjs.sh
 ```
 
-**Q: 測試怎麼跑單一檔案？**
-```bash
-flutter test test/features/reader/read_book_controller_test.dart
-```
+## 提交原則
 
-**Q: 書源規則邏輯要怎麼對照 Android 原版？**
+- 一個 commit / PR 只解一個主問題
+- 如果改了行為，就補對應測試
+- 如果改了可見規格，就同步更新文件
+- 如果某份文件已經不可靠，直接刪掉或重寫，不要繼續堆 handoff / backlog / TODO 文檔
 
-參考 `../legado/app/src/main/java/io/legado/app/model/analyzeRule/`，Flutter 實作在 `lib/core/engine/`。
+## 文件規則
+
+這個 repo 的文檔有一條硬規則：
+
+- 文件只能描述 `main` 上已存在、可被程式碼驗證的事實
+
+因此：
+
+- 不保留過期 roadmap
+- 不保留舊 handoff
+- 不保留沒有落地的設計稿
+- 不用文檔替代待辦清單
+
+如果你改了以下內容，請同步更新文件：
+
+- repo 模組邊界：`docs/architecture.md`
+- 閱讀器 runtime / contract：`docs/reader_runtime.md`
+- 閱讀器功能規格：`docs/reader_spec.md`
+- 釋出流程：`docs/release.md`
+- 資料表與 migration：`docs/DATABASE.md`
+
+## 程式碼規則
+
+- 狀態管理維持 Provider 鏈，不引入第二套全域狀態框架
+- 資料庫經由 DAO / Drift，不直接在 UI 層拼 SQL
+- 閱讀器位置語義以 `ReaderLocation(chapterIndex, charOffset)` 為 durable 真源
+- 修改閱讀器時，優先沿用現有 runtime / coordinator / facade 邊界，不回退成大混雜 controller
+
+## 發版相關
+
+Release 不是手動編 `pubspec.yaml` 後直接上傳產物。
+
+目前真實流程是：
+
+1. `main` 上完成改動
+2. 撰寫 `release-notes/vX.Y.Z.md`（可選，但建議）
+3. 推送 tag `vX.Y.Z`
+4. `build-release.yml` 會回寫 `pubspec.yaml` 版本到 `main` 並產生 release artifacts
+
+完整規則見 [docs/release.md](docs/release.md)。
