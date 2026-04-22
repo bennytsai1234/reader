@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +21,7 @@ import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dar
 import 'package:inkpage_reader/features/reader/reader_provider.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/read_book_controller.dart';
+import 'package:inkpage_reader/features/reader/widgets/reader/reader_bottom_menu.dart';
 import 'package:inkpage_reader/features/reader/widgets/reader/reader_top_menu.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -88,6 +91,30 @@ class _FakeBookSourceDao implements BookSourceDao {
 class _FakeBookmarkDao implements BookmarkDao {
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _PendingNavigationReaderProvider extends ReaderProvider {
+  _PendingNavigationReaderProvider({
+    required super.book,
+    required super.initialChapters,
+  });
+
+  final List<({int chapterIndex, bool fromEnd, ReaderCommandReason reason})>
+  loadRequests = [];
+  Completer<void>? loadCompleter;
+
+  @override
+  Future<void> loadChapter(
+    int index, {
+    bool fromEnd = false,
+    ReaderCommandReason reason = ReaderCommandReason.chapterChange,
+  }) async {
+    loadRequests.add((chapterIndex: index, fromEnd: fromEnd, reason: reason));
+    final completer = loadCompleter ??= Completer<void>();
+    await completer.future;
+    currentChapterIndex = index;
+    visibleChapterIndex = index;
+  }
 }
 
 void _setupDi() {
@@ -607,6 +634,38 @@ void main() {
       controller.dispose();
     });
 
+    test('chapter navigation pending 期間會忽略重入', () async {
+      final controller = _PendingNavigationReaderProvider(
+        book: _makeBook(),
+        initialChapters: [
+          BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+          BookChapter(title: 'c1', index: 1, bookUrl: 'http://test.com/book'),
+          BookChapter(title: 'c2', index: 2, bookUrl: 'http://test.com/book'),
+        ],
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      controller.currentChapterIndex = 0;
+      controller.visibleChapterIndex = 0;
+
+      final firstJump = controller.jumpToChapter(1);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.hasPendingChapterNavigation, isTrue);
+      expect(controller.pendingChapterNavigationIndex, 1);
+      expect(controller.loadRequests, hasLength(1));
+
+      unawaited(controller.nextChapter());
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.loadRequests, hasLength(1));
+
+      controller.loadCompleter!.complete();
+      await firstJump;
+
+      expect(controller.hasPendingChapterNavigation, isFalse);
+      expect(controller.pendingChapterNavigationIndex, isNull);
+      controller.dispose();
+    });
+
     test('app pause 前會 flush 目前 slide session progress', () async {
       _fakeChaptersFromDao = [
         BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
@@ -770,6 +829,74 @@ void main() {
     controller.dispose();
   });
 
+  testWidgets('PageViewWidget 會透過 onPageTapUp 分發點擊', (tester) async {
+    final controller = ReaderProvider(book: _makeBook());
+    await tester.pump(const Duration(milliseconds: 10));
+    final page = _buildPages(0, [0], title: 'c0').single;
+    var tapCount = 0;
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ReaderProvider>.value(
+        value: controller,
+        child: MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 480,
+            child: PageViewWidget(
+              page: page,
+              contentStyle: const TextStyle(fontSize: 18),
+              titleStyle: const TextStyle(fontSize: 22),
+              onPageTapUp: (_) => tapCount++,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(PageViewWidget));
+    await tester.pump();
+
+    expect(tapCount, 1);
+    controller.dispose();
+  });
+
+  testWidgets('PageViewWidget 開啟 selectText 後仍會透過 onPageTapUp 分發點擊', (
+    tester,
+  ) async {
+    final controller = ReaderProvider(book: _makeBook());
+    await tester.pump(const Duration(milliseconds: 10));
+    final page = _buildPages(0, [0], title: 'c0').single;
+    var tapCount = 0;
+    controller.setSelectText(true);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ReaderProvider>.value(
+        value: controller,
+        child: MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 480,
+            child: PageViewWidget(
+              page: page,
+              contentStyle: const TextStyle(fontSize: 18),
+              titleStyle: const TextStyle(fontSize: 22),
+              onPageTapUp: (_) => tapCount++,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(SelectionArea), findsOneWidget);
+
+    await tester.tap(find.byType(PageViewWidget));
+    await tester.pump();
+
+    expect(tapCount, 1);
+    controller.dispose();
+  });
+
   testWidgets('showReadTitleAddition 會控制 top menu 的章節附加資訊', (tester) async {
     final book = _makeBook().copyWith(originName: '測試來源');
     final controller = ReaderProvider(
@@ -818,6 +945,70 @@ void main() {
 
     expect(find.text('章節標題'), findsOneWidget);
     expect(find.text('測試來源'), findsOneWidget);
+    controller.dispose();
+  });
+
+  testWidgets('ReaderBottomMenu 在 pending chapter navigation 時禁用章節切換', (
+    tester,
+  ) async {
+    final controller = _PendingNavigationReaderProvider(
+      book: _makeBook(),
+      initialChapters: [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+        BookChapter(title: 'c1', index: 1, bookUrl: 'http://test.com/book'),
+      ],
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+    controller.showControls = true;
+
+    unawaited(controller.jumpToChapter(1));
+    await tester.pump();
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ReaderProvider>.value(
+        value: controller,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 800,
+              child: Stack(
+                children: [
+                  ReaderBottomMenu(
+                    provider: controller,
+                    onOpenDrawer: () {},
+                    onTts: () {},
+                    onInterface: () {},
+                    onSettings: () {},
+                    onAutoPage: () {},
+                    onToggleDayNight: () {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, '上一章'))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, '下一章'))
+          .onPressed,
+      isNull,
+    );
+
+    controller.loadCompleter!.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     controller.dispose();
   });
 }

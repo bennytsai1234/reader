@@ -24,6 +24,7 @@ class PageViewWidget extends StatelessWidget {
   final int ttsWordEnd;
   final bool isScrollMode;
   final void Function(int lineIndex)? onLineTap;
+  final GestureTapUpCallback? onPageTapUp;
   final Color pageBackgroundColor;
 
   /// TTS 正在朗讀的章節索引，用於過濾跨章節時的重複高亮（-1 表示不過濾）
@@ -48,6 +49,7 @@ class PageViewWidget extends StatelessWidget {
     this.ttsChapterIndex = -1,
     this.isScrollMode = false,
     this.onLineTap,
+    this.onPageTapUp,
     this.pageBackgroundColor = Colors.white,
   });
 
@@ -75,6 +77,7 @@ class PageViewWidget extends StatelessWidget {
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTapUp: (details) {
+              onPageTapUp?.call(details);
               if (onLineTap == null) return;
               // 扣除 paddingTop 後，判斷點擊落在哪一行
               final tapY = details.localPosition.dy - currentPaddingTop;

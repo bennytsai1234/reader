@@ -5,21 +5,20 @@ import 'package:inkpage_reader/core/constant/page_anim.dart';
 import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:inkpage_reader/core/models/book.dart';
-import 'package:inkpage_reader/core/models/book_source.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
-import 'package:inkpage_reader/core/models/search_book.dart';
 import 'package:inkpage_reader/core/database/dao/read_record_dao.dart';
-import 'package:inkpage_reader/core/services/source_switch_service.dart'
-    show SourceSwitchResolution;
 import 'package:inkpage_reader/core/services/tts_service.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_perf_trace.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_auto_page_mixin.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_auxiliary_flow_mixin.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_chapter_navigation_mixin.dart';
 import 'package:inkpage_reader/features/reader/provider/content_callbacks.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_content_facade_mixin.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_settings_mixin.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_shell_interaction_mixin.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_progress_coordinator.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
 import 'package:inkpage_reader/features/reader/runtime/read_aloud_controller.dart';
@@ -35,10 +34,10 @@ import 'package:inkpage_reader/features/reader/runtime/reader_display_coordinato
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_session_state.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_viewport_command.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_page_exit_coordinator.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime_controller.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_session_facade.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_session_runtime.dart';
-import 'package:inkpage_reader/features/reader/runtime/reader_source_switch_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_viewport_lifecycle_runtime.dart';
 import 'package:inkpage_reader/shared/theme/app_theme.dart';
 
@@ -50,10 +49,14 @@ class ReadBookController extends ReaderProviderBase
     with
         ReaderSettingsMixin,
         ReaderContentFacadeMixin,
+        ReaderAuxiliaryFlowMixin,
+        ReaderChapterNavigationMixin,
         ReaderAutoPageMixin,
         ReaderTtsMixin,
         ReaderBatteryMixin,
-        WidgetsBindingObserver {
+        ReaderShellInteractionMixin,
+        WidgetsBindingObserver
+    implements ReaderExitFlowDelegate {
   final Map<int, ReaderChapter> _chapterRuntimeCache = {};
   final ReaderChapterProvider _chapterProvider = const ReaderChapterProvider();
   final ReaderNavigationController _navigation = ReaderNavigationController();
@@ -68,7 +71,6 @@ class ReadBookController extends ReaderProviderBase
   late final ReaderSessionCoordinator _sessionCoordinator;
   late final ReaderRuntimeController _runtimeController;
   final ReaderSessionFacade _sessionFacade = const ReaderSessionFacade();
-  final ReaderSourceSwitchRuntime _sourceSwitch = ReaderSourceSwitchRuntime();
   late final ReaderSessionRuntime _sessionRuntime;
   final ReaderViewportLifecycleRuntime _viewportLifecycle =
       ReaderViewportLifecycleRuntime();
@@ -156,15 +158,55 @@ class ReadBookController extends ReaderProviderBase
 
   ReaderCommandReason? get activeCommandReason =>
       _navigation.activeCommandReason;
+  @override
   ReaderProgressStore get progressStore => _progressStore;
   ReaderLocation get sessionLocation => _sessionCoordinator.sessionLocation;
   ReaderLocation get visibleLocation => _sessionCoordinator.visibleLocation;
   ReaderLocation get durableLocation => _sessionCoordinator.durableLocation;
   ReaderSessionPhase get sessionPhase => _sessionCoordinator.phase;
-  bool get isSwitchingSource => _sourceSwitch.isSwitching;
-  String? get sourceSwitchMessage => _sourceSwitch.message;
   String? get currentChapterFailureMessage =>
       chapterFailureMessage(currentChapterIndex);
+
+  @override
+  int resolveScrubChapterIndexForNavigation(dynamic value) {
+    return _displayCoordinator.resolveScrubChapterIndex(
+      value: value,
+      totalChapters: chapters.length,
+    );
+  }
+
+  @override
+  void updateSessionLocationForChapterNavigation(ReaderLocation location) {
+    _updateSessionLocation(location);
+  }
+
+  @override
+  void guardTransientViewportChangesForShell() {
+    _guardTransientViewportChanges();
+  }
+
+  @override
+  void updateCurrentThemeBackgroundImage(String? path) {
+    currentTheme.backgroundImage = path;
+  }
+
+  @override
+  int get displayChapterIndexForAuxiliary => _displayPageChapterIndex;
+
+  @override
+  int resolveCurrentCharOffsetForAuxiliary() {
+    return _resolveCurrentCharOffset();
+  }
+
+  @override
+  void clearChapterRuntimeCacheEntry(int index) {
+    _chapterRuntimeCache.remove(index);
+  }
+
+  @override
+  void updateSessionLocationForAuxiliary(ReaderLocation location) {
+    _updateSessionLocation(location);
+  }
 
   ReadAloudController _buildReadAloudController() {
     return ReadAloudController(
@@ -223,6 +265,7 @@ class ReadBookController extends ReaderProviderBase
     );
   }
 
+  @override
   void jumpToChapterCharOffset({
     required int chapterIndex,
     required int charOffset,
@@ -730,17 +773,6 @@ class ReadBookController extends ReaderProviderBase
     super.dispose();
   }
 
-  void toggleControls() {
-    _guardTransientViewportChanges();
-    showControls = !showControls;
-    if (showControls) {
-      pauseAutoPage();
-    } else {
-      resumeAutoPage();
-    }
-    notifyListeners();
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
@@ -782,30 +814,9 @@ class ReadBookController extends ReaderProviderBase
   String get currentChapterUrl =>
       chapters.isNotEmpty ? chapters[currentChapterIndex].url : '';
 
+  @override
   ReaderLocation resolveExitLocation() {
     return _sessionRuntime.resolveExitLocation(_currentSessionContext());
-  }
-
-  bool shouldPromptAddToBookshelfOnExit() {
-    return !book.isInBookshelf && showAddToShelfAlert;
-  }
-
-  Future<void> addCurrentBookToBookshelf() async {
-    final location = resolveExitLocation();
-    final title =
-        location.chapterIndex >= 0 && location.chapterIndex < chapters.length
-            ? chapters[location.chapterIndex].title
-            : (book.durChapterTitle ?? '');
-    await _sessionFacade.addCurrentBookToBookshelf(
-      book: book,
-      chapters: chapters,
-      location: location,
-      chapterTitle: title,
-      progressStore: _progressStore,
-      bookDao: bookDao,
-      chapterDao: chapterDao,
-      onCompleted: notifyListeners,
-    );
   }
 
   String get displayChapterPercentLabel {
@@ -876,156 +887,15 @@ class ReadBookController extends ReaderProviderBase
   @override
   TTSService get tts => TTSService();
 
-  double backgroundBlur = 0.0;
-  void setBackgroundBlur(double v) {
-    backgroundBlur = v;
-    notifyListeners();
-  }
-
-  void setBackgroundImage(String? path) {
-    currentTheme.backgroundImage = path;
-    notifyListeners();
-  }
-
   BookChapter? get currentChapter =>
       chapters.isNotEmpty && currentChapterIndex < chapters.length
           ? chapters[currentChapterIndex]
           : null;
   bool get isBookmarked => false;
   double get rate => TTSService().rate;
-  bool isScrubbing = false;
-  int scrubIndex = 0;
-
-  void onScrubStart() {
-    isScrubbing = true;
-    scrubIndex = currentChapterIndex;
-    notifyListeners();
-  }
-
-  void onScrubbing(dynamic value) {
-    final targetIndex = _displayCoordinator.resolveScrubChapterIndex(
-      value: value,
-      totalChapters: chapters.length,
-    );
-    if (scrubIndex != targetIndex) {
-      scrubIndex = targetIndex;
-      notifyListeners();
-    }
-  }
-
-  void onScrubEnd(dynamic value) {
-    isScrubbing = false;
-    final targetIndex = _displayCoordinator.resolveScrubChapterIndex(
-      value: value,
-      totalChapters: chapters.length,
-    );
-    unawaited(jumpToChapter(targetIndex));
-    notifyListeners();
-  }
-
   void jumpToPage(int index) {
     if (index >= 0 && index < slidePages.length) {
       onPageChanged(index);
-    }
-  }
-
-  Future<void> toggleBookmark() async {
-    addBookmark();
-  }
-
-  void addBookmark({String? content}) {
-    final chapterIndex = _displayPageChapterIndex;
-    final bookmark = _sessionFacade.buildBookmark(
-      book: book,
-      chapterIndex: chapterIndex,
-      chapterTitle: displayChapterTitleAt(chapterIndex),
-      chapterPos: _resolveCurrentCharOffset(),
-      content: content,
-    );
-    _sessionFacade.saveBookmark(
-      bookmarkDao: bookmarkDao,
-      bookmark: bookmark,
-      onCompleted: notifyListeners,
-    );
-  }
-
-  void replaceChapterSource(int index, BookSource source, String content) {
-    if (index >= 0 && index < chapters.length) {
-      chapters[index].content = content;
-      putChapterContent(index, content);
-      clearChapterFailure(index);
-      _chapterRuntimeCache.remove(index);
-      if (index == currentChapterIndex) {
-        unawaited(loadChapter(index, reason: ReaderCommandReason.system));
-      }
-      notifyListeners();
-    }
-  }
-
-  Future<bool> autoChangeSourceForCurrentChapter() async {
-    final result = await _sourceSwitch.autoChangeSourceForCurrentChapter(
-      book: book,
-      targetChapterIndex: currentChapterIndex,
-      targetChapterTitle: currentChapterTitle,
-      applyResolution: _applySourceSwitchResolution,
-      notifyListeners: notifyListeners,
-    );
-    return result?.changed ?? false;
-  }
-
-  Future<void> changeBookSourceTo(SearchBook searchBook) async {
-    final result = await _sourceSwitch.changeBookSource(
-      book: book,
-      searchBook: searchBook,
-      targetChapterIndex: currentChapterIndex,
-      targetChapterTitle: currentChapterTitle,
-      applyResolution: _applySourceSwitchResolution,
-      notifyListeners: notifyListeners,
-    );
-    if (result?.error != null) {
-      Error.throwWithStackTrace(
-        result!.error!,
-        result.stackTrace ?? StackTrace.current,
-      );
-    }
-  }
-
-  Future<void> _applySourceSwitchResolution(
-    SourceSwitchResolution resolution,
-  ) async {
-    await _sessionFacade.applySourceSwitchResolution(
-      resolution: resolution,
-      book: book,
-      setSource: (value) => source = value,
-      setChapters: (value) => chapters = value,
-      clearChapterFailure: clearChapterFailure,
-      refreshChapterDisplayTitles: refreshChapterDisplayTitles,
-      resetContentLifecycle: resetContentLifecycle,
-      putChapterContent: putChapterContent,
-      bookDao: bookDao,
-      chapterDao: chapterDao,
-      updateSessionLocation: _updateSessionLocation,
-      loadChapter: loadChapter,
-      jumpToChapterCharOffset:
-          ({
-            required chapterIndex,
-            required charOffset,
-            required ReaderCommandReason reason,
-          }) => jumpToChapterCharOffset(
-            chapterIndex: chapterIndex,
-            charOffset: charOffset,
-            reason: reason,
-          ),
-      reason: ReaderCommandReason.system,
-    );
-  }
-
-  Future<void> jumpToChapter(int index) async {
-    if (index >= 0 && index < chapters.length) {
-      _updateSessionLocation(
-        ReaderLocation(chapterIndex: index, charOffset: 0),
-      );
-      await loadChapter(index, reason: ReaderCommandReason.user);
     }
   }
 
@@ -1158,6 +1028,7 @@ class ReadBookController extends ReaderProviderBase
     );
   }
 
+  @override
   Future<void> persistExitProgress() async {
     await _sessionRuntime.persistExitProgress(_currentSessionContext());
     await _flushReadRecord();

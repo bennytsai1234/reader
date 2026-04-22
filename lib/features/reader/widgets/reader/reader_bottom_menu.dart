@@ -143,38 +143,61 @@ class ReaderBottomMenu extends StatelessWidget {
   Widget _buildChapterSlider(BuildContext context, ReaderMenuStyle menuStyle) {
     final chapterCount = provider.chapters.length;
     final maxVal = (chapterCount <= 1 ? 0 : chapterCount - 1).toDouble();
+    final pendingIndex = provider.pendingChapterNavigationIndex;
     final displayIndex =
         provider.isScrubbing
             ? provider.scrubIndex
-            : provider.currentChapterIndex;
+            : (pendingIndex ?? provider.currentChapterIndex);
     final displayTitle =
         (chapterCount > 0 && displayIndex < chapterCount)
             ? provider.displayChapterTitleAt(displayIndex)
             : '';
+    final isPending = provider.hasPendingChapterNavigation;
+    final canChangeChapter = chapterCount > 1 && !isPending;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (provider.isScrubbing && displayTitle.isNotEmpty)
+          if ((provider.isScrubbing || isPending) && displayTitle.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                displayTitle,
-                style: TextStyle(
-                  color: menuStyle.mutedForeground,
-                  fontSize: 11,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (isPending) ...[
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          menuStyle.accent,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Flexible(
+                    child: Text(
+                      displayTitle,
+                      style: TextStyle(
+                        color: menuStyle.mutedForeground,
+                        fontSize: 11,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
           Row(
             children: [
               TextButton(
                 onPressed:
-                    provider.currentChapterIndex > 0
+                    provider.canNavigateToPrevChapter
                         ? () => provider.prevChapter(fromEnd: false)
                         : null,
                 style: TextButton.styleFrom(
@@ -198,17 +221,17 @@ class ReaderBottomMenu extends StatelessWidget {
                     min: 0,
                     max: maxVal,
                     onChangeStart:
-                        chapterCount <= 1
-                            ? null
-                            : (_) => provider.onScrubStart(),
+                        canChangeChapter
+                            ? (_) => provider.onScrubStart()
+                            : null,
                     onChanged:
-                        chapterCount <= 1
-                            ? null
-                            : (v) => provider.onScrubbing(v.toInt()),
+                        canChangeChapter
+                            ? (v) => provider.onScrubbing(v.toInt())
+                            : null,
                     onChangeEnd:
-                        chapterCount <= 1
-                            ? null
-                            : (v) => provider.onScrubEnd(v.toInt()),
+                        canChangeChapter
+                            ? (v) => provider.onScrubEnd(v.toInt())
+                            : null,
                     activeColor: menuStyle.accent,
                     inactiveColor: menuStyle.mutedForeground.withValues(
                       alpha: 0.24,
@@ -218,7 +241,7 @@ class ReaderBottomMenu extends StatelessWidget {
               ),
               TextButton(
                 onPressed:
-                    provider.currentChapterIndex < chapterCount - 1
+                    provider.canNavigateToNextChapter
                         ? provider.nextChapter
                         : null,
                 style: TextButton.styleFrom(

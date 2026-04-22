@@ -26,6 +26,7 @@ class ScrollModeDelegate extends PageModeDelegate {
     required BuildContext context,
     required ReaderProvider provider,
     required PageController pageController,
+    GestureTapUpCallback? onContentTapUp,
   }) {
     final contentStyle = TextStyle(
       fontSize: provider.fontSize,
@@ -103,6 +104,7 @@ class ScrollModeDelegate extends PageModeDelegate {
                     height: runtimeChapter?.pageHeightAt(page.index) ?? 0,
                     child: PageViewWidget(
                       page: page,
+                      onPageTapUp: onContentTapUp,
                       contentStyle: contentStyle,
                       titleStyle: titleStyle,
                       isScrollMode: true,

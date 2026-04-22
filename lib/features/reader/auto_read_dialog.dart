@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/core/constant/page_anim.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_page_action_dispatcher.dart';
 import 'package:provider/provider.dart';
 import 'reader_provider.dart';
-import 'widgets/reader_settings_sheets.dart';
 import 'widgets/reader/reader_menu_palette.dart';
 
 class AutoReadDialog extends StatelessWidget {
   const AutoReadDialog({super.key});
+  static const ReaderPageActionDispatcher _actionDispatcher =
+      ReaderPageActionDispatcher();
 
   /// 顯示自動翻頁對話框，返回 Future 以便呼叫方感知關閉事件
   static Future<void> show(BuildContext context) async {
@@ -191,28 +193,29 @@ class AutoReadDialog extends StatelessWidget {
                 context,
                 icon: Icons.menu,
                 label: '主選單',
-                onTap: () {
-                  Navigator.pop(context);
-                  provider.toggleControls();
-                },
+                onTap:
+                    () => _actionDispatcher.openMainMenuFromAutoReadDialog(
+                      context,
+                      provider,
+                    ),
               ),
               _buildAction(
                 context,
                 icon: Icons.list,
                 label: '目錄',
-                onTap: () {
-                  Navigator.pop(context);
-                  Scaffold.of(context).openDrawer();
-                },
+                onTap:
+                    () =>
+                        _actionDispatcher.openDrawerFromAutoReadDialog(context),
               ),
               _buildAction(
                 context,
                 icon: Icons.stop_circle_outlined,
                 label: '停止',
-                onTap: () {
-                  provider.stopAutoPage();
-                  Navigator.pop(context);
-                },
+                onTap:
+                    () => _actionDispatcher.stopAutoPageFromDialog(
+                      context,
+                      provider,
+                    ),
               ),
               _buildAction(
                 context,
@@ -220,7 +223,7 @@ class AutoReadDialog extends StatelessWidget {
                 label: '設定',
                 onTap: () {
                   Navigator.pop(context);
-                  ReaderSettingsSheets.showPageTurnMode(context, provider);
+                  _actionDispatcher.showPageTurnModeSettings(context, provider);
                 },
               ),
             ],

@@ -279,22 +279,19 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
                 )
                 : const PageModeDelegate();
 
-        final content = GestureDetector(
-          behavior: HitTestBehavior.deferToChild,
-          onTapUp: widget.onContentTapUp,
-          child: NotificationListener<ScrollNotification>(
-            onNotification:
-                (notification) =>
-                    _handleScrollNotification(notification, provider),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: KeyedSubtree(
-                key: ValueKey<int>(provider.pageTurnMode),
-                child: delegate.build(
-                  context: context,
-                  provider: provider,
-                  pageController: widget.pageController,
-                ),
+        final content = NotificationListener<ScrollNotification>(
+          onNotification:
+              (notification) =>
+                  _handleScrollNotification(notification, provider),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: KeyedSubtree(
+              key: ValueKey<int>(provider.pageTurnMode),
+              child: delegate.build(
+                context: context,
+                provider: provider,
+                pageController: widget.pageController,
+                onContentTapUp: widget.onContentTapUp,
               ),
             ),
           ),

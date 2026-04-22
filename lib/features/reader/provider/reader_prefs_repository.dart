@@ -209,6 +209,10 @@ class ReaderPrefsRepository {
     return _setInt(PreferKey.readerChineseConvert, value);
   }
 
+  Future<void> saveShowAddToShelfAlert(bool value) {
+    return _setBool(PreferKey.showAddToShelfAlert, value);
+  }
+
   Future<void> saveShowReadTitleAddition(bool value) {
     return _setBool(PreferKey.showReadTitleAddition, value);
   }

@@ -1,13 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/features/cache_manager/storage_management_page.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_prefs_repository.dart';
 import 'package:provider/provider.dart';
 import 'settings_provider.dart';
 
-class OtherSettingsPage extends StatelessWidget {
+class OtherSettingsPage extends StatefulWidget {
   const OtherSettingsPage({super.key});
 
   @override
+  State<OtherSettingsPage> createState() => _OtherSettingsPageState();
+}
+
+class _OtherSettingsPageState extends State<OtherSettingsPage> {
+  final ReaderPrefsRepository _prefsRepository = const ReaderPrefsRepository();
+  ReaderPrefsSnapshot? _readerPrefs;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReaderPrefs();
+  }
+
+  Future<void> _loadReaderPrefs() async {
+    final snapshot = await _prefsRepository.load();
+    if (!mounted) return;
+    setState(() {
+      _readerPrefs = snapshot;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final readerPrefs = _readerPrefs;
     return Scaffold(
       appBar: AppBar(title: const Text('其他設定')),
       body: Consumer<SettingsProvider>(
@@ -46,8 +70,19 @@ class OtherSettingsPage extends StatelessWidget {
               ),
               SwitchListTile(
                 title: const Text('顯示加入書架提示'),
-                value: settings.showAddToShelfAlert,
-                onChanged: (v) => settings.setShowAddToShelfAlert(v),
+                value: readerPrefs?.showAddToShelfAlert ?? true,
+                onChanged:
+                    readerPrefs == null
+                        ? null
+                        : (value) {
+                          final next = readerPrefs.copyWith(
+                            showAddToShelfAlert: value,
+                          );
+                          setState(() {
+                            _readerPrefs = next;
+                          });
+                          _prefsRepository.saveShowAddToShelfAlert(value);
+                        },
               ),
               const SizedBox(height: 24),
             ],
