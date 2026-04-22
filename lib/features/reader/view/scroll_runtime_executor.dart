@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:inkpage_reader/features/reader/reader_provider.dart';
 import 'package:inkpage_reader/features/reader/view/scroll_execution_adapter.dart';
 import 'package:inkpage_reader/features/reader/view/scroll_restore_runner.dart';
@@ -62,6 +63,7 @@ class ScrollRuntimeExecutor {
     required int chapterIndex,
     required double localOffset,
     required int token,
+    required int navigationToken,
     int retries = 20,
   }) {
     scrollRestoreRunner.run(
@@ -75,7 +77,11 @@ class ScrollRuntimeExecutor {
       ensureChapterVisible: () {
         itemScrollController.jumpTo(index: chapterIndex, alignment: 0);
       },
-      deferRestore: () => provider.deferPendingScrollRestore(token),
+      deferRestore:
+          () => provider.abortNavigation(
+            navigationToken,
+            ReaderCommandReason.restore,
+          ),
       scrollToChapterLocalOffset: ({
         required int chapterIndex,
         required double localOffset,

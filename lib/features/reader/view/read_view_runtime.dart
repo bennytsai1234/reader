@@ -149,6 +149,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
             chapterIndex: pendingScrollAction.chapterIndex,
             localOffset: pendingScrollAction.localOffset,
             token: pendingScrollAction.restoreToken,
+            navigationToken: pendingScrollAction.navigationToken,
           );
           return;
         }
