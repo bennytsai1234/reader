@@ -117,7 +117,7 @@ Recent page-layer progress:
 - `ReaderPage` now delegates shell scaffolding (`Scaffold`, menus, permanent info, dismiss scrim, drawer host) to a dedicated shell widget
 - `ReaderPageShell` now pins the reader content with `Positioned.fill` so the content runtime owns the full reading viewport inside the shell stack
 - `ReaderChaptersDrawer` now tracks provider updates directly so it can auto-scroll to the current or pending chapter even when the provider instance stays the same
-- page-level widget coverage now includes shell wiring, exit flow, permanent info visibility, controls dismiss overlay, drawer auto-location, drawer pending-state lock, real content taps for shell toggle, `selectText` vs tap-zone interaction, and slide/scroll restore consistency
+- page-level widget coverage now includes shell wiring, exit flow through the real top-back shell entry, permanent info visibility, controls dismiss overlay, drawer auto-location, drawer pending-state lock, real content taps for shell toggle, `selectText` vs tap-zone interaction, bottom-slider driven chapter navigation, drawer-open to chapter-select end-to-end flow, and slide/scroll restore consistency
 
 This keeps the public controller API stable while shrinking the main runtime
 file and preserving existing regression coverage.

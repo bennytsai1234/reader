@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -145,6 +147,37 @@ class _ReaderPageActionProbe extends ReaderProvider {
   }
 }
 
+class _ReaderPageFlowProbe extends _ReaderPageActionProbe {
+  _ReaderPageFlowProbe({required super.book, required super.initialChapters});
+
+  final List<({int chapterIndex, bool fromEnd, ReaderCommandReason reason})>
+  loadRequests = [];
+  bool interceptChapterLoads = false;
+  Completer<void>? loadCompleter;
+
+  @override
+  Future<void> loadChapter(
+    int index, {
+    bool fromEnd = false,
+    ReaderCommandReason reason = ReaderCommandReason.chapterChange,
+  }) async {
+    if (!interceptChapterLoads) {
+      currentChapterIndex = index;
+      visibleChapterIndex = index;
+      return;
+    }
+
+    loadRequests.add((chapterIndex: index, fromEnd: fromEnd, reason: reason));
+    final completer = loadCompleter ??= Completer<void>();
+    await completer.future;
+    currentChapterIndex = index;
+    visibleChapterIndex = index;
+    if (!isDisposed) {
+      notifyListeners();
+    }
+  }
+}
+
 void _setupDi() {
   if (getIt.isRegistered<BookDao>()) getIt.unregister<BookDao>();
   if (getIt.isRegistered<ChapterDao>()) getIt.unregister<ChapterDao>();
@@ -166,6 +199,17 @@ Book _makeBook() => Book(
   origin: 'source://demo',
   originName: '測試書源',
 );
+
+List<BookChapter> _buildChapters(List<String> titles) {
+  return List.generate(
+    titles.length,
+    (index) => BookChapter(
+      title: titles[index],
+      index: index,
+      bookUrl: 'https://example.com/book',
+    ),
+  );
+}
 
 List<TextPage> _buildPages(
   int chapterIndex,
@@ -450,5 +494,118 @@ void main() {
     provider.pageTurnMode = PageAnim.slide;
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+  });
+
+  testWidgets('ReaderPage 底部 slider 拖動會走真實切章流程並在 pending 期間鎖定重入', (
+    tester,
+  ) async {
+    final provider = _ReaderPageFlowProbe(
+      book: _makeBook(),
+      initialChapters: _buildChapters(['第一章', '第二章', '第三章']),
+    );
+
+    addTearDown(provider.dispose);
+    await _pumpReaderPage(tester, provider);
+    provider.primeVisibleContent();
+    provider.showControls = true;
+    provider.interceptChapterLoads = true;
+    provider.loadCompleter = Completer<void>();
+    provider.notifyListeners();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final slider = find.byType(Slider);
+    expect(slider, findsOneWidget);
+
+    final sliderRect = tester.getRect(slider);
+    final gesture = await tester.startGesture(
+      Offset(sliderRect.left + 12, sliderRect.center.dy),
+    );
+    await tester.pump();
+    await gesture.moveTo(Offset(sliderRect.right - 12, sliderRect.center.dy));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(provider.loadRequests, hasLength(1));
+    expect(provider.loadRequests.single.chapterIndex, 2);
+    expect(provider.pendingChapterNavigationIndex, 2);
+    expect(find.text('第三章'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    final secondGesture = await tester.startGesture(
+      Offset(sliderRect.right - 12, sliderRect.center.dy),
+    );
+    await tester.pump();
+    await secondGesture.moveTo(
+      Offset(sliderRect.left + 12, sliderRect.center.dy),
+    );
+    await tester.pump();
+    await secondGesture.up();
+    await tester.pump();
+
+    expect(provider.loadRequests, hasLength(1));
+
+    provider.loadCompleter!.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(provider.pendingChapterNavigationIndex, isNull);
+    expect(provider.currentChapterIndex, 2);
+  });
+
+  testWidgets('ReaderPage 打開目錄後選擇章節會關閉 drawer 並同步 reader 狀態', (tester) async {
+    final provider = _ReaderPageFlowProbe(
+      book: _makeBook(),
+      initialChapters: _buildChapters(['第一章', '第二章', '第三章', '第四章']),
+    );
+
+    addTearDown(provider.dispose);
+    await _pumpReaderPage(tester, provider);
+    provider.primeVisibleContent();
+    provider.showControls = true;
+    provider.interceptChapterLoads = true;
+    provider.loadCompleter = Completer<void>();
+    provider.notifyListeners();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final scaffoldState = tester.state<ScaffoldState>(find.byType(Scaffold));
+    expect(scaffoldState.isDrawerOpen, isFalse);
+
+    await tester.tap(find.byIcon(Icons.list));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(scaffoldState.isDrawerOpen, isTrue);
+    expect(find.byType(Drawer), findsOneWidget);
+    expect(find.text('第四章'), findsOneWidget);
+
+    await tester.tap(find.text('第三章'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(provider.loadRequests, hasLength(1));
+    expect(provider.loadRequests.single.chapterIndex, 2);
+    expect(provider.pendingChapterNavigationIndex, 2);
+    expect(scaffoldState.isDrawerOpen, isTrue);
+    expect(
+      find.descendant(
+        of: find.byType(Drawer),
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+
+    provider.loadCompleter!.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(provider.pendingChapterNavigationIndex, isNull);
+    expect(provider.currentChapterIndex, 2);
+    expect(provider.visibleChapterIndex, 2);
+    expect(scaffoldState.isDrawerOpen, isFalse);
+    expect(find.byType(Drawer), findsNothing);
   });
 }
