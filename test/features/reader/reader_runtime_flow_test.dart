@@ -443,10 +443,11 @@ void main() {
       );
 
       expect(restore.matchesPendingScrollRestore(token), isTrue);
-      final target = restore.dispatchPendingScrollRestore();
-      expect(target, isNotNull);
-      expect(target!.token, token);
-      expect(target!.chapterIndex, 2);
+      final dispatchedTarget = restore.dispatchPendingScrollRestore();
+      expect(dispatchedTarget, isNotNull);
+      final target = dispatchedTarget!;
+      expect(target.token, token);
+      expect(target.chapterIndex, 2);
       expect(target.localOffset, 88);
     });
 

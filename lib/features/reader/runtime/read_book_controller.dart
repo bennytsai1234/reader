@@ -249,6 +249,7 @@ class ReadBookController extends ReaderProviderBase
   ReaderLocation get visibleLocation => _sessionCoordinator.visibleLocation;
   ReaderLocation get durableLocation => _sessionCoordinator.durableLocation;
   bool get visibleConfirmed => _sessionCoordinator.visibleConfirmed;
+  @override
   int get currentNavigationGeneration => _sessionCoordinator.generation;
   ReaderSessionPhase get sessionPhase => _sessionCoordinator.phase;
   String? get currentChapterFailureMessage =>
