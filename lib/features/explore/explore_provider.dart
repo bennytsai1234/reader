@@ -37,6 +37,8 @@ class ExploreProvider extends ChangeNotifier {
   String? _selectedGroup;
 
   // --- ExploreKind 快取 (對標 Android exploreKindsMap) ---
+  // Legado 以 bookSourceUrl + exploreUrl 作為分類快取鍵，規則變更後會自動
+  // 重新解析，不會沿用舊分類。
   final Map<String, List<ExploreKind>> _kindsCache = {};
 
   // --- Getters ---
@@ -75,9 +77,7 @@ class ExploreProvider extends ChangeNotifier {
             : null;
 
     _allSources =
-        sources
-            .where((source) => source.canParticipateInDiscovery)
-            .toList()
+        sources.where((source) => source.canParticipateInDiscovery).toList()
           ..sort((a, b) => a.customOrder.compareTo(b.customOrder));
 
     // 提取分組
@@ -176,7 +176,7 @@ class ExploreProvider extends ChangeNotifier {
 
   /// 為書源載入分類標籤 (帶快取，對標 Android exploreKinds())
   Future<void> _loadKindsForSource(BookSource source) async {
-    final cacheKey = source.bookSourceUrl;
+    final cacheKey = _cacheKeyForSource(source);
 
     if (_kindsCache.containsKey(cacheKey)) {
       _expandedKinds = _kindsCache[cacheKey]!;
@@ -206,9 +206,13 @@ class ExploreProvider extends ChangeNotifier {
     }
   }
 
+  String _cacheKeyForSource(BookSource source) {
+    return '${source.bookSourceUrl}\n${source.exploreUrl ?? ''}';
+  }
+
   /// 刷新分類快取 (對標 Android menu_refresh / clearExploreKindsCache)
   Future<void> refreshKindsCache(BookSource source) async {
-    _kindsCache.remove(source.bookSourceUrl);
+    _kindsCache.remove(_cacheKeyForSource(source));
     await ExploreUrlParser.clearCache(source, exploreUrl: source.exploreUrl);
     if (_expandedIndex >= 0 &&
         _expandedIndex < _filteredSources.length &&
@@ -237,7 +241,9 @@ class ExploreProvider extends ChangeNotifier {
   /// 刪除書源 (對標 Android ExploreViewModel.deleteSource)
   Future<void> deleteSource(BookSource source) async {
     await _sourceDao.deleteByUrl(source.bookSourceUrl);
-    _kindsCache.remove(source.bookSourceUrl);
+    _kindsCache.removeWhere(
+      (cacheKey, _) => cacheKey.startsWith('${source.bookSourceUrl}\n'),
+    );
     await _loadSources();
   }
 

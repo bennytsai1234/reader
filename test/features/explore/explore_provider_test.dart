@@ -77,7 +77,7 @@ void main() {
     expect(provider.expandedKinds, isEmpty);
 
     kindsCompleter.complete([
-      ExploreKind(
+      const ExploreKind(
         title: '最新',
         url: 'https://bbxxxx.com/rank/new/{{page}}.html',
       ),
@@ -86,7 +86,7 @@ void main() {
 
     expect(provider.isLoadingKinds, isFalse);
     expect(provider.expandedKinds, [
-      ExploreKind(
+      const ExploreKind(
         title: '最新',
         url: 'https://bbxxxx.com/rank/new/{{page}}.html',
       ),
@@ -113,8 +113,8 @@ void main() {
     ];
 
     final responses = <List<ExploreKind>>[
-      [ExploreKind(title: '最新', url: 'https://example.com/new')],
-      [ExploreKind(title: '熱門', url: 'https://example.com/hot')],
+      [const ExploreKind(title: '最新', url: 'https://example.com/new')],
+      [const ExploreKind(title: '熱門', url: 'https://example.com/hot')],
     ];
     var loaderCalls = 0;
     final provider = ExploreProvider(
@@ -131,6 +131,54 @@ void main() {
     await provider.refreshKindsCache(provider.sources.first);
     expect(provider.expandedKinds.first.title, '熱門');
     expect(loaderCalls, 2);
+  });
+
+  test('changing exploreUrl invalidates in-memory kinds cache', () async {
+    fakeSourceDao.sources = [
+      BookSource(
+        bookSourceUrl: 'source://same',
+        bookSourceName: '同一書源',
+        enabledExplore: true,
+        exploreUrl: '舊分類::https://example.com/old',
+      ),
+    ];
+
+    final loaderInputs = <String?>[];
+    final provider = ExploreProvider(
+      sourceDao: fakeSourceDao,
+      kindsLoader: (exploreUrl, {source}) async {
+        loaderInputs.add(exploreUrl);
+        return <ExploreKind>[
+          ExploreKind(
+            title: exploreUrl?.contains('新分類') == true ? '新分類' : '舊分類',
+            url: exploreUrl,
+          ),
+        ];
+      },
+    );
+    addTearDown(provider.dispose);
+
+    await _settleAsync();
+    await provider.toggleExpand(0);
+    expect(provider.expandedKinds.first.title, '舊分類');
+
+    await provider.toggleExpand(0);
+    fakeSourceDao.pushSources([
+      BookSource(
+        bookSourceUrl: 'source://same',
+        bookSourceName: '同一書源',
+        enabledExplore: true,
+        exploreUrl: '新分類::https://example.com/new',
+      ),
+    ]);
+    await _settleAsync();
+
+    await provider.toggleExpand(0);
+    expect(provider.expandedKinds.first.title, '新分類');
+    expect(loaderInputs, <String?>[
+      '舊分類::https://example.com/old',
+      '新分類::https://example.com/new',
+    ]);
   });
 
   test(

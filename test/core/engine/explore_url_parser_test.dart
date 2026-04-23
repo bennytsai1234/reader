@@ -75,13 +75,16 @@ void main() {
       final kinds = await ExploreUrlParser.parseAsync('''
         最新::https://example.com/new
         熱門::https://example.com/hot
+        無連結分類
       ''');
 
-      expect(kinds, hasLength(2));
+      expect(kinds, hasLength(3));
       expect(kinds[0].title, '最新');
       expect(kinds[0].url, 'https://example.com/new');
       expect(kinds[1].title, '熱門');
       expect(kinds[1].url, 'https://example.com/hot');
+      expect(kinds[2].title, '無連結分類');
+      expect(kinds[2].url, isNull);
     });
 
     test('parseAsync awaits js explore definitions', () async {
@@ -132,17 +135,40 @@ void main() {
     });
 
     test('parseAsync accepts trailing commas in JSON arrays', () async {
-      final kinds = await ExploreUrlParser.parseAsync(
-        '''
+      final kinds = await ExploreUrlParser.parseAsync('''
         [
           {"title":"推薦","url":"https://example.com/recommend"},
         ]
-        ''',
-      );
+        ''');
 
       expect(kinds, hasLength(1));
       expect(kinds.first.title, '推薦');
       expect(kinds.first.url, 'https://example.com/recommend');
+    });
+
+    test('parseAsync preserves Legado explore kind flex style', () async {
+      final kinds = await ExploreUrlParser.parseAsync('''
+        [
+          {
+            "title": "排行",
+            "url": "https://example.com/rank",
+            "style": {
+              "layout_flexGrow": 1,
+              "layout_flexShrink": 1,
+              "layout_alignSelf": "center",
+              "layout_flexBasisPercent": 0.5,
+              "layout_wrapBefore": true
+            }
+          }
+        ]
+        ''');
+
+      expect(kinds, hasLength(1));
+      expect(kinds.first.title, '排行');
+      expect(kinds.first.style?.layoutFlexGrow, 1);
+      expect(kinds.first.style?.layoutAlignSelf, 'center');
+      expect(kinds.first.style?.layoutFlexBasisPercent, 0.5);
+      expect(kinds.first.style?.layoutWrapBefore, isTrue);
     });
 
     test('parseAsync flattens mixed lists returned by js rules', () async {
@@ -272,8 +298,7 @@ void main() {
         bookSourceName: '同步 IIFE 測試源',
       );
 
-      final kinds = await ExploreUrlParser.parseAsync(
-        '''
+      final kinds = await ExploreUrlParser.parseAsync('''
         <js>
         (() => {
           cookie.get('session');
@@ -282,23 +307,23 @@ void main() {
           ]);
         })()
         </js>
-        ''',
-        source: source,
-      );
+        ''', source: source);
 
       expect(kinds, hasLength(1));
       expect(kinds.first.title, '推薦');
       expect(kinds.first.url, 'https://example.com/recommend');
     });
 
-    test('parseAsync normalizes legacy bare destructuring arrow params', () async {
-      if (runtime == null) {
-        expect(runtimeError, isNotNull);
-        return;
-      }
+    test(
+      'parseAsync normalizes legacy bare destructuring arrow params',
+      () async {
+        if (runtime == null) {
+          expect(runtimeError, isNotNull);
+          return;
+        }
 
-      final kinds = await ExploreUrlParser.parseAsync(
-        '''
+        final kinds = await ExploreUrlParser.parseAsync(
+          '''
         @js:
         sort = [];
         push = (title, url) => sort.push({title: title, url: url});
@@ -307,15 +332,16 @@ void main() {
         });
         JSON.stringify(sort)
         ''',
-        source: BookSource(
-          bookSourceUrl: 'https://example.com',
-          bookSourceName: '解構參數測試源',
-        ),
-      );
+          source: BookSource(
+            bookSourceUrl: 'https://example.com',
+            bookSourceName: '解構參數測試源',
+          ),
+        );
 
-      expect(kinds, hasLength(1));
-      expect(kinds.first.title, '推薦');
-      expect(kinds.first.url, 'https://example.com/recommend');
-    });
+        expect(kinds, hasLength(1));
+        expect(kinds.first.title, '推薦');
+        expect(kinds.first.url, 'https://example.com/recommend');
+      },
+    );
   });
 }

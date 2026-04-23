@@ -287,14 +287,12 @@ class ExploreUrlParser {
         if (trimmed.isEmpty) continue;
 
         final parts = trimmed.split('::');
-        if (parts.length >= 2) {
-          kinds.add(
-            ExploreKind(
-              title: parts[0].trim(),
-              url: parts.sublist(1).join('::').trim(),
-            ),
-          );
-        }
+        kinds.add(
+          ExploreKind(
+            title: parts.first.trim(),
+            url: parts.length >= 2 ? parts.sublist(1).join('::').trim() : null,
+          ),
+        );
       }
     } catch (e) {
       AppLog.e('ExploreUrl 解析失敗: $e', error: e);
@@ -323,10 +321,7 @@ class ExploreUrlParser {
   }
 
   static String _sanitizeRelaxedJson(String raw) {
-    return raw.replaceAllMapped(
-      RegExp(r',(?=\s*[\]}])'),
-      (_) => '',
-    );
+    return raw.replaceAllMapped(RegExp(r',(?=\s*[\]}])'), (_) => '');
   }
 
   static bool _canPersistResolvedValue(dynamic value, List<ExploreKind> kinds) {

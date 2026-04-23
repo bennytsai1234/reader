@@ -9,6 +9,7 @@ import 'package:inkpage_reader/features/source_manager/source_editor_page.dart';
 
 import 'explore_provider.dart';
 import 'explore_show_page.dart';
+import 'widgets/legado_explore_kind_flow.dart';
 
 /// ExplorePage - 發現主頁面
 /// (對標 Android ExploreFragment + ExploreAdapter)
@@ -321,63 +322,69 @@ class _ExplorePageContentState extends State<_ExplorePageContent> {
     BookSource source,
     ThemeData theme,
   ) {
+    final kinds = provider.expandedKinds;
+
     return Padding(
       padding: const EdgeInsets.all(8),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: provider.expandedKinds.map((kind) {
-          final isError = kind.title.startsWith('ERROR:');
-          final background =
-              isError
-                  ? Colors.red.withValues(alpha: 0.08)
-                  : theme.colorScheme.primaryContainer.withValues(alpha: 0.42);
-          final borderColor =
-              isError
-                  ? Colors.red.withValues(alpha: 0.2)
-                  : theme.colorScheme.outlineVariant;
-          final textColor =
-              isError ? Colors.red.shade700 : theme.colorScheme.onSurface;
+      child: LegadoExploreKindFlow(
+        styles: kinds.map((kind) => kind.effectiveStyle).toList(),
+        children:
+            kinds.map((kind) {
+              final isError = kind.title.startsWith('ERROR:');
+              final hasUrl = kind.url != null && kind.url!.isNotEmpty;
+              final background =
+                  isError
+                      ? Colors.red.withValues(alpha: 0.08)
+                      : theme.colorScheme.primaryContainer.withValues(
+                        alpha: 0.42,
+                      );
+              final borderColor =
+                  isError
+                      ? Colors.red.withValues(alpha: 0.2)
+                      : theme.colorScheme.outlineVariant;
+              final textColor =
+                  isError ? Colors.red.shade700 : theme.colorScheme.onSurface;
 
-          return Material(
-            color: background,
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                if (isError) {
-                  _showKindError(context, kind);
-                  return;
-                }
-                if (kind.url == null || kind.url!.isEmpty) return;
-                _navigateToExploreShow(source, kind);
-              },
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 40, maxWidth: 140),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: borderColor),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    kind.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      fontSize: 11,
-                      height: 1.15,
-                      color: textColor,
-                      fontWeight: FontWeight.w600,
+              return Material(
+                color: background,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap:
+                      isError
+                          ? () => _showKindError(context, kind)
+                          : hasUrl
+                          ? () => _navigateToExploreShow(source, kind)
+                          : null,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 40),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: borderColor),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        kind.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontSize: 11,
+                          height: 1.15,
+                          color: textColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          );
-        }).toList(),
+              );
+            }).toList(),
       ),
     );
   }
