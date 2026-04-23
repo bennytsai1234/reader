@@ -173,8 +173,17 @@ extension BookSourceLogic on BookSourceBase {
 
   bool get isNovelTextSource => nonNovelExclusionReason == null;
 
+  bool get isReaderSupportedSourceType => bookSourceType == SourceType.book;
+
+  bool get canParticipateInDiscovery =>
+      enabled &&
+      enabledExplore &&
+      hasExploreUrl &&
+      isNovelTextSource &&
+      runtimeHealth.allowsReading;
+
   String? get nonNovelExclusionReason {
-    if (bookSourceType != SourceType.book) {
+    if (!isReaderSupportedSourceType) {
       return 'sourceType:$bookSourceType';
     }
     final marker = detectedNonNovelMarker;
