@@ -253,7 +253,7 @@ class ExploreUrlParser {
   /// 解析 JSON 陣列格式的 exploreUrl
   static List<ExploreKind> _parseJsonArray(String jsonStr) {
     try {
-      final decoded = jsonDecode(jsonStr);
+      final decoded = jsonDecode(_sanitizeRelaxedJson(jsonStr));
       if (decoded is! List) return [];
       return decoded
           .whereType<Map>()
@@ -267,7 +267,7 @@ class ExploreUrlParser {
 
   static List<ExploreKind> _parseJsonObject(String jsonStr) {
     try {
-      final decoded = jsonDecode(jsonStr);
+      final decoded = jsonDecode(_sanitizeRelaxedJson(jsonStr));
       if (decoded is! Map) return [];
       return [ExploreKind.fromJson(Map<String, dynamic>.from(decoded))];
     } catch (e) {
@@ -320,6 +320,13 @@ class ExploreUrlParser {
             ? 'ERROR:${trimmed.substring('JS_ERROR:'.length).trim()}'
             : 'ERROR:$trimmed';
     return <ExploreKind>[ExploreKind(title: title, url: trimmed)];
+  }
+
+  static String _sanitizeRelaxedJson(String raw) {
+    return raw.replaceAllMapped(
+      RegExp(r',(?=\s*[\]}])'),
+      (_) => '',
+    );
   }
 
   static bool _canPersistResolvedValue(dynamic value, List<ExploreKind> kinds) {

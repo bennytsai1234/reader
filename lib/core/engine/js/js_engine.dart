@@ -102,7 +102,8 @@ class JsEngine {
 
     _injectContext(context);
     await _ensureSourceJsLibLoadedAsync();
-    final rewritten = AsyncJsRewriter.rewrite(normalizedJs);
+    final asyncFriendlyJs = _normalizeLegacySyncIifeForAsync(normalizedJs);
+    final rewritten = AsyncJsRewriter.rewrite(asyncFriendlyJs);
     final (callId, future) = _extensions!.registerRuleCall();
     final wrapped = JsRuleAsyncWrapper.wrap(rewritten, callId);
 
@@ -124,6 +125,19 @@ class JsEngine {
     }
 
     return future.then(_decodeContextValue);
+  }
+
+  String _normalizeLegacySyncIifeForAsync(String jsCode) {
+    var normalized = jsCode;
+    normalized = normalized.replaceFirstMapped(
+      RegExp(r'^(\s*)\(\s*\(\s*\)\s*=>'),
+      (match) => '${match.group(1)}(async () =>',
+    );
+    normalized = normalized.replaceFirstMapped(
+      RegExp(r'^(\s*)\(\s*function\b'),
+      (match) => '${match.group(1)}(async function',
+    );
+    return normalized;
   }
 
   String? _extractSourceJsLib() {

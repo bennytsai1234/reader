@@ -1,11 +1,32 @@
+import 'package:flutter_js/flutter_js.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkpage_reader/core/engine/explore_url_parser.dart';
 import 'package:inkpage_reader/core/models/book_source.dart';
+import '../../test_helper.dart';
 
 void main() {
+  setupTestDI();
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('ExploreUrlParser', () {
+    JavascriptRuntime? runtime;
+    Object? runtimeError;
+
+    setUp(() {
+      runtimeError = null;
+      try {
+        runtime = getJavascriptRuntime();
+      } catch (error) {
+        runtime = null;
+        runtimeError = error;
+      }
+    });
+
+    tearDown(() {
+      runtime?.dispose();
+      runtime = null;
+    });
+
     test('parseAsync caches js explore results per source', () async {
       const exploreRule = '''
         <js>
@@ -103,6 +124,20 @@ void main() {
         '@js: JSON.stringify({"title":"推薦","url":"https://example.com/recommend"})',
         jsExecutor:
             (_) async => '{"title":"推薦","url":"https://example.com/recommend"}',
+      );
+
+      expect(kinds, hasLength(1));
+      expect(kinds.first.title, '推薦');
+      expect(kinds.first.url, 'https://example.com/recommend');
+    });
+
+    test('parseAsync accepts trailing commas in JSON arrays', () async {
+      final kinds = await ExploreUrlParser.parseAsync(
+        '''
+        [
+          {"title":"推薦","url":"https://example.com/recommend"},
+        ]
+        ''',
       );
 
       expect(kinds, hasLength(1));
@@ -224,6 +259,63 @@ void main() {
       expect(maxActiveExecutions, 1);
       expect(results[0].first.title, '第一個');
       expect(results[1].first.title, '第二個');
+    });
+
+    test('parseAsync supports legacy sync IIFE with async helpers', () async {
+      if (runtime == null) {
+        expect(runtimeError, isNotNull);
+        return;
+      }
+
+      final source = BookSource(
+        bookSourceUrl: 'https://example.com',
+        bookSourceName: '同步 IIFE 測試源',
+      );
+
+      final kinds = await ExploreUrlParser.parseAsync(
+        '''
+        <js>
+        (() => {
+          cookie.get('session');
+          return JSON.stringify([
+            {"title":"推薦","url":"https://example.com/recommend"}
+          ]);
+        })()
+        </js>
+        ''',
+        source: source,
+      );
+
+      expect(kinds, hasLength(1));
+      expect(kinds.first.title, '推薦');
+      expect(kinds.first.url, 'https://example.com/recommend');
+    });
+
+    test('parseAsync normalizes legacy bare destructuring arrow params', () async {
+      if (runtime == null) {
+        expect(runtimeError, isNotNull);
+        return;
+      }
+
+      final kinds = await ExploreUrlParser.parseAsync(
+        '''
+        @js:
+        sort = [];
+        push = (title, url) => sort.push({title: title, url: url});
+        [["推薦", "https://example.com/recommend"]].map([title, url]=>{
+          push(title, url);
+        });
+        JSON.stringify(sort)
+        ''',
+        source: BookSource(
+          bookSourceUrl: 'https://example.com',
+          bookSourceName: '解構參數測試源',
+        ),
+      );
+
+      expect(kinds, hasLength(1));
+      expect(kinds.first.title, '推薦');
+      expect(kinds.first.url, 'https://example.com/recommend');
     });
   });
 }

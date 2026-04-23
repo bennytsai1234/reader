@@ -87,7 +87,7 @@ class AsyncJsRewriter {
   /// we drop the invalid backslash and keep the following character.
   static String normalizeLegacyTemplateEscapes(String source) {
     if (!source.contains('`') || !source.contains(r'\')) {
-      return source;
+      return _normalizeLegacyArrowDestructuring(source);
     }
 
     final sb = StringBuffer();
@@ -131,7 +131,19 @@ class AsyncJsRewriter {
       sb.writeCharCode(c);
       i++;
     }
-    return sb.toString();
+    return _normalizeLegacyArrowDestructuring(sb.toString());
+  }
+
+  static String _normalizeLegacyArrowDestructuring(String source) {
+    var normalized = source.replaceAllMapped(
+      RegExp(r'([,(=])\s*(\[[^\[\]\n]+\])\s*=>'),
+      (match) => '${match.group(1)}(${match.group(2)}) =>',
+    );
+    normalized = normalized.replaceAllMapped(
+      RegExp(r'^(\s*)(\[[^\[\]\n]+\])\s*=>'),
+      (match) => '${match.group(1)}(${match.group(2)}) =>',
+    );
+    return normalized;
   }
 
   // ─── internal ────────────────────────────────────────────────────────
