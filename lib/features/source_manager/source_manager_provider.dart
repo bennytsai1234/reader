@@ -13,12 +13,17 @@ import 'widgets/import_preview_dialog.dart';
 
 class ParsedSourceImportResult {
   final List<BookSource> importableSources;
-  final List<BookSource> excludedNonNovelSources;
+  final List<BookSource> unsupportedSources;
 
   const ParsedSourceImportResult({
     required this.importableSources,
-    required this.excludedNonNovelSources,
+    required this.unsupportedSources,
   });
+
+  List<BookSource> get allSources => <BookSource>[
+    ...importableSources,
+    ...unsupportedSources,
+  ];
 }
 
 class SourceManagerProvider with ChangeNotifier {
@@ -35,6 +40,7 @@ class SourceManagerProvider with ChangeNotifier {
   SourceCheckReport get lastCheckReport => checkService.lastReport;
   bool get hasLastCheckReport => checkService.hasLastReport;
   SourceCheckConfig get checkConfig => checkService.config;
+  int get totalSourceCount => _sources.length;
 
   List<BookSourcePart> get sources {
     var list = List<BookSourcePart>.from(_sources);
@@ -500,7 +506,7 @@ class SourceManagerProvider with ChangeNotifier {
   }
 
   Future<void> checkAllSources({SourceCheckConfig? config}) async {
-    final urls = sources.map((s) => s.bookSourceUrl).toList();
+    final urls = _sources.map((s) => s.bookSourceUrl).toList();
     if (config != null) {
       await checkService.updateConfig(config);
     }
@@ -518,14 +524,14 @@ class SourceManagerProvider with ChangeNotifier {
 
   /// 解析 JSON 字串為書源列表 (不匯入)
   List<BookSource> parseSources(String jsonStr) {
-    return parseSourcesDetailed(jsonStr).importableSources;
+    return parseSourcesDetailed(jsonStr).allSources;
   }
 
   ParsedSourceImportResult parseSourcesDetailed(String jsonStr) {
     final decoded = jsonDecode(jsonStr);
     final List<dynamic> list = decoded is List ? decoded : [decoded];
     final result = <BookSource>[];
-    final excluded = <BookSource>[];
+    final unsupported = <BookSource>[];
     for (final e in list) {
       if (e is! Map<String, dynamic>) continue;
       final source = BookSource.fromJson(e);
@@ -536,21 +542,21 @@ class SourceManagerProvider with ChangeNotifier {
         source.enabled = false;
         source.enabledExplore = false;
         source.addGroup(nonNovelSourceGroupTag);
-        excluded.add(source);
+        unsupported.add(source);
         continue;
       }
       result.add(source);
     }
     return ParsedSourceImportResult(
       importableSources: result,
-      excludedNonNovelSources: excluded,
+      unsupportedSources: unsupported,
     );
   }
 
   /// 預覽匯入：分類為新增、更新、無變化
   Future<ImportPreviewResult> previewImport(
     List<BookSource> incoming, {
-    List<BookSource> excludedSources = const <BookSource>[],
+    List<BookSource> unsupportedSources = const <BookSource>[],
   }) async {
     final newSources = <BookSource>[];
     final updatedSources = <BookSource>[];
@@ -571,7 +577,7 @@ class SourceManagerProvider with ChangeNotifier {
       newSources: newSources,
       updatedSources: updatedSources,
       unchangedSources: unchangedSources,
-      excludedSources: excludedSources,
+      unsupportedSources: unsupportedSources,
     );
   }
 
@@ -595,10 +601,10 @@ class SourceManagerProvider with ChangeNotifier {
     notifyListeners();
     try {
       final parsed = parseSourcesDetailed(jsonStr);
-      if (parsed.importableSources.isEmpty) return 0;
-      await _dao.insertOrUpdateAll(parsed.importableSources);
+      if (parsed.allSources.isEmpty) return 0;
+      await _dao.insertOrUpdateAll(parsed.allSources);
       await loadSources();
-      return parsed.importableSources.length;
+      return parsed.allSources.length;
     } catch (_) {
       return 0;
     } finally {

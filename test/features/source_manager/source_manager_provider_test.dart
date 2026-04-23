@@ -85,7 +85,7 @@ void main() {
     expect(parsed[1].bookSourceName, '第二个书源');
   });
 
-  test('parseSourcesDetailed excludes non-novel sources', () {
+  test('parseSourcesDetailed preserves unsupported sources as disabled entries', () {
     final provider = SourceManagerProvider();
     final jsonStr = jsonEncode([
       {
@@ -109,12 +109,61 @@ void main() {
 
     expect(parsed.importableSources, hasLength(1));
     expect(parsed.importableSources.single.bookSourceName, '純小說站');
-    expect(parsed.excludedNonNovelSources, hasLength(2));
-    expect(parsed.excludedNonNovelSources.first.enabled, isFalse);
+    expect(parsed.unsupportedSources, hasLength(2));
+    expect(parsed.allSources, hasLength(3));
+    expect(parsed.unsupportedSources.first.enabled, isFalse);
     expect(
-      parsed.excludedNonNovelSources.first.bookSourceGroup,
+      parsed.unsupportedSources.first.bookSourceGroup,
       contains(nonNovelSourceGroupTag),
     );
+  });
+
+  test('checkAllSources uses all stored sources instead of current filter', () async {
+    fakeDao.store['https://enabled.example.com'] = BookSource(
+      bookSourceUrl: 'https://enabled.example.com',
+      bookSourceName: '啟用源',
+      bookSourceType: SourceType.book,
+      enabled: true,
+    );
+    fakeDao.store['https://disabled.example.com'] = BookSource(
+      bookSourceUrl: 'https://disabled.example.com',
+      bookSourceName: '停用源',
+      bookSourceType: SourceType.book,
+      enabled: false,
+    );
+
+    final provider = SourceManagerProvider();
+    await provider.loadSources();
+    provider.setFilterGroup('已啟用');
+
+    await provider.checkAllSources();
+
+    expect(provider.lastCheckReport.total, 2);
+  });
+
+  test('previewImport keeps unsupported new sources in import buckets', () async {
+    final provider = SourceManagerProvider();
+    final novelSource = BookSource(
+      bookSourceUrl: 'https://novel.example.com',
+      bookSourceName: '小說源',
+      bookSourceType: SourceType.book,
+    );
+    final unsupportedSource = BookSource(
+      bookSourceUrl: 'https://audio.example.com',
+      bookSourceName: '有聲源',
+      bookSourceType: SourceType.audio,
+      enabled: false,
+      enabledExplore: false,
+      bookSourceGroup: nonNovelSourceGroupTag,
+    );
+
+    final preview = await provider.previewImport(
+      [novelSource, unsupportedSource],
+      unsupportedSources: [unsupportedSource],
+    );
+
+    expect(preview.newSources, hasLength(2));
+    expect(preview.unsupportedSources, [unsupportedSource]);
   });
 
   test('deleteNonNovelSources removes existing non-novel sources', () async {

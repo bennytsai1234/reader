@@ -5,23 +5,25 @@ class ImportPreviewResult {
   final List<BookSource> newSources;
   final List<BookSource> updatedSources;
   final List<BookSource> unchangedSources;
-  final List<BookSource> excludedSources;
+  final List<BookSource> unsupportedSources;
 
   ImportPreviewResult({
     required this.newSources,
     required this.updatedSources,
     required this.unchangedSources,
-    this.excludedSources = const <BookSource>[],
+    this.unsupportedSources = const <BookSource>[],
   });
 
   int get total =>
       newSources.length +
       updatedSources.length +
       unchangedSources.length +
-      excludedSources.length;
+      unsupportedSources.length;
 
   int get importableTotal =>
       newSources.length + updatedSources.length + unchangedSources.length;
+
+  int get unsupportedCount => unsupportedSources.length;
 }
 
 /// Shows a dialog summarizing what will happen if sources are imported.
@@ -61,11 +63,11 @@ class _ImportPreviewDialogState extends State<_ImportPreviewDialog> {
             '共解析 ${p.total} 個書源',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          if (p.excludedSources.isNotEmpty)
+          if (p.unsupportedSources.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                '已排除非小說源：${p.excludedSources.length} 個',
+                '含非小說/不支援來源：${p.unsupportedSources.length} 個（會以停用狀態匯入）',
                 style: const TextStyle(color: Colors.orange, fontSize: 13),
               ),
             ),
