@@ -494,12 +494,12 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final parsed = p.parseSourcesDetailed(jsonStr);
-      if (parsed.importableSources.isEmpty) {
-        if (parsed.excludedNonNovelSources.isNotEmpty) {
+      if (parsed.allSources.isEmpty) {
+        if (parsed.unsupportedSources.isNotEmpty) {
           messenger.showSnackBar(
             SnackBar(
               content: Text(
-                '已排除 ${parsed.excludedNonNovelSources.length} 個非小說源，未匯入任何書源',
+                '解析到 ${parsed.unsupportedSources.length} 個不支援來源，但沒有可匯入書源',
               ),
             ),
           );
@@ -509,20 +509,20 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
         return;
       }
       final preview = await p.previewImport(
-        parsed.importableSources,
-        excludedSources: parsed.excludedNonNovelSources,
+        parsed.allSources,
+        unsupportedSources: parsed.unsupportedSources,
       );
       if (!context.mounted) return;
       final confirmed = await showImportPreviewDialog(context, preview);
       if (confirmed != null && confirmed.isNotEmpty) {
         final count = await p.importSources(confirmed);
         if (context.mounted) {
-          final excludedCount = parsed.excludedNonNovelSources.length;
+          final unsupportedCount = parsed.unsupportedSources.length;
           messenger.showSnackBar(
             SnackBar(
               content: Text(
-                excludedCount > 0
-                    ? '成功匯入 $count 個書源，已排除 $excludedCount 個非小說源'
+                unsupportedCount > 0
+                    ? '成功匯入 $count 個書源，其中 $unsupportedCount 個已標記為不支援並停用'
                     : '成功匯入 $count 個書源',
               ),
             ),

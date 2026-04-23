@@ -89,7 +89,7 @@ class SourceManagerDialogs {
     bool checkAll = false,
   }) async {
     final targetCount =
-        checkAll ? provider.sources.length : provider.selectedUrls.length;
+        checkAll ? provider.totalSourceCount : provider.selectedUrls.length;
     if (targetCount == 0) {
       return;
     }
@@ -114,7 +114,7 @@ class SourceManagerDialogs {
                 (context, setState) => AlertDialog(
                   title: Text(
                     checkAll
-                        ? '校驗所有書源 ($targetCount)'
+                        ? '校驗所有書源（全部 $targetCount 項）'
                         : '校驗選中書源 ($targetCount)',
                   ),
                   content: SizedBox(
