@@ -30,6 +30,22 @@ class ReadViewRuntimeCoordinator {
   PendingScrollAction? consumePendingScrollAction(ReaderProvider provider) {
     if (provider.pageTurnMode != PageAnim.scroll) return null;
 
+    final pendingRestore = provider.dispatchPendingScrollRestore();
+    if (pendingRestore != null) {
+      provider.clearPendingChapterJump();
+      return (
+        command: provider.buildScrollViewportCommand(
+          chapterIndex: pendingRestore.chapterIndex,
+          localOffset: pendingRestore.localOffset,
+          reason: ReaderCommandReason.restore,
+          anchor: pendingRestore.anchor,
+        ),
+        navigationToken: provider.activeNavigationToken ?? -1,
+        restoreToken: pendingRestore.token,
+        isRestore: true,
+      );
+    }
+
     final pendingChapterJump = provider.consumePendingChapterJump();
     if (pendingChapterJump != null) {
       return (
@@ -44,20 +60,7 @@ class ReadViewRuntimeCoordinator {
         isRestore: false,
       );
     }
-
-    final pendingRestore = provider.dispatchPendingScrollRestore();
-    if (pendingRestore == null) return null;
-    return (
-      command: provider.buildScrollViewportCommand(
-        chapterIndex: pendingRestore.chapterIndex,
-        localOffset: pendingRestore.localOffset,
-        reason: ReaderCommandReason.restore,
-        anchor: pendingRestore.anchor,
-      ),
-      navigationToken: provider.activeNavigationToken ?? -1,
-      restoreToken: pendingRestore.token,
-      isRestore: true,
-    );
+    return null;
   }
 
   bool shouldFollowTts(

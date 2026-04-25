@@ -1222,6 +1222,67 @@ void main() {
       controller.dispose();
     });
 
+    test('scroll restore anchor padding 使用實際 scroll viewport 高度', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller
+        ..pageTurnMode = PageAnim.scroll
+        ..viewSize = const Size(400, 800)
+        ..scrollViewportTopInset = 40
+        ..scrollViewportBottomInset = 80;
+
+      expect(
+        controller.scrollRestoreAnchorPadding,
+        closeTo((800 - 40 - 80) * ReaderScrollLayout.anchorRatio, 0.1),
+      );
+      controller.dispose();
+    });
+
+    test('scroll restore 章節 ready 後 confirmed anchor 會釋放 navigation', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(book: _makeBook());
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller
+        ..pageTurnMode = PageAnim.scroll
+        ..viewSize = const Size(400, 800)
+        ..scrollViewportTopInset = 40
+        ..scrollViewportBottomInset = 80;
+
+      controller.jumpToChapterCharOffset(
+        chapterIndex: 0,
+        charOffset: 8,
+        reason: ReaderCommandReason.restore,
+      );
+      expect(controller.shouldPersistVisiblePosition(), isFalse);
+
+      controller.chapterPagesCache[0] = _buildPages(0, [0, 8, 16], title: 'c0');
+      controller.refreshChapterRuntime(0);
+      controller.onScrollChapterReadyApplied(0, hasPages: true);
+
+      final pending = controller.consumePendingChapterJump();
+      expect(pending, isNotNull);
+      expect(pending!.reason, ReaderCommandReason.restore);
+
+      controller.handleVisibleScrollState(
+        chapterIndex: pending.chapterIndex,
+        localOffset: pending.localOffset,
+        alignment: pending.alignment,
+        visibleChapterIndexes: const [0],
+        anchorPadding: controller.scrollRestoreAnchorPadding,
+      );
+
+      expect(controller.shouldPersistVisiblePosition(), isTrue);
+      expect(controller.isScrollRestoreUnconfirmed, isFalse);
+      controller.dispose();
+    });
+
     test('visible placeholder 章節 ready 後會依相對進度 re-anchor', () async {
       _fakeChaptersFromDao = [
         BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),

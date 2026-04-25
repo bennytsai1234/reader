@@ -300,6 +300,30 @@ void main() {
       provider.dispose();
     });
 
+    test('scroll restore action 優先於 stale chapter jump 並清掉舊 jump', () {
+      final provider = _FakeReaderProvider()..pageTurnMode = PageAnim.scroll;
+
+      provider.requestJumpToChapter(
+        chapterIndex: 0,
+        localOffset: 0,
+        reason: ReaderCommandReason.chapterChange,
+      );
+      final token = provider.registerPendingScrollRestore(
+        chapterIndex: 2,
+        localOffset: 48,
+      );
+
+      final action = coordinator.consumePendingScrollAction(provider);
+
+      expect(action, isNotNull);
+      expect(action!.isRestore, isTrue);
+      expect(action.restoreToken, token);
+      expect(action.command.target.chapterIndex, 2);
+      expect(action.command.target.localOffset, 48);
+      expect(provider.consumePendingChapterJump(), isNull);
+      provider.dispose();
+    });
+
     test('scroll restore pending 期間會持續 hold content', () {
       final provider = _FakeReaderProvider()..pageTurnMode = PageAnim.scroll;
 

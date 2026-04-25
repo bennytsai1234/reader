@@ -180,10 +180,15 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
   void _handleItemPositionsChanged() {
     final p = widget.provider;
     if (p.pageTurnMode != PageAnim.scroll) return;
-    final viewportHeight = context.size?.height ?? 1.0;
+    final containerHeight = context.size?.height ?? 1.0;
+    final scrollViewportHeight = ReaderScrollLayout.scrollViewportHeight(
+      viewportHeight: containerHeight,
+      topInset: p.scrollViewportTopInset,
+      bottomInset: p.scrollViewportBottomInset,
+    );
     final update = _executionBridge.resolveVisibleScrollUpdate(
       positions: _itemPositionsListener.itemPositions.value,
-      viewportHeight: viewportHeight,
+      viewportHeight: scrollViewportHeight,
       chapterHeightFor: p.estimatedChapterContentHeight,
       chapterItemExtentFor: p.estimatedChapterItemExtent,
     );
@@ -196,8 +201,9 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       visibleChapterIndexes: update.visibleChapterIndexes,
       isAnchorConfirmed: pageAnchor != null,
       anchorPadding: ReaderScrollLayout.anchorPadding(
-        viewportHeight: viewportHeight,
+        viewportHeight: containerHeight,
         topInset: p.scrollViewportTopInset,
+        bottomInset: p.scrollViewportBottomInset,
       ),
     );
   }

@@ -181,6 +181,10 @@ abstract class ReaderProviderBase extends ChangeNotifier {
     );
   }
 
+  void clearPendingChapterJump() {
+    _viewportMailbox.clearPendingChapterJump();
+  }
+
   int? consumePendingSlidePageIndex() {
     return _viewportMailbox.consumePendingSlidePageIndex();
   }

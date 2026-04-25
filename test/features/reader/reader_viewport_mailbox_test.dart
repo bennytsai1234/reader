@@ -38,6 +38,22 @@ void main() {
       expect(mailbox.consumePendingChapterJump(), isNull);
     });
 
+    test('clearPendingChapterJump 會清掉尚未消費的 chapter jump', () {
+      final mailbox = ReaderViewportMailbox<ReaderCommandReason>(
+        systemReason: ReaderCommandReason.system,
+      );
+
+      mailbox.requestJumpToChapter(
+        chapterIndex: 3,
+        alignment: 0.2,
+        localOffset: 48,
+        reason: ReaderCommandReason.settingsRepaginate,
+      );
+      mailbox.clearPendingChapterJump();
+
+      expect(mailbox.consumePendingChapterJump(), isNull);
+    });
+
     test('controller reset target 只會被消費一次', () {
       final mailbox = ReaderViewportMailbox<ReaderCommandReason>(
         systemReason: ReaderCommandReason.system,

@@ -33,13 +33,26 @@ class ReaderScrollLayout {
         chapterSeparatorExtent(fontSize: fontSize, lineHeight: lineHeight);
   }
 
+  static double scrollViewportHeight({
+    required double viewportHeight,
+    required double topInset,
+    required double bottomInset,
+  }) {
+    return (viewportHeight - topInset - bottomInset)
+        .clamp(1.0, double.infinity)
+        .toDouble();
+  }
+
   static double anchorPadding({
     required double viewportHeight,
     required double topInset,
+    required double bottomInset,
   }) {
-    return ((viewportHeight * anchorRatio) - topInset).clamp(
-      0.0,
-      double.infinity,
-    );
+    return scrollViewportHeight(
+          viewportHeight: viewportHeight,
+          topInset: topInset,
+          bottomInset: bottomInset,
+        ) *
+        anchorRatio;
   }
 }

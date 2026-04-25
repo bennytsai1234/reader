@@ -64,6 +64,13 @@ class ReaderViewportMailbox<TReason> {
     return jump;
   }
 
+  void clearPendingChapterJump() {
+    _pendingJumpChapterIndex = null;
+    _pendingJumpAlignment = null;
+    _pendingJumpLocalOffset = null;
+    _pendingChapterJumpReason = _systemReason;
+  }
+
   int? consumePendingSlidePageIndex() {
     final value = _pendingSlidePageIndex;
     _pendingSlidePageIndex = null;

@@ -285,6 +285,7 @@ class ReadBookController extends ReaderProviderBase
     return ReaderScrollLayout.anchorPadding(
       viewportHeight: size.height,
       topInset: scrollViewportTopInset,
+      bottomInset: scrollViewportBottomInset,
     );
   }
 
@@ -438,7 +439,9 @@ class ReadBookController extends ReaderProviderBase
         _navigation.retargetActiveNavigation(
           reason: reason,
           targetLocation: targetLocation,
-          targetScrollLocalOffset: localOffset,
+          targetScrollLocalOffset: _restoreNavigationTargetLocalOffset(
+            localOffset,
+          ),
           completionPolicy:
               ReaderNavigationCompletionPolicy.visibleLocationMatch,
         );
@@ -812,6 +815,13 @@ class ReadBookController extends ReaderProviderBase
         setCurrentChapterIndex: (i) => currentChapterIndex = i,
       );
     }
+    final confirmedVisibleLocation =
+        isAnchorConfirmed
+            ? _runtimeController.resolveVisibleScrollLocation(
+              chapterIndex: chapterIndex,
+              localOffset: localOffset,
+            )
+            : visibleLocation;
 
     final update = _scrollVisibility.evaluate(
       visibleChapterIndexes: visibleChapterIndexes,
@@ -851,7 +861,7 @@ class ReadBookController extends ReaderProviderBase
               localOffset: localOffset,
               anchorPadding: anchorPadding,
               chapterContentHeight: estimatedChapterContentHeight(chapterIndex),
-              visibleLocation: visibleLocation,
+              visibleLocation: confirmedVisibleLocation,
             )
             : null;
     if (completedNavigation?.restoreToken case final restoreToken?) {

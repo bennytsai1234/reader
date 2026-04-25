@@ -348,6 +348,13 @@ class ReaderNavigationController {
     )) {
       return _completeActiveNavigation();
     }
+    if (active.reason == ReaderCommandReason.restore &&
+        active.matchesVisibleLocation(
+          visibleLocation,
+          charTolerance: charTolerance,
+        )) {
+      return _completeActiveNavigation();
+    }
     if (active.targetScrollLocalOffset != null) {
       return null;
     }

@@ -245,6 +245,31 @@ void main() {
       expect(nav.shouldPersistVisiblePosition(), isTrue);
     });
 
+    test('restore scroll transaction 可用實際 visible location 作為完成保底', () {
+      final nav = ReaderNavigationController();
+
+      expect(
+        nav.beginChapterJump(
+          ReaderCommandReason.restore,
+          targetLocation: const ReaderLocation(chapterIndex: 0, charOffset: 20),
+          targetScrollLocalOffset: 80,
+          completionPolicy:
+              ReaderNavigationCompletionPolicy.visibleLocationMatch,
+        ),
+        isTrue,
+      );
+
+      nav.reconcileVisibleScrollTarget(
+        chapterIndex: 0,
+        localOffset: 130,
+        anchorPadding: 12,
+        chapterContentHeight: 200,
+        visibleLocation: const ReaderLocation(chapterIndex: 0, charOffset: 20),
+      );
+
+      expect(nav.shouldPersistVisiblePosition(), isTrue);
+    });
+
     test('completeNavigation 必須匹配 token 才會釋放 explicit transaction', () {
       final nav = ReaderNavigationController();
 
