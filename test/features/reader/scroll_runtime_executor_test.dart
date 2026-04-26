@@ -101,6 +101,10 @@ class _RecordingReaderProvider extends ReaderProvider {
   int? abortedNavigationToken;
   ReaderCommandReason? abortedNavigationReason;
   int? deferredRestoreToken;
+  int? completedRestoreToken;
+  int? completedNavigationToken;
+  int? completedChapterIndex;
+  double? completedRequestedLocalOffset;
 
   @override
   bool matchesPendingScrollRestore(int token) => token == 99;
@@ -114,6 +118,51 @@ class _RecordingReaderProvider extends ReaderProvider {
   @override
   void deferPendingScrollRestore(int token) {
     deferredRestoreToken = token;
+  }
+
+  @override
+  void completeScrollRestoreFromViewport({
+    required int restoreToken,
+    required int navigationToken,
+    required int chapterIndex,
+    required double requestedLocalOffset,
+    int? measuredChapterIndex,
+    double? measuredLocalOffset,
+    double measuredTolerance = 96.0,
+  }) {
+    completedRestoreToken = restoreToken;
+    completedNavigationToken = navigationToken;
+    completedChapterIndex = chapterIndex;
+    completedRequestedLocalOffset = requestedLocalOffset;
+  }
+}
+
+class _CompletingScrollRestoreRunner extends ScrollRestoreRunner {
+  const _CompletingScrollRestoreRunner();
+
+  @override
+  void run({
+    required ReaderProvider provider,
+    required int chapterIndex,
+    required double localOffset,
+    required int token,
+    required bool Function() isMounted,
+    required bool Function() isScrollControllerAttached,
+    required void Function() ensureChapterVisible,
+    required void Function() deferRestore,
+    required VoidCallback cancelRestore,
+    required VoidCallback onCompleted,
+    required void Function({
+      required int chapterIndex,
+      required double localOffset,
+      required bool animate,
+    })
+    scrollToChapterLocalOffset,
+    required Future<void> Function(int chapterIndex) ensureChapterCached,
+    required bool Function(int chapterIndex) hasTargetPageContext,
+    int retries = 20,
+  }) {
+    onCompleted();
   }
 }
 
@@ -162,6 +211,33 @@ void main() {
       provider.dispose();
     },
   );
+
+  test('restore runner completion settles provider restore state', () {
+    final provider = _RecordingReaderProvider();
+    final executor = ScrollRuntimeExecutor(
+      provider: provider,
+      itemScrollController: ItemScrollController(),
+      pageKeys: const {},
+      scrollExecution: const ScrollExecutionAdapter(pageKeys: {}),
+      scrollRestoreRunner: const _CompletingScrollRestoreRunner(),
+      isMounted: () => true,
+      viewportHeight: () => 600,
+    );
+
+    executor.restoreScrollPosition(
+      chapterIndex: 3,
+      localOffset: 240.0,
+      token: 99,
+      navigationToken: 42,
+      retries: 0,
+    );
+
+    expect(provider.completedRestoreToken, 99);
+    expect(provider.completedNavigationToken, 42);
+    expect(provider.completedChapterIndex, 3);
+    expect(provider.completedRequestedLocalOffset, 240.0);
+    provider.dispose();
+  });
 
   test('restore exhaustion defers while target chapter is still loading', () {
     final provider = _RecordingReaderProvider()..loadingChapters.add(0);

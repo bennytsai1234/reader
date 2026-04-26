@@ -13,7 +13,6 @@ import 'shared/theme/app_theme.dart';
 import 'features/settings/settings_provider.dart';
 import 'features/welcome/splash_page.dart';
 import 'core/services/app_log_service.dart';
-import 'core/services/chinese_utils.dart';
 import 'features/browser/source_verification_coordinator.dart';
 
 @pragma('vm:entry-point')
@@ -91,17 +90,8 @@ void main() {
 
       try {
         AppLog.i('Configuring Dependencies...');
-        await Future.wait([configureDependencies(), ChineseUtils.initialize()]);
+        await configureDependencies();
         AppLog.i('Dependencies Configured Successfully');
-
-        if (kDebugMode) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('recordLog', true);
-          AppLog.i('Debug Mode: recordLog forced to TRUE');
-        }
-
-        AppLog.i('Initializing Workmanager...');
-        Workmanager().initialize(callbackDispatcher, isInDebugMode: kDebugMode);
 
         FlutterError.onError = (details) {
           FlutterError.presentError(details);
@@ -120,6 +110,9 @@ void main() {
             child: const LegadoReaderApp(),
           ),
         );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_runPostFirstFrameStartupTasks());
+        });
       } catch (e, stack) {
         AppLog.e('Startup Critical Error: $e', error: e, stackTrace: stack);
         runApp(
@@ -144,6 +137,24 @@ void main() {
       AppLog.e('Uncaught Error: $error', error: error, stackTrace: stack);
     },
   );
+}
+
+Future<void> _runPostFirstFrameStartupTasks() async {
+  if (kDebugMode) {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('recordLog', true);
+    AppLog.i('Debug Mode: recordLog forced to TRUE');
+  }
+
+  try {
+    AppLog.i('Initializing Workmanager...');
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: kDebugMode,
+    );
+  } catch (e, stack) {
+    AppLog.e('Workmanager init failed: $e', error: e, stackTrace: stack);
+  }
 }
 
 class LegadoReaderApp extends StatefulWidget {

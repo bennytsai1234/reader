@@ -506,7 +506,7 @@ void main() {
     expect(find.byType(PageViewWidget), findsNothing);
   });
 
-  testWidgets('ReaderPage scroll restore target 在 controller 完成前不會被頁面層提前清掉', (
+  testWidgets('ReaderPage scroll restore target 由 restore runner 完成後才清掉', (
     tester,
   ) async {
     final provider = _ReaderPageActionProbe(
@@ -526,12 +526,18 @@ void main() {
 
     provider.registerPendingScrollRestore(chapterIndex: 1, localOffset: 0);
     provider.notifyListeners();
+
+    expect(provider.pendingScrollRestoreChapterIndex, 1);
+    expect(provider.pendingScrollRestoreLocalOffset, 0);
+    expect(provider.shouldBlockScrollInputForRestore, isTrue);
+
     for (var i = 0; i < 6; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
 
-    expect(provider.pendingScrollRestoreChapterIndex, 1);
-    expect(provider.pendingScrollRestoreLocalOffset, 0);
+    expect(provider.pendingScrollRestoreChapterIndex, isNull);
+    expect(provider.pendingScrollRestoreLocalOffset, isNull);
+    expect(provider.shouldBlockScrollInputForRestore, isFalse);
     expect(provider.pageTurnMode, PageAnim.scroll);
     provider.pageTurnMode = PageAnim.slide;
     await tester.pumpWidget(const SizedBox.shrink());

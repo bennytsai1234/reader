@@ -35,7 +35,9 @@ ReaderProgressCoordinator _makeCoordinator({
     shouldPersistVisiblePosition: shouldPersist ?? () => true,
     updateVisibleLocation: (_) {},
     updateCommittedLocation: (_) {},
-    persistLocation: onPersistLocation ?? (_) async {},
+    persistLocation:
+        (location, {double? scrollLocalOffsetSnapshot}) =>
+            onPersistLocation?.call(location) ?? Future<void>.value(),
   );
 }
 
@@ -83,7 +85,7 @@ void main() {
           shouldPersistVisiblePosition: () => true,
           updateVisibleLocation: (_) {},
           updateCommittedLocation: (location) => committedLocation = location,
-          persistLocation: (_) async {},
+          persistLocation: (_, {double? scrollLocalOffsetSnapshot}) async {},
         );
 
         coordinator.updateVisibleChapterPosition(
@@ -147,6 +149,7 @@ void main() {
       );
 
       ReaderLocation? persistedLocation;
+      double? persistedSnapshot;
       final coordinator = ReaderProgressCoordinator(
         chapterAt: (_) => null,
         pagesForChapter: (_) => _buildScrollPages(),
@@ -159,8 +162,9 @@ void main() {
         shouldPersistVisiblePosition: () => true,
         updateVisibleLocation: (_) {},
         updateCommittedLocation: (_) {},
-        persistLocation: (location) async {
+        persistLocation: (location, {double? scrollLocalOffsetSnapshot}) async {
           persistedLocation = location;
+          persistedSnapshot = scrollLocalOffsetSnapshot;
         },
       );
 
@@ -182,6 +186,7 @@ void main() {
       expect(flushed!.chapterIndex, 0);
       expect(flushed.charOffset, 52);
       expect(persistedLocation, flushed);
+      expect(persistedSnapshot, 100.0);
       coordinator.dispose();
     });
 
@@ -252,7 +257,7 @@ void main() {
         shouldPersistVisiblePosition: () => true,
         updateVisibleLocation: (location) => visibleLocation = location,
         updateCommittedLocation: (location) => committedLocation = location,
-        persistLocation: (location) async {
+        persistLocation: (location, {double? scrollLocalOffsetSnapshot}) async {
           persistedLocation = location;
           persistCalled = true;
         },
@@ -305,7 +310,7 @@ void main() {
         shouldPersistVisiblePosition: () => true,
         updateVisibleLocation: (_) {},
         updateCommittedLocation: (_) {},
-        persistLocation: (_) async {
+        persistLocation: (_, {double? scrollLocalOffsetSnapshot}) async {
           persistCalled = true;
         },
       );

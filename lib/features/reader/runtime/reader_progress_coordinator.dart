@@ -7,6 +7,16 @@ import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dar
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_progress_store.dart';
 
+class ReaderProgressCandidate {
+  final ReaderLocation location;
+  final double? scrollLocalOffsetSnapshot;
+
+  const ReaderProgressCandidate({
+    required this.location,
+    this.scrollLocalOffsetSnapshot,
+  });
+}
+
 /// 管理閱讀進度的更新與持久化。
 ///
 /// 取代原本 [ReaderProgressMixin] 的 contentCallbacksRef 繞道模式，
@@ -19,10 +29,14 @@ class ReaderProgressCoordinator {
   final bool Function() _shouldPersistVisiblePosition;
   final void Function(ReaderLocation location) _updateVisibleLocation;
   final void Function(ReaderLocation location) _updateCommittedLocation;
-  final Future<void> Function(ReaderLocation location) _persistLocation;
+  final Future<void> Function(
+    ReaderLocation location, {
+    double? scrollLocalOffsetSnapshot,
+  })
+  _persistLocation;
 
   Timer? scrollSaveTimer;
-  ReaderLocation? _pendingDebouncedLocation;
+  ReaderProgressCandidate? _pendingDebouncedProgress;
 
   ReaderProgressCoordinator({
     required ReaderChapter? Function(int) chapterAt,
@@ -32,7 +46,11 @@ class ReaderProgressCoordinator {
     required bool Function() shouldPersistVisiblePosition,
     required void Function(ReaderLocation location) updateVisibleLocation,
     required void Function(ReaderLocation location) updateCommittedLocation,
-    required Future<void> Function(ReaderLocation location) persistLocation,
+    required Future<void> Function(
+      ReaderLocation location, {
+      double? scrollLocalOffsetSnapshot,
+    })
+    persistLocation,
   }) : _chapterAt = chapterAt,
        _pagesForChapter = pagesForChapter,
        _store = store,
@@ -70,11 +88,16 @@ class ReaderProgressCoordinator {
       chapterIndex: chapterIndex,
       localOffset: localOffset,
     );
+    final candidate = ReaderProgressCandidate(
+      location: currentLocation,
+      scrollLocalOffsetSnapshot: localOffset,
+    );
     _updateVisibleLocation(currentLocation);
     if (!_shouldPersistVisiblePosition()) return;
     final durableLocation = _durableLocation();
 
-    if (durableLocation == currentLocation) {
+    if (durableLocation == currentLocation &&
+        !_shouldPersistScrollSnapshot(candidate)) {
       _updateCommittedLocation(currentLocation);
       return;
     }
@@ -90,17 +113,27 @@ class ReaderProgressCoordinator {
     if (crossThreshold) {
       scrollSaveTimer?.cancel();
       scrollSaveTimer = null;
-      _pendingDebouncedLocation = null;
-      unawaited(_persistLocation(currentLocation));
+      _pendingDebouncedProgress = null;
+      unawaited(
+        _persistLocation(
+          currentLocation,
+          scrollLocalOffsetSnapshot: localOffset,
+        ),
+      );
     } else {
       scrollSaveTimer?.cancel();
-      _pendingDebouncedLocation = currentLocation;
+      _pendingDebouncedProgress = candidate;
       scrollSaveTimer = Timer(const Duration(milliseconds: 500), () {
         scrollSaveTimer = null;
-        final pendingLocation = _pendingDebouncedLocation;
-        _pendingDebouncedLocation = null;
-        if (pendingLocation == null) return;
-        unawaited(_persistLocation(pendingLocation));
+        final pending = _pendingDebouncedProgress;
+        _pendingDebouncedProgress = null;
+        if (pending == null) return;
+        unawaited(
+          _persistLocation(
+            pending.location,
+            scrollLocalOffsetSnapshot: pending.scrollLocalOffsetSnapshot,
+          ),
+        );
       });
     }
   }
@@ -127,7 +160,13 @@ class ReaderProgressCoordinator {
 
     _updateCommittedLocation(location);
 
-    unawaited(_persistLocation(location));
+    unawaited(
+      _persistLocation(
+        location,
+        scrollLocalOffsetSnapshot:
+            pageTurnMode == PageAnim.scroll ? visibleChapterLocalOffset : null,
+      ),
+    );
   }
 
   /// 更新 scroll mode 的頁面索引（不觸發持久化）。
@@ -155,19 +194,37 @@ class ReaderProgressCoordinator {
   void dispose() {
     scrollSaveTimer?.cancel();
     scrollSaveTimer = null;
-    _pendingDebouncedLocation = null;
+    _pendingDebouncedProgress = null;
   }
 
   Future<ReaderLocation?> flushPendingProgress() async {
     scrollSaveTimer?.cancel();
     scrollSaveTimer = null;
 
-    final pendingLocation = _pendingDebouncedLocation;
-    _pendingDebouncedLocation = null;
-    if (pendingLocation == null) return null;
+    final pending = _pendingDebouncedProgress;
+    _pendingDebouncedProgress = null;
+    if (pending == null) return null;
 
-    await _persistLocation(pendingLocation);
-    return pendingLocation;
+    await _persistLocation(
+      pending.location,
+      scrollLocalOffsetSnapshot: pending.scrollLocalOffsetSnapshot,
+    );
+    return pending.location;
+  }
+
+  bool _shouldPersistScrollSnapshot(ReaderProgressCandidate candidate) {
+    final snapshot = candidate.scrollLocalOffsetSnapshot;
+    if (snapshot == null || !snapshot.isFinite || snapshot < 0) {
+      return false;
+    }
+
+    final savedAnchor = _store.lastSavedAnchor;
+    if (savedAnchor == null) return false;
+    if (savedAnchor.location != candidate.location) return true;
+
+    final savedSnapshot = savedAnchor.localOffsetSnapshot;
+    if (savedSnapshot == null) return true;
+    return (savedSnapshot - snapshot).abs() >= 0.5;
   }
 
   ReaderLocation _resolveScrollLocation({

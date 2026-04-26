@@ -83,7 +83,19 @@ class ScrollRuntimeExecutor {
             navigationToken,
             ReaderCommandReason.restore,
           ),
-      onCompleted: () {},
+      onCompleted: () {
+        final measured = scrollExecution.resolveAnchorLocation(
+          provider: provider,
+        );
+        provider.completeScrollRestoreFromViewport(
+          restoreToken: token,
+          navigationToken: navigationToken,
+          chapterIndex: chapterIndex,
+          requestedLocalOffset: localOffset,
+          measuredChapterIndex: measured?.chapterIndex,
+          measuredLocalOffset: measured?.localOffset,
+        );
+      },
       scrollToChapterLocalOffset: ({
         required int chapterIndex,
         required double localOffset,

@@ -910,6 +910,72 @@ class ReadBookController extends ReaderProviderBase
     }
   }
 
+  void completeScrollRestoreFromViewport({
+    required int restoreToken,
+    required int navigationToken,
+    required int chapterIndex,
+    required double requestedLocalOffset,
+    int? measuredChapterIndex,
+    double? measuredLocalOffset,
+    double measuredTolerance = 96.0,
+  }) {
+    if (!_restore.matchesPendingScrollRestore(restoreToken)) return;
+
+    final useMeasured =
+        measuredChapterIndex != null &&
+        measuredLocalOffset != null &&
+        measuredLocalOffset.isFinite &&
+        measuredChapterIndex == chapterIndex &&
+        (measuredLocalOffset - requestedLocalOffset).abs() <= measuredTolerance;
+
+    final effectiveChapterIndex =
+        useMeasured ? measuredChapterIndex : chapterIndex;
+    final rawEffectiveLocalOffset =
+        useMeasured ? measuredLocalOffset : requestedLocalOffset;
+    final effectiveLocalOffset = _safeScrollLocalOffset(
+      effectiveChapterIndex,
+      rawEffectiveLocalOffset,
+    );
+
+    visibleChapterIndex = effectiveChapterIndex;
+    visibleChapterLocalOffset = effectiveLocalOffset;
+    visibleChapterAlignment = _scrollAlignmentForLocalOffset(
+      effectiveChapterIndex,
+      effectiveLocalOffset,
+    );
+    _lastVisibleScrollAnchorConfirmed = true;
+    _sessionCoordinator.updateVisibleConfirmed(true);
+
+    _progressCoordinator.updateScrollPageIndex(
+      chapterIndex: effectiveChapterIndex,
+      localOffset: effectiveLocalOffset,
+      setCurrentPageIndex: (i) => currentPageIndex = i,
+      setVisibleChapterIndex: (i) => visibleChapterIndex = i,
+      setCurrentChapterIndex: (i) => currentChapterIndex = i,
+    );
+
+    final visibleLocation = _runtimeController.resolveVisibleScrollLocation(
+      chapterIndex: effectiveChapterIndex,
+      localOffset: effectiveLocalOffset,
+    );
+    _updateCommittedLocation(visibleLocation);
+    _sessionCoordinator.updateVisibleLocation(visibleLocation);
+
+    final completed = _navigation.completeNavigation(
+      navigationToken,
+      reason: ReaderCommandReason.restore,
+    );
+    if (completed == null) {
+      _navigation.clear(ReaderCommandReason.restore);
+    }
+
+    _completeInitialScrollRestore(completed?.restoreToken ?? restoreToken);
+
+    if (!isDisposed) {
+      notifyListeners();
+    }
+  }
+
   void abortNavigation(int token, ReaderCommandReason reason) {
     final aborted = _navigation.abortNavigation(token, reason: reason);
     if (aborted?.restoreToken case final restoreToken?) {
@@ -1696,16 +1762,19 @@ class ReadBookController extends ReaderProviderBase
 
     _updateCommittedLocation(location);
     _sessionCoordinator.updateVisibleLocation(location);
-    if (location == durableLocation) return;
-    await _sessionCoordinator.persistAnchor(
-      _buildPersistedAnchor(
+
+    final anchor = _buildPersistedAnchor(
+      location,
+      sourceAnchor: ReaderAnchor.location(
         location,
-        sourceAnchor: ReaderAnchor.location(
-          location,
-          localOffsetSnapshot: localOffset,
-        ),
+        localOffsetSnapshot: localOffset,
       ),
+      preserveScrollLocalOffsetSnapshot: true,
     );
+
+    if (_savedAnchorMatches(anchor)) return;
+
+    await _sessionCoordinator.persistAnchor(anchor);
   }
 
   @override
@@ -1717,7 +1786,24 @@ class ReadBookController extends ReaderProviderBase
     _sessionCoordinator.updateCommittedLocation(location);
   }
 
-  Future<void> _persistSessionLocation(ReaderLocation location) {
+  Future<void> _persistSessionLocation(
+    ReaderLocation location, {
+    double? scrollLocalOffsetSnapshot,
+  }) {
+    if (pageTurnMode == PageAnim.scroll &&
+        scrollLocalOffsetSnapshot != null &&
+        scrollLocalOffsetSnapshot.isFinite) {
+      return _sessionCoordinator.persistAnchor(
+        _buildPersistedAnchor(
+          location,
+          sourceAnchor: ReaderAnchor.location(
+            location,
+            localOffsetSnapshot: scrollLocalOffsetSnapshot,
+          ),
+          preserveScrollLocalOffsetSnapshot: true,
+        ),
+      );
+    }
     return _sessionCoordinator.persistAnchor(_buildPersistedAnchor(location));
   }
 
@@ -1725,6 +1811,7 @@ class ReadBookController extends ReaderProviderBase
     ReaderLocation location, {
     ReaderAnchor? sourceAnchor,
     int? globalPageIndex,
+    bool preserveScrollLocalOffsetSnapshot = false,
   }) {
     final normalized = location.normalized();
     final baseAnchor = (sourceAnchor ?? ReaderAnchor.location(normalized))
@@ -1745,6 +1832,17 @@ class ReadBookController extends ReaderProviderBase
             .anchor;
     if (pageTurnMode == PageAnim.scroll) {
       final sourceSnapshot = sourceAnchor?.localOffsetSnapshot;
+      if (preserveScrollLocalOffsetSnapshot &&
+          sourceSnapshot != null &&
+          sourceSnapshot.isFinite &&
+          sourceSnapshot >= 0) {
+        return resolvedAnchor.copyWith(
+          localOffsetSnapshot: _safeScrollLocalOffset(
+            normalized.chapterIndex,
+            sourceSnapshot,
+          ),
+        );
+      }
       if (normalized.charOffset > 0 &&
           sourceSnapshot != null &&
           sourceSnapshot > 0 &&
@@ -1758,6 +1856,38 @@ class ReadBookController extends ReaderProviderBase
         normalized,
       ),
     );
+  }
+
+  bool _savedAnchorMatches(ReaderAnchor anchor) {
+    final saved = _progressStore.lastSavedAnchor?.normalized();
+    if (saved == null) return false;
+
+    final normalized = anchor.normalized();
+    if (saved.location != normalized.location) return false;
+    if (saved.contentHash != normalized.contentHash) return false;
+    if (saved.layoutSignature != normalized.layoutSignature) return false;
+    if (saved.pageIndexSnapshot != normalized.pageIndexSnapshot) return false;
+
+    final savedOffset = saved.localOffsetSnapshot;
+    final currentOffset = normalized.localOffsetSnapshot;
+    if (savedOffset == null || currentOffset == null) {
+      return savedOffset == currentOffset;
+    }
+    return (savedOffset - currentOffset).abs() < 0.5;
+  }
+
+  double _safeScrollLocalOffset(int chapterIndex, double localOffset) {
+    if (!localOffset.isFinite || localOffset < 0) return 0.0;
+    final height = estimatedChapterContentHeight(chapterIndex);
+    return localOffset
+        .clamp(0.0, height <= 0 ? double.infinity : height)
+        .toDouble();
+  }
+
+  double _scrollAlignmentForLocalOffset(int chapterIndex, double localOffset) {
+    final height = estimatedChapterContentHeight(chapterIndex);
+    if (height <= 0) return 0.0;
+    return (localOffset / height).clamp(0.0, 1.0).toDouble();
   }
 
   String _currentLayoutSignature() {
@@ -2243,6 +2373,16 @@ class ReadBookController extends ReaderProviderBase
     required int charOffset,
   }) {
     _restoreInitialSlideLocation(
+      chapterIndex: chapterIndex,
+      charOffset: charOffset,
+    );
+  }
+
+  void restoreInitialScrollLocationForTesting({
+    required int chapterIndex,
+    required int charOffset,
+  }) {
+    _restoreInitialScrollLocation(
       chapterIndex: chapterIndex,
       charOffset: charOffset,
     );

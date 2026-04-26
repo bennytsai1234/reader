@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +18,8 @@ class SplashPage extends StatefulWidget {
 class _SplashPageState extends State<SplashPage> {
   String _status = '正在初始化...';
   String? _error;
+  String? _resolvedWelcomeImagePath;
+  File? _welcomeImageFile;
 
   @override
   void initState() {
@@ -24,21 +27,58 @@ class _SplashPageState extends State<SplashPage> {
     _initApp();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final settings = Provider.of<SettingsProvider>(context);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final customPath =
+        isDarkMode ? settings.welcomeImageDark : settings.welcomeImage;
+    if (customPath == _resolvedWelcomeImagePath) return;
+    _resolvedWelcomeImagePath = customPath;
+    _welcomeImageFile = null;
+    unawaited(_resolveWelcomeImage(customPath));
+  }
+
   Future<void> _initApp() async {
     try {
-      setState(() => _status = '正在載入資料庫與預設資料...');
-      await DefaultData.init();
+      setState(() => _status = '正在載入閱讀配置...');
+      await DefaultData.initEssential();
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainPage()),
-        );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const MainPage()));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_initDeferredStartupData());
+        });
       }
     } catch (e, stack) {
       AppLog.e('Init Error: $e', error: e, stackTrace: stack);
       if (mounted) {
-        setState(() { _error = '$e\n$stack'; });
+        setState(() {
+          _error = '$e\n$stack';
+        });
       }
     }
+  }
+
+  Future<void> _initDeferredStartupData() async {
+    try {
+      await DefaultData.initDeferred();
+    } catch (e, stack) {
+      AppLog.e('Deferred init error: $e', error: e, stackTrace: stack);
+    }
+  }
+
+  Future<void> _resolveWelcomeImage(String path) async {
+    if (path.isEmpty) {
+      return;
+    }
+
+    final file = File(path);
+    final exists = await file.exists();
+    if (!mounted || _resolvedWelcomeImagePath != path) return;
+    setState(() => _welcomeImageFile = exists ? file : null);
   }
 
   @override
@@ -46,12 +86,15 @@ class _SplashPageState extends State<SplashPage> {
     final settings = context.watch<SettingsProvider>();
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
-    final customPath = isDarkMode ? settings.welcomeImageDark : settings.welcomeImage;
-    final showIcon = isDarkMode ? settings.welcomeShowIconDark : settings.welcomeShowIcon;
-    final showText = isDarkMode ? settings.welcomeShowTextDark : settings.welcomeShowText;
+    final showIcon =
+        isDarkMode ? settings.welcomeShowIconDark : settings.welcomeShowIcon;
+    final showText =
+        isDarkMode ? settings.welcomeShowTextDark : settings.welcomeShowText;
     final base = isDarkMode ? const Color(0xFF0F1D19) : const Color(0xFFF4F1E8);
-    final accent = isDarkMode ? const Color(0xFFB9D7C2) : const Color(0xFF244739);
-    final secondary = isDarkMode ? const Color(0xFF1B342C) : const Color(0xFFD8C8A8);
+    final accent =
+        isDarkMode ? const Color(0xFFB9D7C2) : const Color(0xFF244739);
+    final secondary =
+        isDarkMode ? const Color(0xFF1B342C) : const Color(0xFFD8C8A8);
 
     return Scaffold(
       body: Container(
@@ -69,15 +112,18 @@ class _SplashPageState extends State<SplashPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (customPath.isNotEmpty && File(customPath).existsSync())
+            if (_welcomeImageFile != null)
               Opacity(
                 opacity: 0.14,
-                child: Image.file(File(customPath), fit: BoxFit.cover),
+                child: Image.file(_welcomeImageFile!, fit: BoxFit.cover),
               ),
             Positioned(
               top: -60,
               right: -40,
-              child: _GlowOrb(color: secondary.withValues(alpha: 0.35), size: 220),
+              child: _GlowOrb(
+                color: secondary.withValues(alpha: 0.35),
+                size: 220,
+              ),
             ),
             Positioned(
               bottom: -80,
@@ -86,16 +132,26 @@ class _SplashPageState extends State<SplashPage> {
             ),
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 32,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: accent.withValues(alpha: isDarkMode ? 0.16 : 0.10),
+                        color: accent.withValues(
+                          alpha: isDarkMode ? 0.16 : 0.10,
+                        ),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: accent.withValues(alpha: 0.22)),
+                        border: Border.all(
+                          color: accent.withValues(alpha: 0.22),
+                        ),
                       ),
                       child: Text(
                         '閱讀工作台',
@@ -117,20 +173,29 @@ class _SplashPageState extends State<SplashPage> {
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: isDarkMode ? 0.24 : 0.12),
+                              color: Colors.black.withValues(
+                                alpha: isDarkMode ? 0.24 : 0.12,
+                              ),
                               blurRadius: 28,
                               offset: const Offset(0, 14),
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 44),
+                        child: const Icon(
+                          Icons.menu_book_rounded,
+                          color: Colors.white,
+                          size: 44,
+                        ),
                       ),
                     if (showIcon) const SizedBox(height: 24),
                     if (showText) ...[
                       Text(
                         kAppDisplayName,
                         style: theme.textTheme.headlineMedium?.copyWith(
-                          color: isDarkMode ? Colors.white : const Color(0xFF15231E),
+                          color:
+                              isDarkMode
+                                  ? Colors.white
+                                  : const Color(0xFF15231E),
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.0,
                         ),
@@ -139,7 +204,10 @@ class _SplashPageState extends State<SplashPage> {
                       Text(
                         '快速進入閱讀，聚焦在書架、章節與工作流程。',
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isDarkMode ? Colors.white70 : const Color(0xFF4E5E57),
+                          color:
+                              isDarkMode
+                                  ? Colors.white70
+                                  : const Color(0xFF4E5E57),
                           height: 1.5,
                         ),
                       ),
@@ -148,16 +216,26 @@ class _SplashPageState extends State<SplashPage> {
                     if (_error != null)
                       Text(
                         '啟動失敗：$_error',
-                        style: const TextStyle(color: Colors.redAccent, height: 1.4),
+                        style: const TextStyle(
+                          color: Colors.redAccent,
+                          height: 1.4,
+                        ),
                       )
                     else
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 16,
+                        ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: isDarkMode ? 0.08 : 0.72),
+                          color: Colors.white.withValues(
+                            alpha: isDarkMode ? 0.08 : 0.72,
+                          ),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: isDarkMode ? 0.10 : 0.55),
+                            color: Colors.white.withValues(
+                              alpha: isDarkMode ? 0.10 : 0.55,
+                            ),
                           ),
                         ),
                         child: Row(
@@ -167,7 +245,9 @@ class _SplashPageState extends State<SplashPage> {
                               height: 18,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.2,
-                                valueColor: AlwaysStoppedAnimation<Color>(accent),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  accent,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 14),
@@ -175,7 +255,10 @@ class _SplashPageState extends State<SplashPage> {
                               child: Text(
                                 _status,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: isDarkMode ? Colors.white70 : const Color(0xFF4E5E57),
+                                  color:
+                                      isDarkMode
+                                          ? Colors.white70
+                                          : const Color(0xFF4E5E57),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -208,12 +291,9 @@ class _GlowOrb extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color, color.withValues(alpha: 0)],
-          ),
+          gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
         ),
       ),
     );
   }
 }
-

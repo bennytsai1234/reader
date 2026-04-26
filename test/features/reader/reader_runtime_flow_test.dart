@@ -124,7 +124,9 @@ class _ReaderRuntimeHarness extends ReaderProviderBase
           (location) => _sessionState.updateVisibleLocation(location),
       updateCommittedLocation:
           (location) => _sessionState.updateCommittedLocation(location),
-      persistLocation: (location) async => persistLocation(location),
+      persistLocation:
+          (location, {double? scrollLocalOffsetSnapshot}) async =>
+              persistLocation(location),
     );
     contentCallbacks = ContentCallbacks(
       refreshChapterRuntime: (_) {},

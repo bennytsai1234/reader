@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/engine/page_view_widget.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:inkpage_reader/features/reader/reader_provider.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_anchor.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_scroll_layout.dart';
 import 'package:inkpage_reader/features/reader/widgets/reader/reader_bottom_menu.dart';
@@ -343,7 +345,7 @@ Future<void> _expectScrollResumeRoundTripAtChapterTen({
   );
   const scrolledLocalOffset = lineHeight * scrolledLines;
   const expectedCharOffset = 10 * charsPerLine;
-  const expectedRestoredLocalOffset = 10 * lineHeight;
+  const expectedRestoredLocalOffset = scrolledLocalOffset;
 
   _fakeChaptersFromDao = chapters;
   final firstController = _ScrollModeSeededReaderProvider(
@@ -1283,6 +1285,97 @@ void main() {
       controller.dispose();
     });
 
+    test('scroll restore runner completion 會釋放 restore block', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(
+        book: _makeBook(),
+        initialChapters: _fakeChaptersFromDao,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller
+        ..pageTurnMode = PageAnim.scroll
+        ..viewSize = const Size(400, 800);
+      controller.chapterPagesCache[0] = _buildSinglePageLinePages(
+        0,
+        lineCount: 24,
+        lineHeight: 20,
+        charsPerLine: 20,
+        title: 'c0',
+      );
+      controller.refreshChapterRuntime(0);
+
+      controller.restoreInitialScrollLocationForTesting(
+        chapterIndex: 0,
+        charOffset: 200,
+      );
+
+      final restoreToken = controller.pendingScrollRestoreToken;
+      final navigationToken = controller.activeNavigationToken;
+      expect(controller.shouldBlockScrollInputForRestore, isTrue);
+      expect(navigationToken, isNotNull);
+
+      controller.completeScrollRestoreFromViewport(
+        restoreToken: restoreToken,
+        navigationToken: navigationToken!,
+        chapterIndex: 0,
+        requestedLocalOffset: 210.0,
+        measuredChapterIndex: 0,
+        measuredLocalOffset: 212.0,
+      );
+
+      expect(controller.hasPendingScrollRestore, isFalse);
+      expect(controller.shouldBlockScrollInputForRestore, isFalse);
+      expect(controller.visibleChapterIndex, 0);
+      expect(controller.visibleChapterLocalOffset, closeTo(212.0, 0.5));
+      controller.dispose();
+    });
+
+    test('scroll restore completion 不依賴 item positions listener', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final controller = ReadBookController(
+        book: _makeBook(),
+        initialChapters: _fakeChaptersFromDao,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.scroll;
+      controller.chapterPagesCache[0] = _buildSinglePageLinePages(
+        0,
+        lineCount: 24,
+        lineHeight: 20,
+        charsPerLine: 20,
+        title: 'c0',
+      );
+      controller.refreshChapterRuntime(0);
+
+      controller.restoreInitialScrollLocationForTesting(
+        chapterIndex: 0,
+        charOffset: 200,
+      );
+
+      final restoreToken = controller.pendingScrollRestoreToken;
+      final navigationToken = controller.activeNavigationToken;
+      expect(controller.shouldBlockScrollInputForRestore, isTrue);
+      expect(navigationToken, isNotNull);
+
+      controller.completeScrollRestoreFromViewport(
+        restoreToken: restoreToken,
+        navigationToken: navigationToken!,
+        chapterIndex: 0,
+        requestedLocalOffset: 210.0,
+      );
+
+      expect(controller.hasPendingScrollRestore, isFalse);
+      expect(controller.shouldBlockScrollInputForRestore, isFalse);
+      expect(controller.visibleChapterLocalOffset, closeTo(210.0, 0.5));
+      controller.dispose();
+    });
+
     test('visible placeholder 章節 ready 後會依相對進度 re-anchor', () async {
       _fakeChaptersFromDao = [
         BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
@@ -1596,6 +1689,52 @@ void main() {
         controller.durableLocation,
         const ReaderLocation(chapterIndex: 0, charOffset: 8),
       );
+      controller.dispose();
+    });
+
+    test('scroll flush 會在同一 charOffset 下重寫 localOffsetSnapshot', () async {
+      _fakeChaptersFromDao = [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
+      ];
+      final book = _makeBook();
+      final controller = ReadBookController(
+        book: book,
+        initialChapters: _fakeChaptersFromDao,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      controller.pageTurnMode = PageAnim.scroll;
+      controller.chapterPagesCache[0] = _buildSinglePageLinePages(
+        0,
+        lineCount: 24,
+        lineHeight: 20,
+        charsPerLine: 20,
+        title: 'c0',
+      );
+      controller.refreshChapterRuntime(0);
+
+      controller.handleVisibleScrollState(
+        chapterIndex: 0,
+        localOffset: 205.0,
+        alignment: 0.0,
+        visibleChapterIndexes: const [0],
+      );
+      await controller.persistExitProgress();
+
+      controller.handleVisibleScrollState(
+        chapterIndex: 0,
+        localOffset: 216.5,
+        alignment: 0.0,
+        visibleChapterIndexes: const [0],
+      );
+      await controller.flushNow();
+
+      final saved = ReaderAnchor.fromJson(
+        Map<String, dynamic>.from(jsonDecode(book.readerAnchorJson!) as Map),
+      );
+      expect(saved.location.chapterIndex, 0);
+      expect(saved.location.charOffset, 200);
+      expect(saved.localOffsetSnapshot, closeTo(216.5, 0.5));
       controller.dispose();
     });
 
