@@ -155,8 +155,7 @@ mixin ReaderContentFacadeMixin on ReaderProviderBase, ReaderSettingsMixin {
     }
   }
 
-  bool get _isLocalScrollMode =>
-      pageTurnMode == PageAnim.scroll && book.origin == 'local';
+  bool get _isLocalScrollMode => false;
   bool get _isLocalBook => book.origin == 'local';
   bool get _isScrollMode => pageTurnMode == PageAnim.scroll;
   int get _effectiveScrollPreloadRadius =>
@@ -217,7 +216,7 @@ mixin ReaderContentFacadeMixin on ReaderProviderBase, ReaderSettingsMixin {
       chapterPagesCache: chapterPagesCache,
       book: book,
       chapterDao: chapterDao,
-      tempChapterCacheDao: readerTempChapterCacheDao,
+      chapterContentDao: readerChapterContentDao,
       replaceDao: replaceDao,
       sourceDao: sourceDao,
       service: service,

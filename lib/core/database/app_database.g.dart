@@ -1456,17 +1456,6 @@ class $ChaptersTable extends Chapters
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _contentMeta = const VerificationMeta(
-    'content',
-  );
-  @override
-  late final GeneratedColumn<String> content = GeneratedColumn<String>(
-    'content',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
   @override
   List<GeneratedColumn> get $columns => [
     url,
@@ -1485,7 +1474,6 @@ class $ChaptersTable extends Chapters
     startFragmentId,
     endFragmentId,
     variable,
-    content,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1606,12 +1594,6 @@ class $ChaptersTable extends Chapters
         variable.isAcceptableOrUnknown(data['variable']!, _variableMeta),
       );
     }
-    if (data.containsKey('content')) {
-      context.handle(
-        _contentMeta,
-        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
-      );
-    }
     return context;
   }
 
@@ -1694,10 +1676,6 @@ class $ChaptersTable extends Chapters
         DriftSqlType.string,
         data['${effectivePrefix}variable'],
       ),
-      content: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}content'],
-      ),
     );
   }
 
@@ -1727,7 +1705,6 @@ class ChaptersCompanion extends UpdateCompanion<BookChapter> {
   final Value<String?> startFragmentId;
   final Value<String?> endFragmentId;
   final Value<String?> variable;
-  final Value<String?> content;
   final Value<int> rowid;
   const ChaptersCompanion({
     this.url = const Value.absent(),
@@ -1746,7 +1723,6 @@ class ChaptersCompanion extends UpdateCompanion<BookChapter> {
     this.startFragmentId = const Value.absent(),
     this.endFragmentId = const Value.absent(),
     this.variable = const Value.absent(),
-    this.content = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ChaptersCompanion.insert({
@@ -1766,7 +1742,6 @@ class ChaptersCompanion extends UpdateCompanion<BookChapter> {
     this.startFragmentId = const Value.absent(),
     this.endFragmentId = const Value.absent(),
     this.variable = const Value.absent(),
-    this.content = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : url = Value(url),
        title = Value(title),
@@ -1789,7 +1764,6 @@ class ChaptersCompanion extends UpdateCompanion<BookChapter> {
     Expression<String>? startFragmentId,
     Expression<String>? endFragmentId,
     Expression<String>? variable,
-    Expression<String>? content,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1809,7 +1783,6 @@ class ChaptersCompanion extends UpdateCompanion<BookChapter> {
       if (startFragmentId != null) 'startFragmentId': startFragmentId,
       if (endFragmentId != null) 'endFragmentId': endFragmentId,
       if (variable != null) 'variable': variable,
-      if (content != null) 'content': content,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1831,7 +1804,6 @@ class ChaptersCompanion extends UpdateCompanion<BookChapter> {
     Value<String?>? startFragmentId,
     Value<String?>? endFragmentId,
     Value<String?>? variable,
-    Value<String?>? content,
     Value<int>? rowid,
   }) {
     return ChaptersCompanion(
@@ -1851,7 +1823,6 @@ class ChaptersCompanion extends UpdateCompanion<BookChapter> {
       startFragmentId: startFragmentId ?? this.startFragmentId,
       endFragmentId: endFragmentId ?? this.endFragmentId,
       variable: variable ?? this.variable,
-      content: content ?? this.content,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1909,9 +1880,6 @@ class ChaptersCompanion extends UpdateCompanion<BookChapter> {
     if (variable.present) {
       map['variable'] = Variable<String>(variable.value);
     }
-    if (content.present) {
-      map['content'] = Variable<String>(content.value);
-    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1937,7 +1905,6 @@ class ChaptersCompanion extends UpdateCompanion<BookChapter> {
           ..write('startFragmentId: $startFragmentId, ')
           ..write('endFragmentId: $endFragmentId, ')
           ..write('variable: $variable, ')
-          ..write('content: $content, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1966,7 +1933,6 @@ class _$BookChapterInsertable implements Insertable<BookChapter> {
       startFragmentId: Value(_object.startFragmentId),
       endFragmentId: Value(_object.endFragmentId),
       variable: Value(_object.variable),
-      content: Value(_object.content),
     ).toColumns(false);
   }
 }
@@ -1977,12 +1943,12 @@ extension BookChapterToInsertable on BookChapter {
   }
 }
 
-class $ReaderTempChapterCachesTable extends ReaderTempChapterCaches
-    with TableInfo<$ReaderTempChapterCachesTable, ReaderTempChapterCache> {
+class $ReaderChapterContentsTable extends ReaderChapterContents
+    with TableInfo<$ReaderChapterContentsTable, ReaderChapterContent> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $ReaderTempChapterCachesTable(this.attachedDatabase, [this._alias]);
+  $ReaderChapterContentsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _cacheKeyMeta = const VerificationMeta(
     'cacheKey',
   );
@@ -2058,6 +2024,21 @@ class $ReaderTempChapterCachesTable extends ReaderTempChapterCaches
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _isPersistentMeta = const VerificationMeta(
+    'isPersistent',
+  );
+  @override
+  late final GeneratedColumn<bool> isPersistent = GeneratedColumn<bool>(
+    'isPersistent',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("isPersistent" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _failureCountMeta = const VerificationMeta(
     'failureCount',
   );
@@ -2079,16 +2060,17 @@ class $ReaderTempChapterCachesTable extends ReaderTempChapterCaches
     chapterIndex,
     content,
     updatedAt,
+    isPersistent,
     failureCount,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'reader_temp_chapter_caches';
+  static const String $name = 'reader_chapter_contents';
   @override
   VerificationContext validateIntegrity(
-    Insertable<ReaderTempChapterCache> instance, {
+    Insertable<ReaderChapterContent> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -2150,6 +2132,15 @@ class $ReaderTempChapterCachesTable extends ReaderTempChapterCaches
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('isPersistent')) {
+      context.handle(
+        _isPersistentMeta,
+        isPersistent.isAcceptableOrUnknown(
+          data['isPersistent']!,
+          _isPersistentMeta,
+        ),
+      );
+    }
     if (data.containsKey('failureCount')) {
       context.handle(
         _failureCountMeta,
@@ -2165,9 +2156,9 @@ class $ReaderTempChapterCachesTable extends ReaderTempChapterCaches
   @override
   Set<GeneratedColumn> get $primaryKey => {cacheKey};
   @override
-  ReaderTempChapterCache map(Map<String, dynamic> data, {String? tablePrefix}) {
+  ReaderChapterContent map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return ReaderTempChapterCache(
+    return ReaderChapterContent(
       cacheKey:
           attachedDatabase.typeMapping.read(
             DriftSqlType.string,
@@ -2202,6 +2193,11 @@ class $ReaderTempChapterCachesTable extends ReaderTempChapterCaches
             DriftSqlType.int,
             data['${effectivePrefix}updatedAt'],
           )!,
+      isPersistent:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}isPersistent'],
+          )!,
       failureCount:
           attachedDatabase.typeMapping.read(
             DriftSqlType.int,
@@ -2211,13 +2207,13 @@ class $ReaderTempChapterCachesTable extends ReaderTempChapterCaches
   }
 
   @override
-  $ReaderTempChapterCachesTable createAlias(String alias) {
-    return $ReaderTempChapterCachesTable(attachedDatabase, alias);
+  $ReaderChapterContentsTable createAlias(String alias) {
+    return $ReaderChapterContentsTable(attachedDatabase, alias);
   }
 }
 
-class ReaderTempChapterCache extends DataClass
-    implements Insertable<ReaderTempChapterCache> {
+class ReaderChapterContent extends DataClass
+    implements Insertable<ReaderChapterContent> {
   final String cacheKey;
   final String origin;
   final String bookUrl;
@@ -2225,8 +2221,9 @@ class ReaderTempChapterCache extends DataClass
   final int chapterIndex;
   final String? content;
   final int updatedAt;
+  final bool isPersistent;
   final int failureCount;
-  const ReaderTempChapterCache({
+  const ReaderChapterContent({
     required this.cacheKey,
     required this.origin,
     required this.bookUrl,
@@ -2234,6 +2231,7 @@ class ReaderTempChapterCache extends DataClass
     required this.chapterIndex,
     this.content,
     required this.updatedAt,
+    required this.isPersistent,
     required this.failureCount,
   });
   @override
@@ -2248,12 +2246,13 @@ class ReaderTempChapterCache extends DataClass
       map['content'] = Variable<String>(content);
     }
     map['updatedAt'] = Variable<int>(updatedAt);
+    map['isPersistent'] = Variable<bool>(isPersistent);
     map['failureCount'] = Variable<int>(failureCount);
     return map;
   }
 
-  ReaderTempChapterCachesCompanion toCompanion(bool nullToAbsent) {
-    return ReaderTempChapterCachesCompanion(
+  ReaderChapterContentsCompanion toCompanion(bool nullToAbsent) {
+    return ReaderChapterContentsCompanion(
       cacheKey: Value(cacheKey),
       origin: Value(origin),
       bookUrl: Value(bookUrl),
@@ -2264,16 +2263,17 @@ class ReaderTempChapterCache extends DataClass
               ? const Value.absent()
               : Value(content),
       updatedAt: Value(updatedAt),
+      isPersistent: Value(isPersistent),
       failureCount: Value(failureCount),
     );
   }
 
-  factory ReaderTempChapterCache.fromJson(
+  factory ReaderChapterContent.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return ReaderTempChapterCache(
+    return ReaderChapterContent(
       cacheKey: serializer.fromJson<String>(json['cacheKey']),
       origin: serializer.fromJson<String>(json['origin']),
       bookUrl: serializer.fromJson<String>(json['bookUrl']),
@@ -2281,6 +2281,7 @@ class ReaderTempChapterCache extends DataClass
       chapterIndex: serializer.fromJson<int>(json['chapterIndex']),
       content: serializer.fromJson<String?>(json['content']),
       updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      isPersistent: serializer.fromJson<bool>(json['isPersistent']),
       failureCount: serializer.fromJson<int>(json['failureCount']),
     );
   }
@@ -2295,11 +2296,12 @@ class ReaderTempChapterCache extends DataClass
       'chapterIndex': serializer.toJson<int>(chapterIndex),
       'content': serializer.toJson<String?>(content),
       'updatedAt': serializer.toJson<int>(updatedAt),
+      'isPersistent': serializer.toJson<bool>(isPersistent),
       'failureCount': serializer.toJson<int>(failureCount),
     };
   }
 
-  ReaderTempChapterCache copyWith({
+  ReaderChapterContent copyWith({
     String? cacheKey,
     String? origin,
     String? bookUrl,
@@ -2307,8 +2309,9 @@ class ReaderTempChapterCache extends DataClass
     int? chapterIndex,
     Value<String?> content = const Value.absent(),
     int? updatedAt,
+    bool? isPersistent,
     int? failureCount,
-  }) => ReaderTempChapterCache(
+  }) => ReaderChapterContent(
     cacheKey: cacheKey ?? this.cacheKey,
     origin: origin ?? this.origin,
     bookUrl: bookUrl ?? this.bookUrl,
@@ -2316,12 +2319,11 @@ class ReaderTempChapterCache extends DataClass
     chapterIndex: chapterIndex ?? this.chapterIndex,
     content: content.present ? content.value : this.content,
     updatedAt: updatedAt ?? this.updatedAt,
+    isPersistent: isPersistent ?? this.isPersistent,
     failureCount: failureCount ?? this.failureCount,
   );
-  ReaderTempChapterCache copyWithCompanion(
-    ReaderTempChapterCachesCompanion data,
-  ) {
-    return ReaderTempChapterCache(
+  ReaderChapterContent copyWithCompanion(ReaderChapterContentsCompanion data) {
+    return ReaderChapterContent(
       cacheKey: data.cacheKey.present ? data.cacheKey.value : this.cacheKey,
       origin: data.origin.present ? data.origin.value : this.origin,
       bookUrl: data.bookUrl.present ? data.bookUrl.value : this.bookUrl,
@@ -2333,6 +2335,10 @@ class ReaderTempChapterCache extends DataClass
               : this.chapterIndex,
       content: data.content.present ? data.content.value : this.content,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      isPersistent:
+          data.isPersistent.present
+              ? data.isPersistent.value
+              : this.isPersistent,
       failureCount:
           data.failureCount.present
               ? data.failureCount.value
@@ -2342,7 +2348,7 @@ class ReaderTempChapterCache extends DataClass
 
   @override
   String toString() {
-    return (StringBuffer('ReaderTempChapterCache(')
+    return (StringBuffer('ReaderChapterContent(')
           ..write('cacheKey: $cacheKey, ')
           ..write('origin: $origin, ')
           ..write('bookUrl: $bookUrl, ')
@@ -2350,6 +2356,7 @@ class ReaderTempChapterCache extends DataClass
           ..write('chapterIndex: $chapterIndex, ')
           ..write('content: $content, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('isPersistent: $isPersistent, ')
           ..write('failureCount: $failureCount')
           ..write(')'))
         .toString();
@@ -2364,12 +2371,13 @@ class ReaderTempChapterCache extends DataClass
     chapterIndex,
     content,
     updatedAt,
+    isPersistent,
     failureCount,
   );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is ReaderTempChapterCache &&
+      (other is ReaderChapterContent &&
           other.cacheKey == this.cacheKey &&
           other.origin == this.origin &&
           other.bookUrl == this.bookUrl &&
@@ -2377,11 +2385,12 @@ class ReaderTempChapterCache extends DataClass
           other.chapterIndex == this.chapterIndex &&
           other.content == this.content &&
           other.updatedAt == this.updatedAt &&
+          other.isPersistent == this.isPersistent &&
           other.failureCount == this.failureCount);
 }
 
-class ReaderTempChapterCachesCompanion
-    extends UpdateCompanion<ReaderTempChapterCache> {
+class ReaderChapterContentsCompanion
+    extends UpdateCompanion<ReaderChapterContent> {
   final Value<String> cacheKey;
   final Value<String> origin;
   final Value<String> bookUrl;
@@ -2389,9 +2398,10 @@ class ReaderTempChapterCachesCompanion
   final Value<int> chapterIndex;
   final Value<String?> content;
   final Value<int> updatedAt;
+  final Value<bool> isPersistent;
   final Value<int> failureCount;
   final Value<int> rowid;
-  const ReaderTempChapterCachesCompanion({
+  const ReaderChapterContentsCompanion({
     this.cacheKey = const Value.absent(),
     this.origin = const Value.absent(),
     this.bookUrl = const Value.absent(),
@@ -2399,10 +2409,11 @@ class ReaderTempChapterCachesCompanion
     this.chapterIndex = const Value.absent(),
     this.content = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.isPersistent = const Value.absent(),
     this.failureCount = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  ReaderTempChapterCachesCompanion.insert({
+  ReaderChapterContentsCompanion.insert({
     required String cacheKey,
     required String origin,
     required String bookUrl,
@@ -2410,6 +2421,7 @@ class ReaderTempChapterCachesCompanion
     required int chapterIndex,
     this.content = const Value.absent(),
     required int updatedAt,
+    this.isPersistent = const Value.absent(),
     this.failureCount = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : cacheKey = Value(cacheKey),
@@ -2418,7 +2430,7 @@ class ReaderTempChapterCachesCompanion
        chapterUrl = Value(chapterUrl),
        chapterIndex = Value(chapterIndex),
        updatedAt = Value(updatedAt);
-  static Insertable<ReaderTempChapterCache> custom({
+  static Insertable<ReaderChapterContent> custom({
     Expression<String>? cacheKey,
     Expression<String>? origin,
     Expression<String>? bookUrl,
@@ -2426,6 +2438,7 @@ class ReaderTempChapterCachesCompanion
     Expression<int>? chapterIndex,
     Expression<String>? content,
     Expression<int>? updatedAt,
+    Expression<bool>? isPersistent,
     Expression<int>? failureCount,
     Expression<int>? rowid,
   }) {
@@ -2437,12 +2450,13 @@ class ReaderTempChapterCachesCompanion
       if (chapterIndex != null) 'chapterIndex': chapterIndex,
       if (content != null) 'content': content,
       if (updatedAt != null) 'updatedAt': updatedAt,
+      if (isPersistent != null) 'isPersistent': isPersistent,
       if (failureCount != null) 'failureCount': failureCount,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  ReaderTempChapterCachesCompanion copyWith({
+  ReaderChapterContentsCompanion copyWith({
     Value<String>? cacheKey,
     Value<String>? origin,
     Value<String>? bookUrl,
@@ -2450,10 +2464,11 @@ class ReaderTempChapterCachesCompanion
     Value<int>? chapterIndex,
     Value<String?>? content,
     Value<int>? updatedAt,
+    Value<bool>? isPersistent,
     Value<int>? failureCount,
     Value<int>? rowid,
   }) {
-    return ReaderTempChapterCachesCompanion(
+    return ReaderChapterContentsCompanion(
       cacheKey: cacheKey ?? this.cacheKey,
       origin: origin ?? this.origin,
       bookUrl: bookUrl ?? this.bookUrl,
@@ -2461,6 +2476,7 @@ class ReaderTempChapterCachesCompanion
       chapterIndex: chapterIndex ?? this.chapterIndex,
       content: content ?? this.content,
       updatedAt: updatedAt ?? this.updatedAt,
+      isPersistent: isPersistent ?? this.isPersistent,
       failureCount: failureCount ?? this.failureCount,
       rowid: rowid ?? this.rowid,
     );
@@ -2490,6 +2506,9 @@ class ReaderTempChapterCachesCompanion
     if (updatedAt.present) {
       map['updatedAt'] = Variable<int>(updatedAt.value);
     }
+    if (isPersistent.present) {
+      map['isPersistent'] = Variable<bool>(isPersistent.value);
+    }
     if (failureCount.present) {
       map['failureCount'] = Variable<int>(failureCount.value);
     }
@@ -2501,7 +2520,7 @@ class ReaderTempChapterCachesCompanion
 
   @override
   String toString() {
-    return (StringBuffer('ReaderTempChapterCachesCompanion(')
+    return (StringBuffer('ReaderChapterContentsCompanion(')
           ..write('cacheKey: $cacheKey, ')
           ..write('origin: $origin, ')
           ..write('bookUrl: $bookUrl, ')
@@ -2509,6 +2528,7 @@ class ReaderTempChapterCachesCompanion
           ..write('chapterIndex: $chapterIndex, ')
           ..write('content: $content, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('isPersistent: $isPersistent, ')
           ..write('failureCount: $failureCount, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -9357,8 +9377,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $BooksTable books = $BooksTable(this);
   late final $ChaptersTable chapters = $ChaptersTable(this);
-  late final $ReaderTempChapterCachesTable readerTempChapterCaches =
-      $ReaderTempChapterCachesTable(this);
+  late final $ReaderChapterContentsTable readerChapterContents =
+      $ReaderChapterContentsTable(this);
   late final $BookSourcesTable bookSources = $BookSourcesTable(this);
   late final $BookGroupsTable bookGroups = $BookGroupsTable(this);
   late final $SearchHistoryTableTable searchHistoryTable =
@@ -9410,8 +9430,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final SearchKeywordDao searchKeywordDao = SearchKeywordDao(
     this as AppDatabase,
   );
-  late final ReaderTempChapterCacheDao readerTempChapterCacheDao =
-      ReaderTempChapterCacheDao(this as AppDatabase);
+  late final ReaderChapterContentDao readerChapterContentDao =
+      ReaderChapterContentDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -9419,7 +9439,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     books,
     chapters,
-    readerTempChapterCaches,
+    readerChapterContents,
     bookSources,
     bookGroups,
     searchHistoryTable,
@@ -10230,7 +10250,6 @@ typedef $$ChaptersTableCreateCompanionBuilder =
       Value<String?> startFragmentId,
       Value<String?> endFragmentId,
       Value<String?> variable,
-      Value<String?> content,
       Value<int> rowid,
     });
 typedef $$ChaptersTableUpdateCompanionBuilder =
@@ -10251,7 +10270,6 @@ typedef $$ChaptersTableUpdateCompanionBuilder =
       Value<String?> startFragmentId,
       Value<String?> endFragmentId,
       Value<String?> variable,
-      Value<String?> content,
       Value<int> rowid,
     });
 
@@ -10344,11 +10362,6 @@ class $$ChaptersTableFilterComposer
     column: $table.variable,
     builder: (column) => ColumnFilters(column),
   );
-
-  ColumnFilters<String> get content => $composableBuilder(
-    column: $table.content,
-    builder: (column) => ColumnFilters(column),
-  );
 }
 
 class $$ChaptersTableOrderingComposer
@@ -10439,11 +10452,6 @@ class $$ChaptersTableOrderingComposer
     column: $table.variable,
     builder: (column) => ColumnOrderings(column),
   );
-
-  ColumnOrderings<String> get content => $composableBuilder(
-    column: $table.content,
-    builder: (column) => ColumnOrderings(column),
-  );
 }
 
 class $$ChaptersTableAnnotationComposer
@@ -10508,9 +10516,6 @@ class $$ChaptersTableAnnotationComposer
 
   GeneratedColumn<String> get variable =>
       $composableBuilder(column: $table.variable, builder: (column) => column);
-
-  GeneratedColumn<String> get content =>
-      $composableBuilder(column: $table.content, builder: (column) => column);
 }
 
 class $$ChaptersTableTableManager
@@ -10560,7 +10565,6 @@ class $$ChaptersTableTableManager
                 Value<String?> startFragmentId = const Value.absent(),
                 Value<String?> endFragmentId = const Value.absent(),
                 Value<String?> variable = const Value.absent(),
-                Value<String?> content = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ChaptersCompanion(
                 url: url,
@@ -10579,7 +10583,6 @@ class $$ChaptersTableTableManager
                 startFragmentId: startFragmentId,
                 endFragmentId: endFragmentId,
                 variable: variable,
-                content: content,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -10600,7 +10603,6 @@ class $$ChaptersTableTableManager
                 Value<String?> startFragmentId = const Value.absent(),
                 Value<String?> endFragmentId = const Value.absent(),
                 Value<String?> variable = const Value.absent(),
-                Value<String?> content = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ChaptersCompanion.insert(
                 url: url,
@@ -10619,7 +10621,6 @@ class $$ChaptersTableTableManager
                 startFragmentId: startFragmentId,
                 endFragmentId: endFragmentId,
                 variable: variable,
-                content: content,
                 rowid: rowid,
               ),
           withReferenceMapper:
@@ -10651,8 +10652,8 @@ typedef $$ChaptersTableProcessedTableManager =
       BookChapter,
       PrefetchHooks Function()
     >;
-typedef $$ReaderTempChapterCachesTableCreateCompanionBuilder =
-    ReaderTempChapterCachesCompanion Function({
+typedef $$ReaderChapterContentsTableCreateCompanionBuilder =
+    ReaderChapterContentsCompanion Function({
       required String cacheKey,
       required String origin,
       required String bookUrl,
@@ -10660,11 +10661,12 @@ typedef $$ReaderTempChapterCachesTableCreateCompanionBuilder =
       required int chapterIndex,
       Value<String?> content,
       required int updatedAt,
+      Value<bool> isPersistent,
       Value<int> failureCount,
       Value<int> rowid,
     });
-typedef $$ReaderTempChapterCachesTableUpdateCompanionBuilder =
-    ReaderTempChapterCachesCompanion Function({
+typedef $$ReaderChapterContentsTableUpdateCompanionBuilder =
+    ReaderChapterContentsCompanion Function({
       Value<String> cacheKey,
       Value<String> origin,
       Value<String> bookUrl,
@@ -10672,13 +10674,14 @@ typedef $$ReaderTempChapterCachesTableUpdateCompanionBuilder =
       Value<int> chapterIndex,
       Value<String?> content,
       Value<int> updatedAt,
+      Value<bool> isPersistent,
       Value<int> failureCount,
       Value<int> rowid,
     });
 
-class $$ReaderTempChapterCachesTableFilterComposer
-    extends Composer<_$AppDatabase, $ReaderTempChapterCachesTable> {
-  $$ReaderTempChapterCachesTableFilterComposer({
+class $$ReaderChapterContentsTableFilterComposer
+    extends Composer<_$AppDatabase, $ReaderChapterContentsTable> {
+  $$ReaderChapterContentsTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -10720,15 +10723,20 @@ class $$ReaderTempChapterCachesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<bool> get isPersistent => $composableBuilder(
+    column: $table.isPersistent,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get failureCount => $composableBuilder(
     column: $table.failureCount,
     builder: (column) => ColumnFilters(column),
   );
 }
 
-class $$ReaderTempChapterCachesTableOrderingComposer
-    extends Composer<_$AppDatabase, $ReaderTempChapterCachesTable> {
-  $$ReaderTempChapterCachesTableOrderingComposer({
+class $$ReaderChapterContentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ReaderChapterContentsTable> {
+  $$ReaderChapterContentsTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -10770,15 +10778,20 @@ class $$ReaderTempChapterCachesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isPersistent => $composableBuilder(
+    column: $table.isPersistent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get failureCount => $composableBuilder(
     column: $table.failureCount,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$ReaderTempChapterCachesTableAnnotationComposer
-    extends Composer<_$AppDatabase, $ReaderTempChapterCachesTable> {
-  $$ReaderTempChapterCachesTableAnnotationComposer({
+class $$ReaderChapterContentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ReaderChapterContentsTable> {
+  $$ReaderChapterContentsTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -10810,53 +10823,58 @@ class $$ReaderTempChapterCachesTableAnnotationComposer
   GeneratedColumn<int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
+  GeneratedColumn<bool> get isPersistent => $composableBuilder(
+    column: $table.isPersistent,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<int> get failureCount => $composableBuilder(
     column: $table.failureCount,
     builder: (column) => column,
   );
 }
 
-class $$ReaderTempChapterCachesTableTableManager
+class $$ReaderChapterContentsTableTableManager
     extends
         RootTableManager<
           _$AppDatabase,
-          $ReaderTempChapterCachesTable,
-          ReaderTempChapterCache,
-          $$ReaderTempChapterCachesTableFilterComposer,
-          $$ReaderTempChapterCachesTableOrderingComposer,
-          $$ReaderTempChapterCachesTableAnnotationComposer,
-          $$ReaderTempChapterCachesTableCreateCompanionBuilder,
-          $$ReaderTempChapterCachesTableUpdateCompanionBuilder,
+          $ReaderChapterContentsTable,
+          ReaderChapterContent,
+          $$ReaderChapterContentsTableFilterComposer,
+          $$ReaderChapterContentsTableOrderingComposer,
+          $$ReaderChapterContentsTableAnnotationComposer,
+          $$ReaderChapterContentsTableCreateCompanionBuilder,
+          $$ReaderChapterContentsTableUpdateCompanionBuilder,
           (
-            ReaderTempChapterCache,
+            ReaderChapterContent,
             BaseReferences<
               _$AppDatabase,
-              $ReaderTempChapterCachesTable,
-              ReaderTempChapterCache
+              $ReaderChapterContentsTable,
+              ReaderChapterContent
             >,
           ),
-          ReaderTempChapterCache,
+          ReaderChapterContent,
           PrefetchHooks Function()
         > {
-  $$ReaderTempChapterCachesTableTableManager(
+  $$ReaderChapterContentsTableTableManager(
     _$AppDatabase db,
-    $ReaderTempChapterCachesTable table,
+    $ReaderChapterContentsTable table,
   ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer:
-              () => $$ReaderTempChapterCachesTableFilterComposer(
+              () => $$ReaderChapterContentsTableFilterComposer(
                 $db: db,
                 $table: table,
               ),
           createOrderingComposer:
-              () => $$ReaderTempChapterCachesTableOrderingComposer(
+              () => $$ReaderChapterContentsTableOrderingComposer(
                 $db: db,
                 $table: table,
               ),
           createComputedFieldComposer:
-              () => $$ReaderTempChapterCachesTableAnnotationComposer(
+              () => $$ReaderChapterContentsTableAnnotationComposer(
                 $db: db,
                 $table: table,
               ),
@@ -10869,9 +10887,10 @@ class $$ReaderTempChapterCachesTableTableManager
                 Value<int> chapterIndex = const Value.absent(),
                 Value<String?> content = const Value.absent(),
                 Value<int> updatedAt = const Value.absent(),
+                Value<bool> isPersistent = const Value.absent(),
                 Value<int> failureCount = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => ReaderTempChapterCachesCompanion(
+              }) => ReaderChapterContentsCompanion(
                 cacheKey: cacheKey,
                 origin: origin,
                 bookUrl: bookUrl,
@@ -10879,6 +10898,7 @@ class $$ReaderTempChapterCachesTableTableManager
                 chapterIndex: chapterIndex,
                 content: content,
                 updatedAt: updatedAt,
+                isPersistent: isPersistent,
                 failureCount: failureCount,
                 rowid: rowid,
               ),
@@ -10891,9 +10911,10 @@ class $$ReaderTempChapterCachesTableTableManager
                 required int chapterIndex,
                 Value<String?> content = const Value.absent(),
                 required int updatedAt,
+                Value<bool> isPersistent = const Value.absent(),
                 Value<int> failureCount = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => ReaderTempChapterCachesCompanion.insert(
+              }) => ReaderChapterContentsCompanion.insert(
                 cacheKey: cacheKey,
                 origin: origin,
                 bookUrl: bookUrl,
@@ -10901,6 +10922,7 @@ class $$ReaderTempChapterCachesTableTableManager
                 chapterIndex: chapterIndex,
                 content: content,
                 updatedAt: updatedAt,
+                isPersistent: isPersistent,
                 failureCount: failureCount,
                 rowid: rowid,
               ),
@@ -10919,25 +10941,25 @@ class $$ReaderTempChapterCachesTableTableManager
       );
 }
 
-typedef $$ReaderTempChapterCachesTableProcessedTableManager =
+typedef $$ReaderChapterContentsTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
-      $ReaderTempChapterCachesTable,
-      ReaderTempChapterCache,
-      $$ReaderTempChapterCachesTableFilterComposer,
-      $$ReaderTempChapterCachesTableOrderingComposer,
-      $$ReaderTempChapterCachesTableAnnotationComposer,
-      $$ReaderTempChapterCachesTableCreateCompanionBuilder,
-      $$ReaderTempChapterCachesTableUpdateCompanionBuilder,
+      $ReaderChapterContentsTable,
+      ReaderChapterContent,
+      $$ReaderChapterContentsTableFilterComposer,
+      $$ReaderChapterContentsTableOrderingComposer,
+      $$ReaderChapterContentsTableAnnotationComposer,
+      $$ReaderChapterContentsTableCreateCompanionBuilder,
+      $$ReaderChapterContentsTableUpdateCompanionBuilder,
       (
-        ReaderTempChapterCache,
+        ReaderChapterContent,
         BaseReferences<
           _$AppDatabase,
-          $ReaderTempChapterCachesTable,
-          ReaderTempChapterCache
+          $ReaderChapterContentsTable,
+          ReaderChapterContent
         >,
       ),
-      ReaderTempChapterCache,
+      ReaderChapterContent,
       PrefetchHooks Function()
     >;
 typedef $$BookSourcesTableCreateCompanionBuilder =
@@ -15805,11 +15827,8 @@ class $AppDatabaseManager {
       $$BooksTableTableManager(_db, _db.books);
   $$ChaptersTableTableManager get chapters =>
       $$ChaptersTableTableManager(_db, _db.chapters);
-  $$ReaderTempChapterCachesTableTableManager get readerTempChapterCaches =>
-      $$ReaderTempChapterCachesTableTableManager(
-        _db,
-        _db.readerTempChapterCaches,
-      );
+  $$ReaderChapterContentsTableTableManager get readerChapterContents =>
+      $$ReaderChapterContentsTableTableManager(_db, _db.readerChapterContents);
   $$BookSourcesTableTableManager get bookSources =>
       $$BookSourcesTableTableManager(_db, _db.bookSources);
   $$BookGroupsTableTableManager get bookGroups =>

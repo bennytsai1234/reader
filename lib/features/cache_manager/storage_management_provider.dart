@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 import 'package:inkpage_reader/core/database/dao/search_history_dao.dart';
 import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:inkpage_reader/core/services/rule_big_data_service.dart';
@@ -26,7 +26,8 @@ class StorageEntry {
 }
 
 class StorageManagementProvider extends ChangeNotifier {
-  final ChapterDao _chapterDao = getIt<ChapterDao>();
+  final ReaderChapterContentDao _chapterContentDao =
+      getIt<ReaderChapterContentDao>();
   final SearchHistoryDao _searchHistoryDao = getIt<SearchHistoryDao>();
 
   bool _isLoading = false;
@@ -41,7 +42,7 @@ class StorageManagementProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    final chapterSize = await _chapterDao.getTotalContentSize();
+    final chapterSize = await _chapterContentDao.getTotalContentSize();
     final imageCacheDir = await AppStoragePaths.imageCacheDir();
     final imageCacheSize = await StorageMetrics.directorySize(imageCacheDir);
     final exportTempDir = await AppStoragePaths.shareExportDir();
@@ -59,7 +60,7 @@ class StorageManagementProvider extends ChangeNotifier {
         description: '已下載章節與閱讀中寫入資料庫的正文內容',
         sizeInBytes: chapterSize,
         displayValue: StorageMetrics.formatBytes(chapterSize),
-        onClear: _chapterDao.clearAllContent,
+        onClear: _chapterContentDao.clearAllContent,
       ),
       StorageEntry(
         icon: Icons.image_outlined,
@@ -113,7 +114,7 @@ class StorageManagementProvider extends ChangeNotifier {
   }
 
   Future<void> clearAll() async {
-    await _chapterDao.clearAllContent();
+    await _chapterContentDao.clearAllContent();
     await _clearImageCache();
     await _clearExportTemp();
     await _searchHistoryDao.clearAll();

@@ -1,4 +1,4 @@
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
@@ -6,24 +6,33 @@ import 'package:inkpage_reader/features/reader/runtime/models/reader_location.da
 class ReaderPositionResolver {
   const ReaderPositionResolver._();
 
+  static LineLayout? _lineLayout({
+    required ReaderChapter? runtimeChapter,
+    required List<TextPage> pages,
+    required int chapterIndex,
+  }) {
+    if (runtimeChapter != null) return runtimeChapter.lineLayout;
+    if (pages.isEmpty) return null;
+    return LineLayout.fromPages(pages, chapterIndex: chapterIndex);
+  }
+
   static ReaderScrollTarget resolveScrollTarget({
     required ReaderLocation location,
     required ReaderChapter? runtimeChapter,
     required List<TextPage> pages,
   }) {
     final normalized = location.normalized();
-    final localOffset = runtimeChapter != null
-        ? runtimeChapter.localOffsetFromCharOffset(normalized.charOffset)
-        : ChapterPositionResolver.charOffsetToLocalOffset(
-            pages,
-            normalized.charOffset,
-          );
-    final alignment = runtimeChapter != null
-        ? runtimeChapter.alignmentForCharOffset(normalized.charOffset)
-        : ChapterPositionResolver.charOffsetToAlignment(
-            pages,
-            normalized.charOffset,
-          );
+    final layout = _lineLayout(
+      runtimeChapter: runtimeChapter,
+      pages: pages,
+      chapterIndex: normalized.chapterIndex,
+    );
+    final localOffset =
+        layout?.localOffsetForCharOffset(normalized.charOffset) ?? 0.0;
+    final alignment =
+        layout == null || layout.contentHeight <= 0
+            ? 0.0
+            : (localOffset / layout.contentHeight).clamp(0.0, 1.0).toDouble();
     return ReaderScrollTarget(
       chapterIndex: normalized.chapterIndex,
       localOffset: localOffset,
@@ -40,9 +49,10 @@ class ReaderPositionResolver {
     required int targetChapterIndex,
   }) {
     if (globalPageIndex != null) {
-      final safeIndex = slidePages.isEmpty
-          ? 0
-          : globalPageIndex.clamp(0, slidePages.length - 1);
+      final safeIndex =
+          slidePages.isEmpty
+              ? 0
+              : globalPageIndex.clamp(0, slidePages.length - 1);
       final targetPage = slidePages.isNotEmpty ? slidePages[safeIndex] : null;
       return ReaderSlideTarget(
         globalPageIndex: safeIndex,
@@ -51,15 +61,17 @@ class ReaderPositionResolver {
       );
     }
 
-    final normalized = (location ??
-            ReaderLocation(chapterIndex: targetChapterIndex, charOffset: 0))
-        .normalized();
-    final chapterPageIndex = runtimeChapter != null
-        ? runtimeChapter.getPageIndexByCharIndex(normalized.charOffset)
-        : ChapterPositionResolver.findPageIndexByCharOffset(
-            chapterPages,
-            normalized.charOffset,
-          );
+    final normalized =
+        (location ??
+                ReaderLocation(chapterIndex: targetChapterIndex, charOffset: 0))
+            .normalized();
+    final layout = _lineLayout(
+      runtimeChapter: runtimeChapter,
+      pages: chapterPages,
+      chapterIndex: normalized.chapterIndex,
+    );
+    final chapterPageIndex =
+        layout?.findPageIndexByCharOffset(normalized.charOffset) ?? 0;
     final globalIndex = slidePages.indexWhere(
       (page) =>
           page.chapterIndex == normalized.chapterIndex &&

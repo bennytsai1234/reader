@@ -9,6 +9,7 @@ import 'package:inkpage_reader/core/database/dao/book_dao.dart';
 import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
 import 'package:inkpage_reader/core/database/dao/bookmark_dao.dart';
 import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
 import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:inkpage_reader/core/models/book.dart';
@@ -84,6 +85,49 @@ class _FakeReplaceRuleDao implements ReplaceRuleDao {
 class _FakeBookSourceDao implements BookSourceDao {
   @override
   Future<BookSource?> getByUrl(String url) async => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _FakeReaderChapterContentDao implements ReaderChapterContentDao {
+  static final Map<String, String> contentByKey = <String, String>{};
+
+  @override
+  Future<String?> getContent({
+    required String cacheKey,
+    int? minUpdatedAt,
+  }) async {
+    final content = contentByKey[cacheKey];
+    return content == null || content.isEmpty ? null : content;
+  }
+
+  @override
+  Future<void> saveContent({
+    required String cacheKey,
+    required String origin,
+    required String bookUrl,
+    required String chapterUrl,
+    required int chapterIndex,
+    required String content,
+    required int updatedAt,
+    bool isPersistent = false,
+  }) async {
+    contentByKey[cacheKey] = content;
+  }
+
+  @override
+  Future<int> getFailureCount(String cacheKey) async => 0;
+
+  @override
+  Future<void> recordFailure({
+    required String cacheKey,
+    required String origin,
+    required String bookUrl,
+    required String chapterUrl,
+    required int chapterIndex,
+    required int updatedAt,
+  }) async {}
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -217,11 +261,20 @@ void _setupDi() {
     () {
       if (getIt.isRegistered<BookmarkDao>()) getIt.unregister<BookmarkDao>();
     },
+    () {
+      if (getIt.isRegistered<ReaderChapterContentDao>()) {
+        getIt.unregister<ReaderChapterContentDao>();
+      }
+    },
   ]) {
     unregister();
   }
+  _FakeReaderChapterContentDao.contentByKey.clear();
   getIt.registerLazySingleton<BookDao>(() => _FakeBookDao());
   getIt.registerLazySingleton<ChapterDao>(() => _FakeChapterDao());
+  getIt.registerLazySingleton<ReaderChapterContentDao>(
+    () => _FakeReaderChapterContentDao(),
+  );
   getIt.registerLazySingleton<ReplaceRuleDao>(() => _FakeReplaceRuleDao());
   getIt.registerLazySingleton<BookSourceDao>(() => _FakeBookSourceDao());
   getIt.registerLazySingleton<BookmarkDao>(() => _FakeBookmarkDao());
@@ -262,6 +315,19 @@ List<BookChapter> _buildChapters(
       content: includeContent ? 'chapter $index content' : null,
     ),
   );
+}
+
+void _seedChapterContent(Book book, Iterable<BookChapter> chapters) {
+  for (final chapter in chapters) {
+    final content = chapter.content;
+    if (content == null || content.isEmpty) continue;
+    _FakeReaderChapterContentDao.contentByKey[ReaderChapterContentDao.cacheKey(
+          origin: book.origin,
+          bookUrl: book.bookUrl,
+          chapterUrl: chapter.url,
+        )] =
+        content;
+  }
 }
 
 List<TextPage> _buildPages(
@@ -346,6 +412,7 @@ Future<void> _expectScrollResumeRoundTripAtChapterTen({
   const expectedRestoredLocalOffset = lineHeight * 10;
 
   _fakeChaptersFromDao = chapters;
+  _seedChapterContent(book, chapters);
   final firstController = _ScrollModeSeededReaderProvider(
     book: book,
     initialChapters: chapters,
@@ -818,22 +885,26 @@ void main() {
           chapterIndex: 0,
           charOffset: 0,
         );
+        final chapters = [
+          BookChapter(
+            title: 'c0',
+            index: 0,
+            bookUrl: 'http://test.com/book',
+            url: 'http://test.com/book/chapter-0',
+            content: '第一章正文',
+          ),
+          BookChapter(
+            title: 'c1',
+            index: 1,
+            bookUrl: 'http://test.com/book',
+            url: 'http://test.com/book/chapter-1',
+            content: '加載章節失敗: 測試錯誤',
+          ),
+        ];
+        _seedChapterContent(remoteBook, chapters);
         final controller = ReadBookController(
           book: remoteBook,
-          initialChapters: [
-            BookChapter(
-              title: 'c0',
-              index: 0,
-              bookUrl: 'http://test.com/book',
-              content: '第一章正文',
-            ),
-            BookChapter(
-              title: 'c1',
-              index: 1,
-              bookUrl: 'http://test.com/book',
-              content: '加載章節失敗: 測試錯誤',
-            ),
-          ],
+          initialChapters: chapters,
         );
         await Future<void>.delayed(const Duration(milliseconds: 10));
 
@@ -1888,7 +1959,7 @@ void main() {
 
         controller.replaceChapterSource(1, BookSource(), 'updated content');
 
-        expect(controller.chapters[1].content, 'updated content');
+        expect(controller.chapters[1].content, isNull);
         expect(controller.chapterPagesCache.containsKey(1), isFalse);
         expect(controller.chapterAt(1), isNull);
         controller.dispose();

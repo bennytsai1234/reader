@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
-import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
 import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
 import 'package:inkpage_reader/core/engine/reader/chinese_text_converter.dart';
 import 'package:inkpage_reader/core/engine/reader/content_processor.dart'
@@ -20,7 +19,6 @@ import 'package:inkpage_reader/features/reader/engine/reader_perf_trace.dart';
 class ReaderChapterContentLoader {
   ReaderChapterContentLoader({
     required this.book,
-    required this.chapterDao,
     this.cacheRepository,
     required this.replaceDao,
     required this.sourceDao,
@@ -32,7 +30,6 @@ class ReaderChapterContentLoader {
   });
 
   final Book book;
-  final ChapterDao chapterDao;
   final ReaderChapterContentCacheRepository? cacheRepository;
   final ReplaceRuleDao replaceDao;
   final BookSourceDao sourceDao;
@@ -115,15 +112,6 @@ class ReaderChapterContentLoader {
       if (cachedContent != null && cachedContent.isNotEmpty) {
         return cachedContent;
       }
-    } else {
-      final chapterContent = chapter.content;
-      if (chapterContent != null && chapterContent.isNotEmpty) {
-        return chapterContent;
-      }
-      final cachedContent = await chapterDao.getContent(chapter.url);
-      if (cachedContent != null && cachedContent.isNotEmpty) {
-        return cachedContent;
-      }
     }
 
     var source = getSource();
@@ -177,9 +165,6 @@ class ReaderChapterContentLoader {
             chapter: chapter,
             content: raw,
           );
-        } else {
-          await chapterDao.insertChapters(<BookChapter>[chapter]);
-          await chapterDao.saveContent(chapter.url, raw);
         }
         return raw;
       }

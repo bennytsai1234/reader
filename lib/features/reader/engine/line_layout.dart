@@ -269,21 +269,6 @@ class LineLayout {
     return endCharOffset;
   }
 
-  int? charOffsetFromPageLocalOffset({
-    required int pageIndex,
-    required double pageLocalOffset,
-  }) {
-    LineItem? lastTextItem;
-    for (final item in items) {
-      if (item.pageIndex != pageIndex || !item.isText) continue;
-      lastTextItem = item;
-      if (item.line.lineBottom > pageLocalOffset) {
-        return item.chapterPosition;
-      }
-    }
-    return lastTextItem?.endChapterPosition;
-  }
-
   bool containsCharOffset(int charOffset) {
     if (items.isEmpty) return false;
     return charOffset >= firstCharOffset && charOffset <= endCharOffset;

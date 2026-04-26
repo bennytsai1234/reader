@@ -44,7 +44,7 @@ import 'dao/source_subscription_dao.dart';
 import 'dao/search_book_dao.dart';
 import 'dao/download_dao.dart';
 import 'dao/search_keyword_dao.dart';
-import 'dao/reader_temp_chapter_cache_dao.dart';
+import 'dao/reader_chapter_content_dao.dart';
 
 part 'app_database.g.dart';
 
@@ -52,7 +52,7 @@ part 'app_database.g.dart';
   tables: [
     Books,
     Chapters,
-    ReaderTempChapterCaches,
+    ReaderChapterContents,
     BookSources,
     BookGroups,
     SearchHistoryTable,
@@ -93,7 +93,7 @@ part 'app_database.g.dart';
     SearchBookDao,
     DownloadDao,
     SearchKeywordDao,
-    ReaderTempChapterCacheDao,
+    ReaderChapterContentDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -102,7 +102,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase._internal() : super(_openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -132,9 +132,6 @@ class AppDatabase extends _$AppDatabase {
           'ALTER TABLE books ADD COLUMN "readerAnchorJson" TEXT',
         );
       }
-      if (from < 10) {
-        await m.createTable(readerTempChapterCaches);
-      }
       if (from < 11) {
         await customStatement(
           'ALTER TABLE books RENAME COLUMN "durChapterIndex" TO "chapterIndex"',
@@ -142,6 +139,12 @@ class AppDatabase extends _$AppDatabase {
         await customStatement(
           'ALTER TABLE books RENAME COLUMN "durChapterPos" TO "charOffset"',
         );
+      }
+      if (from < 13) {
+        await customStatement(
+          'DROP TABLE IF EXISTS reader_temp_chapter_caches',
+        );
+        await m.createTable(readerChapterContents);
       }
     },
     beforeOpen: (details) async {

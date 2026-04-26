@@ -63,48 +63,48 @@ void main() {
 
   tearDown(() async => GetIt.instance.reset());
 
-  test('BookshelfExchangeService imports books, chapters and sources', () async {
-    final service = BookshelfExchangeService();
-    final payload = jsonEncode({
-      'kind': 'inkpage.bookshelf',
-      'version': 1,
-      'books': [
-        {
-          'bookUrl': 'https://book/1',
-          'name': '測試書',
-          'author': '作者',
-          'origin': 'https://source/1',
-          'originName': '來源',
-          'isInBookshelf': false,
-        },
-      ],
-      'chapters': [
-        {
-          'url': 'https://book/1#0',
-          'bookUrl': 'https://book/1',
-          'title': '第一章',
-          'index': 0,
-          'content': '內容',
-        },
-      ],
-      'sources': [
-        {
-          'bookSourceUrl': 'https://source/1',
-          'bookSourceName': '來源',
-        },
-      ],
-    });
+  test(
+    'BookshelfExchangeService imports books, chapters and sources',
+    () async {
+      final service = BookshelfExchangeService();
+      final payload = jsonEncode({
+        'kind': 'inkpage.bookshelf',
+        'version': 1,
+        'books': [
+          {
+            'bookUrl': 'https://book/1',
+            'name': '測試書',
+            'author': '作者',
+            'origin': 'https://source/1',
+            'originName': '來源',
+            'isInBookshelf': false,
+          },
+        ],
+        'chapters': [
+          {
+            'url': 'https://book/1#0',
+            'bookUrl': 'https://book/1',
+            'title': '第一章',
+            'index': 0,
+            'content': '內容',
+          },
+        ],
+        'sources': [
+          {'bookSourceUrl': 'https://source/1', 'bookSourceName': '來源'},
+        ],
+      });
 
-    final result = await service.importFromText(payload);
-    final bookDao = GetIt.instance<BookDao>() as _FakeBookDao;
-    final chapterDao = GetIt.instance<ChapterDao>() as _FakeChapterDao;
-    final sourceDao = GetIt.instance<BookSourceDao>() as _FakeBookSourceDao;
+      final result = await service.importFromText(payload);
+      final bookDao = GetIt.instance<BookDao>() as _FakeBookDao;
+      final chapterDao = GetIt.instance<ChapterDao>() as _FakeChapterDao;
+      final sourceDao = GetIt.instance<BookSourceDao>() as _FakeBookSourceDao;
 
-    expect(result.books, 1);
-    expect(result.chapters, 1);
-    expect(result.sources, 1);
-    expect(bookDao.storedBooks.single.isInBookshelf, isTrue);
-    expect(chapterDao.storedChapters.single.content, '內容');
-    expect(sourceDao.sources.single.bookSourceUrl, 'https://source/1');
-  });
+      expect(result.books, 1);
+      expect(result.chapters, 1);
+      expect(result.sources, 1);
+      expect(bookDao.storedBooks.single.isInBookshelf, isTrue);
+      expect(chapterDao.storedChapters.single.content, isNull);
+      expect(sourceDao.sources.single.bookSourceUrl, 'https://source/1');
+    },
+  );
 }

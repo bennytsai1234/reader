@@ -322,6 +322,7 @@ void main() {
       List<BookChapter> assignedChapters = const <BookChapter>[];
       final clearedFailures = <int>[];
       final seededContent = <({int chapterIndex, String content})>[];
+      final savedContent = <({BookChapter chapter, String content})>[];
       final updatedLocations = <ReaderLocation>[];
       final loadedChapters =
           <({int chapterIndex, ReaderCommandReason reason})>[];
@@ -347,6 +348,9 @@ void main() {
         },
         bookDao: bookDao,
         chapterDao: chapterDao,
+        saveChapterContent: (chapter, content) async {
+          savedContent.add((chapter: chapter, content: content));
+        },
         updateCommittedLocation: updatedLocations.add,
         loadChapter: (
           chapterIndex, {
@@ -372,10 +376,12 @@ void main() {
       expect(book.readerAnchorJson, isNull);
       expect(assignedSource?.bookSourceName, '來源 B');
       expect(assignedChapters, hasLength(2));
-      expect(assignedChapters[1].content, 'validated content');
+      expect(assignedChapters[1].content, isNull);
       expect(clearedFailures, <int>[1]);
       expect(refreshedTitles, isTrue);
       expect(resetLifecycle, isTrue);
+      expect(savedContent.single.chapter.index, 1);
+      expect(savedContent.single.content, 'validated content');
       expect(seededContent, hasLength(1));
       expect(seededContent.single.chapterIndex, 1);
       expect(updatedLocations, const <ReaderLocation>[

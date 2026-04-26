@@ -1,4 +1,4 @@
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_presentation_contract.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_position_resolver.dart';
@@ -18,19 +18,24 @@ class ReaderDisplayInstruction {
 class ReaderDisplayCoordinator {
   const ReaderDisplayCoordinator();
 
+  int _charOffsetForRequestAnchor(ReaderPresentationRequest request) {
+    if (!request.fromEnd) return request.persistedCharOffset;
+    final runtimeChapter = request.runtimeChapter;
+    if (runtimeChapter != null) return runtimeChapter.lineLayout.endCharOffset;
+    if (request.chapterPages.isEmpty) return request.persistedCharOffset;
+    return LineLayout.fromPages(
+      request.chapterPages,
+      chapterIndex: request.chapterIndex,
+    ).endCharOffset;
+  }
+
   ReaderDisplayInstruction resolveDisplayInstruction(
     ReaderPresentationRequest request,
   ) {
     final location =
         ReaderLocation(
           chapterIndex: request.chapterIndex,
-          charOffset:
-              request.fromEnd && request.chapterPages.isNotEmpty
-                  ? ChapterPositionResolver.getCharOffsetForPage(
-                    request.chapterPages,
-                    request.chapterPages.length - 1,
-                  )
-                  : request.persistedCharOffset,
+          charOffset: _charOffsetForRequestAnchor(request),
         ).normalized();
 
     if (request.isScrollMode) {
@@ -102,22 +107,20 @@ class ReaderDisplayCoordinator {
   String formatReadProgress({
     required int chapterIndex,
     required int totalChapters,
-    required int pageIndex,
-    required int totalPages,
+    required int charOffset,
+    required int chapterEndCharOffset,
   }) {
     if (totalChapters <= 0) return '0.0%';
     final safeChapterIndex = chapterIndex.clamp(0, totalChapters - 1);
-    if (totalPages <= 0) {
-      return '${(((safeChapterIndex + 1) / totalChapters) * 100).toStringAsFixed(1)}%';
-    }
-    final safePageIndex = pageIndex.clamp(0, totalPages - 1);
+    final chapterProgress =
+        chapterEndCharOffset <= 0
+            ? 0.0
+            : (charOffset / chapterEndCharOffset).clamp(0.0, 1.0).toDouble();
     final percent =
-        (safeChapterIndex / totalChapters) +
-        (1.0 / totalChapters) * ((safePageIndex + 1) / totalPages);
+        (safeChapterIndex + chapterProgress) / totalChapters.toDouble();
     var formatted = '${(percent * 100).toStringAsFixed(1)}%';
     if (formatted == '100.0%' &&
-        (safeChapterIndex + 1 != totalChapters ||
-            safePageIndex + 1 != totalPages)) {
+        (safeChapterIndex + 1 != totalChapters || chapterProgress < 1.0)) {
       formatted = '99.9%';
     }
     return formatted;

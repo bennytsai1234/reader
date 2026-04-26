@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 
 class ReaderChapterFingerprint {
@@ -14,6 +14,7 @@ class ReaderChapterFingerprint {
     if (pages.isEmpty) return null;
 
     int scale(double value) => (value * 100).round();
+    final lineLayout = LineLayout.fromPages(pages, chapterIndex: chapterIndex);
 
     final buffer =
         StringBuffer()
@@ -29,9 +30,9 @@ class ReaderChapterFingerprint {
         ..write(':')
         ..write(page.lines.length)
         ..write(':')
-        ..write(ChapterPositionResolver.firstCharOffset(page))
+        ..write(lineLayout.charOffsetForPageIndex(page.index))
         ..write(':')
-        ..write(ChapterPositionResolver.pageEndCharOffset(page));
+        ..write(lineLayout.pageEndCharOffset(page.index));
 
       for (final line in page.lines) {
         buffer

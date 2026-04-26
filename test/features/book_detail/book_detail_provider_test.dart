@@ -4,6 +4,7 @@ import 'package:inkpage_reader/core/database/dao/book_dao.dart';
 import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
 import 'package:inkpage_reader/core/models/book_source.dart';
 import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/models/search_book.dart';
@@ -40,17 +41,49 @@ class _FakeChapterDao extends Fake implements ChapterDao {
     if (chapters.isEmpty) return;
     _store[chapters.first.bookUrl] = chapters;
   }
+}
+
+class _FakeChapterContentDao extends Fake implements ReaderChapterContentDao {
+  _FakeChapterContentDao({Set<int> cachedIndices = const <int>{}})
+    : _cachedIndices = Set<int>.from(cachedIndices);
+
+  final Set<int> _cachedIndices;
 
   @override
-  Future<Set<int>> getCachedChapterIndices(String bookUrl) async {
-    return (_store[bookUrl] ?? const <BookChapter>[])
-        .where((chapter) => (chapter.content ?? '').isNotEmpty)
-        .map((chapter) => chapter.index)
-        .toSet();
+  Future<String?> getContent({
+    required String cacheKey,
+    int? minUpdatedAt,
+  }) async {
+    return null;
   }
 
   @override
-  Future<void> deleteContentByBook(String bookUrl) async {}
+  Future<void> saveContent({
+    required String cacheKey,
+    required String origin,
+    required String bookUrl,
+    required String chapterUrl,
+    required int chapterIndex,
+    required String content,
+    required int updatedAt,
+    bool isPersistent = false,
+  }) async {
+    _cachedIndices.add(chapterIndex);
+  }
+
+  @override
+  Future<Set<int>> getCachedChapterIndices({
+    required String origin,
+    required String bookUrl,
+    bool persistentOnly = false,
+  }) async {
+    return Set<int>.from(_cachedIndices);
+  }
+
+  @override
+  Future<void> deleteContentByBook(String origin, String bookUrl) async {
+    _cachedIndices.clear();
+  }
 }
 
 class _FakeSourceDao extends Fake implements BookSourceDao {
@@ -113,17 +146,15 @@ AggregatedSearchBook _makeSearchBook({
   return AggregatedSearchBook(book: sb, sources: ['書源']);
 }
 
-List<BookChapter> _makeChapters(int n, {Set<int> cachedIndices = const {}}) =>
-    List.generate(
-      n,
-      (i) => BookChapter(
-        url: 'chapter_$i',
-        title: '第 $i 章',
-        bookUrl: 'http://book.com',
-        index: i,
-        content: cachedIndices.contains(i) ? 'cached-$i' : null,
-      ),
-    );
+List<BookChapter> _makeChapters(int n) => List.generate(
+  n,
+  (i) => BookChapter(
+    url: 'chapter_$i',
+    title: '第 $i 章',
+    bookUrl: 'http://book.com',
+    index: i,
+  ),
+);
 
 // ---------------------------------------------------------------------------
 // 測試
@@ -145,6 +176,7 @@ void main() {
     BookSource? source,
     BookSourceService? service,
     DownloadService? downloadService,
+    Set<int> cachedIndices = const <int>{},
   }) async {
     final chapterDao = GetIt.instance<ChapterDao>() as _FakeChapterDao;
     if (chapters.isNotEmpty) {
@@ -153,6 +185,7 @@ void main() {
     final p = BookDetailProvider(
       _makeSearchBook(url: url, origin: origin),
       sourceDao: _FakeSourceDao(source),
+      chapterContentDao: _FakeChapterContentDao(cachedIndices: cachedIndices),
       service: service ?? _FakeBookSourceService(chapterList: chapters),
       downloadService: downloadService,
     );
@@ -259,7 +292,8 @@ void main() {
     test('queueDownloadUncached 只會加入未快取章節', () async {
       final downloadService = _FakeDownloadService();
       final provider = await makeProvider(
-        chapters: _makeChapters(5, cachedIndices: <int>{1, 3}),
+        chapters: _makeChapters(5),
+        cachedIndices: <int>{1, 3},
         source: BookSource(bookSourceUrl: 'origin', bookSourceName: '測試書源'),
         downloadService: downloadService,
       );

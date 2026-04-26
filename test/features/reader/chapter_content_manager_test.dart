@@ -416,6 +416,32 @@ void main() {
       manager.dispose();
     });
 
+    test('background content preload 只預抓內容，不預先建立頁面', () async {
+      final fetchOrder = <int>[];
+      final manager = ChapterContentManager(
+        fetchFn: (index) async {
+          fetchOrder.add(index);
+          return FetchResult(content: 'background-content-$index');
+        },
+        chapters: makeChapters(4),
+      );
+      manager.updateConfig(makeConfig());
+
+      manager.startBackgroundContentPreload(startIndex: 2);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(manager.backgroundContentPreloadEnabled, isTrue);
+      expect(manager.getCachedContent(2), 'background-content-2');
+      expect(manager.getCachedPages(2), isNull);
+
+      final pages = await manager.getChapterPages(2);
+      expect(pages, isNotEmpty);
+      expect(fetchOrder.where((index) => index == 2), hasLength(1));
+
+      manager.dispose();
+    });
+
     test(
       'prioritizeChapter 會保留 retained chapter，不驅逐 current neighborhood',
       () async {

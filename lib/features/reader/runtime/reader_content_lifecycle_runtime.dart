@@ -7,7 +7,7 @@ import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'package:inkpage_reader/core/services/book_source_service.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_content_manager.dart';
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_chapter_content_loader.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_chapter_content_cache_repository.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_perf_trace.dart';
@@ -15,7 +15,7 @@ import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
 import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
 import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
-import 'package:inkpage_reader/core/database/dao/reader_temp_chapter_cache_dao.dart';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 
 class ReaderContentLifecycleRuntime {
   static const int scrollPreloadRadius = 1;
@@ -31,6 +31,7 @@ class ReaderContentLifecycleRuntime {
   ReaderChapterContentLoader? _chapterContentLoader;
   int _scrollPreloadRadius = scrollPreloadRadius;
   int _lastVisibleScrollChapter = -1;
+  bool _backgroundContentPreloadEnabled = false;
   final Map<int, String> _chapterFailureMessages = <int, String>{};
 
   bool get hasContentManager => _contentManager != null;
@@ -109,7 +110,7 @@ class ReaderContentLifecycleRuntime {
   void init({
     required Book book,
     required ChapterDao chapterDao,
-    required ReaderTempChapterCacheDao? tempChapterCacheDao,
+    required ReaderChapterContentDao? chapterContentDao,
     required ReplaceRuleDao replaceDao,
     required BookSourceDao sourceDao,
     required BookSourceService service,
@@ -131,6 +132,8 @@ class ReaderContentLifecycleRuntime {
     _contentManager?.dispose();
     _chapterFailureMessages.clear();
     _lastVisibleScrollChapter = -1;
+    _backgroundContentPreloadEnabled =
+        book.origin != 'local' && book.isInBookshelf;
     _scrollPreloadRadius =
         book.origin != 'local' && book.isInBookshelf
             ? bookshelfNetworkScrollPreloadRadius
@@ -140,13 +143,12 @@ class ReaderContentLifecycleRuntime {
     resetPresentationState();
     _chapterContentLoader = ReaderChapterContentLoader(
       book: book,
-      chapterDao: chapterDao,
       cacheRepository:
-          tempChapterCacheDao == null
+          chapterContentDao == null
               ? null
               : ReaderChapterContentCacheRepository(
                 chapterDao: chapterDao,
-                tempCacheDao: tempChapterCacheDao,
+                contentDao: chapterContentDao,
               ),
       replaceDao: replaceDao,
       sourceDao: sourceDao,
@@ -282,6 +284,7 @@ class ReaderContentLifecycleRuntime {
       refreshChapterRuntime: refreshChapterRuntime,
       retainedChapterIndexes: retainedChapterIndexes,
     );
+    _startBackgroundContentPreload(centerIndex);
   }
 
   void scheduleDeferredWindowWarmup({
@@ -393,6 +396,7 @@ class ReaderContentLifecycleRuntime {
     Set<int> retainedChapterIndexes = const <int>{},
   }) {
     if (!hasContentManager || !isScrollMode) return;
+    _startBackgroundContentPreload(visibleChapter);
     ReaderPerfTrace.mark(
       'scroll preload update center=$visibleChapter '
       '(cached: ${chapterPagesCache[visibleChapter]?.isNotEmpty == true}, '
@@ -443,7 +447,10 @@ class ReaderContentLifecycleRuntime {
     if (localOffset != null) {
       final chapterHeight =
           visiblePages != null && visiblePages.isNotEmpty
-              ? ChapterPositionResolver.chapterHeight(visiblePages)
+              ? LineLayout.fromPages(
+                visiblePages,
+                chapterIndex: visibleChapter,
+              ).contentHeight
               : chapterHeightFor(visibleChapter);
       if (chapterHeight > 0) {
         final progress = localOffset / chapterHeight;
@@ -493,6 +500,11 @@ class ReaderContentLifecycleRuntime {
         }
       }
     }
+  }
+
+  void _startBackgroundContentPreload(int startIndex) {
+    if (!_backgroundContentPreloadEnabled || !hasContentManager) return;
+    _contentManager!.startBackgroundContentPreload(startIndex: startIndex);
   }
 
   void setScrollInteractionActive({
@@ -594,7 +606,6 @@ class ReaderContentLifecycleRuntime {
     required bool isScrollMode,
     required bool isLocalBook,
   }) {
-    if (isLocalBook && isScrollMode) return 1;
     if (isScrollMode) {
       return requestedRadius.clamp(0, _scrollPreloadRadius).toInt();
     }

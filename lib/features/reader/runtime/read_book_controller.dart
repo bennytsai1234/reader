@@ -8,7 +8,6 @@ import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/database/dao/read_record_dao.dart';
 import 'package:inkpage_reader/core/services/tts_service.dart';
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
 import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_perf_trace.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
@@ -216,7 +215,8 @@ class ReadBookController extends ReaderProviderBase
     }
     final pages = chapterPagesCache[chapterIndex];
     if (pages != null && pages.isNotEmpty) {
-      final contentHeight = ChapterPositionResolver.chapterHeight(pages);
+      final contentHeight =
+          LineLayout.fromPages(pages, chapterIndex: chapterIndex).contentHeight;
       if (contentHeight > 0) {
         _chapterContentHeightCache[chapterIndex] = contentHeight;
         return contentHeight;
@@ -225,6 +225,14 @@ class ReadBookController extends ReaderProviderBase
     return cachedChapterContentHeight(chapterIndex) ??
         _placeholderChapterContentHeight(chapterIndex) ??
         fallback;
+  }
+
+  LineLayout? _lineLayoutForChapter(int chapterIndex) {
+    final runtimeChapter = chapterAt(chapterIndex);
+    if (runtimeChapter != null) return runtimeChapter.lineLayout;
+    final pages = pagesForChapter(chapterIndex);
+    if (pages.isEmpty) return null;
+    return LineLayout.fromPages(pages, chapterIndex: chapterIndex);
   }
 
   double estimatedChapterItemExtent(
@@ -329,19 +337,11 @@ class ReadBookController extends ReaderProviderBase
     required int chapterIndex,
     required double localOffset,
   }) {
-    final runtimeChapter = chapterAt(chapterIndex);
-    final pages = pagesForChapter(chapterIndex);
-    if ((runtimeChapter == null || runtimeChapter.lineLayout.items.isEmpty) &&
-        pages.isEmpty) {
+    final lineLayout = _lineLayoutForChapter(chapterIndex);
+    if (lineLayout == null || lineLayout.items.isEmpty) {
       return scrollItemIndexForChapter(chapterIndex);
     }
-    final charOffset =
-        runtimeChapter != null
-            ? runtimeChapter.charOffsetFromLocalOffset(localOffset)
-            : ChapterPositionResolver.localOffsetToCharOffset(
-              pages,
-              localOffset,
-            );
+    final charOffset = lineLayout.charOffsetFromLocalOffset(localOffset);
     return scrollItemIndexForLocation(
       ReaderLocation(chapterIndex: chapterIndex, charOffset: charOffset),
     );
@@ -1202,7 +1202,8 @@ class ReadBookController extends ReaderProviderBase
       _chapterRuntimeCache.remove(index);
       return;
     }
-    final chapterHeight = ChapterPositionResolver.chapterHeight(pages);
+    final chapterHeight =
+        LineLayout.fromPages(pages, chapterIndex: index).contentHeight;
     if (chapterHeight > 0) {
       _chapterContentHeightCache[index] = chapterHeight;
     }
@@ -1607,51 +1608,55 @@ class ReadBookController extends ReaderProviderBase
   }
 
   String get displayChapterPercentLabel {
+    final location = _displayLocation;
+    final layout = _lineLayoutForChapter(location.chapterIndex);
     return _displayCoordinator.formatReadProgress(
-      chapterIndex: _displayPageChapterIndex,
+      chapterIndex: location.chapterIndex,
       totalChapters: chapters.length,
-      pageIndex: displayPageIndex,
-      totalPages: displayPageCount,
+      charOffset: location.charOffset,
+      chapterEndCharOffset: layout?.endCharOffset ?? 0,
     );
   }
 
   int get displayPageCount {
     final chapterIndex = _displayPageChapterIndex;
     if (chapterIndex < 0) return 0;
-    final runtimeChapter = chapterAt(chapterIndex);
-    if (runtimeChapter != null) return runtimeChapter.pageCount;
-    return pagesForChapter(chapterIndex).length;
+    return _lineLayoutForChapter(chapterIndex)?.pageGroups.length ?? 0;
   }
 
   int get displayPageIndex {
     final chapterIndex = _displayPageChapterIndex;
     if (chapterIndex < 0) return 0;
-    if (pageTurnMode == PageAnim.scroll) {
-      final runtimeChapter = chapterAt(chapterIndex);
-      final localPageIndex =
-          runtimeChapter != null
-              ? runtimeChapter.getPageIndexByCharIndex(
-                visibleLocation.charOffset,
-              )
-              : ChapterPositionResolver.findPageIndexByCharOffset(
-                pagesForChapter(chapterIndex),
-                visibleLocation.charOffset,
-              );
-      return localPageIndex < 0 ? 0 : localPageIndex;
-    }
+    final layout = _lineLayoutForChapter(chapterIndex);
+    if (layout == null || layout.pageGroups.isEmpty) return 0;
 
+    final location = _displayLocation;
+    final pageIndex = layout.findPageIndexByCharOffset(location.charOffset);
+    return pageIndex < 0 ? 0 : pageIndex;
+  }
+
+  ReaderLocation get _displayLocation {
+    final chapterIndex = _displayPageChapterIndex;
+    if (chapterIndex < 0) {
+      return const ReaderLocation(chapterIndex: 0, charOffset: 0);
+    }
+    return pageTurnMode == PageAnim.scroll
+        ? visibleLocation.normalized()
+        : _slideVisibleLocationForDisplay(chapterIndex);
+  }
+
+  ReaderLocation _slideVisibleLocationForDisplay(int fallbackChapterIndex) {
     if (currentPageIndex >= 0 && currentPageIndex < slidePages.length) {
-      return slidePages[currentPageIndex].index;
+      final page = slidePages[currentPageIndex];
+      final layout = _lineLayoutForChapter(page.chapterIndex);
+      return ReaderLocation(
+        chapterIndex: page.chapterIndex,
+        charOffset: layout?.charOffsetForPageIndex(page.index) ?? 0,
+      ).normalized();
     }
-
-    final runtimeChapter = chapterAt(chapterIndex);
-    return runtimeChapter?.getPageIndexByCharIndex(
-          committedLocation.charOffset,
-        ) ??
-        ChapterPositionResolver.findPageIndexByCharOffset(
-          pagesForChapter(chapterIndex),
-          committedLocation.charOffset,
-        );
+    final committed = committedLocation.normalized();
+    if (committed.chapterIndex == fallbackChapterIndex) return committed;
+    return ReaderLocation(chapterIndex: fallbackChapterIndex, charOffset: 0);
   }
 
   String get displayPageLabel {
@@ -1845,9 +1850,8 @@ class ReadBookController extends ReaderProviderBase
 
     final chapterIndex =
         visibleChapterIndex.clamp(0, chapters.length - 1).toInt();
-    final runtimeChapter = chapterAt(chapterIndex);
-    final pages = pagesForChapter(chapterIndex);
-    if (runtimeChapter == null && pages.isEmpty) return;
+    final layout = _lineLayoutForChapter(chapterIndex);
+    if (layout == null) return;
 
     final location =
         _confirmedVisibleScrollLocationFor(chapterIndex) ??
@@ -1857,13 +1861,7 @@ class ReadBookController extends ReaderProviderBase
                       visibleChapterLocalOffset > 0
                   ? visibleChapterLocalOffset
                   : 0.0;
-          final charOffset =
-              runtimeChapter != null
-                  ? runtimeChapter.charOffsetFromLocalOffset(localOffset)
-                  : ChapterPositionResolver.localOffsetToCharOffset(
-                    pages,
-                    localOffset,
-                  );
+          final charOffset = layout.charOffsetFromLocalOffset(localOffset);
           return ReaderLocation(
             chapterIndex: chapterIndex,
             charOffset: charOffset,
@@ -1889,9 +1887,8 @@ class ReadBookController extends ReaderProviderBase
 
     final chapterIndex =
         visibleChapterIndex.clamp(0, chapters.length - 1).toInt();
-    final runtimeChapter = chapterAt(chapterIndex);
-    final pages = pagesForChapter(chapterIndex);
-    if (runtimeChapter == null && pages.isEmpty) {
+    final layout = _lineLayoutForChapter(chapterIndex);
+    if (layout == null) {
       ReaderPerfTrace.mark(
         'scroll persist skipped unresolved chapter=$chapterIndex',
       );
@@ -1905,13 +1902,7 @@ class ReadBookController extends ReaderProviderBase
                       visibleChapterLocalOffset > 0
                   ? visibleChapterLocalOffset
                   : 0.0;
-          final charOffset =
-              runtimeChapter != null
-                  ? runtimeChapter.charOffsetFromLocalOffset(localOffset)
-                  : ChapterPositionResolver.localOffsetToCharOffset(
-                    pages,
-                    localOffset,
-                  );
+          final charOffset = layout.charOffsetFromLocalOffset(localOffset);
           return ReaderLocation(
             chapterIndex: chapterIndex,
             charOffset: charOffset,

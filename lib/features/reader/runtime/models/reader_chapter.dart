@@ -1,5 +1,4 @@
 import 'package:inkpage_reader/core/models/chapter.dart';
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
 import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter_metrics.dart';
@@ -263,7 +262,14 @@ class ReaderChapter {
   }
 
   int firstCharOffset(TextPage page) {
-    return ChapterPositionResolver.firstCharOffset(page);
+    if (page.chapterIndex == index &&
+        page.index >= 0 &&
+        page.index < pageGroups.length) {
+      return pageGroups[page.index].firstCharOffset;
+    }
+    return LineLayout.fromPages([
+      page,
+    ], chapterIndex: page.chapterIndex).firstCharOffset;
   }
 
   List<TextLine> allLines() {
@@ -333,7 +339,14 @@ class ReaderChapter {
   }
 
   int pageEndCharOffset(TextPage page) {
-    return ChapterPositionResolver.pageEndCharOffset(page);
+    if (page.chapterIndex == index &&
+        page.index >= 0 &&
+        page.index < pageGroups.length) {
+      return pageGroups[page.index].endCharOffset;
+    }
+    return LineLayout.fromPages([
+      page,
+    ], chapterIndex: page.chapterIndex).endCharOffset;
   }
 
   List<TextLine> visibleLinesFrom(int startCharOffset) {

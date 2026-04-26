@@ -1,12 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
-import 'package:inkpage_reader/core/database/dao/reader_temp_chapter_cache_dao.dart';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_chapter_content_cache_repository.dart';
 
 class _FakeChapterDao implements ChapterDao {
-  final Map<String, String> contentByUrl = <String, String>{};
   final List<List<BookChapter>> insertedBatches = <List<BookChapter>>[];
 
   @override
@@ -15,18 +14,10 @@ class _FakeChapterDao implements ChapterDao {
   }
 
   @override
-  Future<String?> getContent(String url) async => contentByUrl[url];
-
-  @override
-  Future<void> saveContent(String url, String content) async {
-    contentByUrl[url] = content;
-  }
-
-  @override
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class _FakeTempChapterCacheDao implements ReaderTempChapterCacheDao {
+class _FakeChapterContentDao implements ReaderChapterContentDao {
   final Map<String, String> contentByKey = <String, String>{};
   final Map<String, int> failuresByKey = <String, int>{};
 
@@ -47,9 +38,19 @@ class _FakeTempChapterCacheDao implements ReaderTempChapterCacheDao {
     required int chapterIndex,
     required String content,
     required int updatedAt,
+    bool isPersistent = false,
   }) async {
     contentByKey[cacheKey] = content;
     failuresByKey[cacheKey] = 0;
+  }
+
+  @override
+  Future<Set<int>> getCachedChapterIndices({
+    required String origin,
+    required String bookUrl,
+    bool persistentOnly = false,
+  }) async {
+    return contentByKey.keys.map((_) => 1).toSet();
   }
 
   @override
@@ -94,10 +95,10 @@ void main() {
   group('ReaderChapterContentCacheRepository', () {
     test('非書架網路書保存到 transient cache，不寫正式 chapters', () async {
       final chapterDao = _FakeChapterDao();
-      final tempDao = _FakeTempChapterCacheDao();
+      final contentDao = _FakeChapterContentDao();
       final repository = ReaderChapterContentCacheRepository(
         chapterDao: chapterDao,
-        tempCacheDao: tempDao,
+        contentDao: contentDao,
       );
       final book = _book();
       final chapter = _chapter(1, 'chapter-1');
@@ -109,18 +110,18 @@ void main() {
       );
 
       expect(chapterDao.insertedBatches, isEmpty);
-      expect(chapterDao.contentByUrl, isEmpty);
       expect(
         await repository.getRawContent(book: book, chapter: chapter),
         'raw content',
       );
     });
 
-    test('書架內網路書保存到正式 chapters content', () async {
+    test('書架內網路書保存到持久章節內容 store', () async {
       final chapterDao = _FakeChapterDao();
+      final contentDao = _FakeChapterContentDao();
       final repository = ReaderChapterContentCacheRepository(
         chapterDao: chapterDao,
-        tempCacheDao: _FakeTempChapterCacheDao(),
+        contentDao: contentDao,
       );
       final book = _book(bookshelf: true);
       final chapter = _chapter(2, 'chapter-2');
@@ -132,15 +133,21 @@ void main() {
       );
 
       expect(chapterDao.insertedBatches.single.single.url, 'chapter-2');
-      expect(chapterDao.contentByUrl['chapter-2'], 'bookshelf raw');
+      expect(
+        contentDao.contentByKey[ReaderChapterContentCacheRepository.cacheKeyFor(
+          book: book,
+          chapter: chapter,
+        )],
+        'bookshelf raw',
+      );
     });
 
     test('加入書架時會提升 matching transient content', () async {
       final chapterDao = _FakeChapterDao();
-      final tempDao = _FakeTempChapterCacheDao();
+      final contentDao = _FakeChapterContentDao();
       final repository = ReaderChapterContentCacheRepository(
         chapterDao: chapterDao,
-        tempCacheDao: tempDao,
+        contentDao: contentDao,
       );
       final book = _book();
       final chapters = [_chapter(0, 'chapter-0'), _chapter(1, 'chapter-1')];
@@ -157,8 +164,52 @@ void main() {
       );
 
       expect(chapterDao.insertedBatches.single.length, 2);
-      expect(chapterDao.contentByUrl['chapter-1'], 'cached chapter');
-      expect(chapterDao.contentByUrl.containsKey('chapter-0'), isFalse);
+      expect(
+        contentDao.contentByKey[ReaderChapterContentCacheRepository.cacheKeyFor(
+          book: book,
+          chapter: chapters[1],
+        )],
+        'cached chapter',
+      );
+      expect(
+        contentDao.contentByKey.containsKey(
+          ReaderChapterContentCacheRepository.cacheKeyFor(
+            book: book,
+            chapter: chapters[0],
+          ),
+        ),
+        isFalse,
+      );
+    });
+
+    test('不再讀取 chapter inline content，只讀 chapter content store', () async {
+      final chapterDao = _FakeChapterDao();
+      final contentDao = _FakeChapterContentDao();
+      final repository = ReaderChapterContentCacheRepository(
+        chapterDao: chapterDao,
+        contentDao: contentDao,
+      );
+      final book = _book(bookshelf: true);
+      final chapter = _chapter(
+        3,
+        'chapter-3',
+      ).copyWith(content: 'legacy inline');
+
+      final content = await repository.getRawContent(
+        book: book,
+        chapter: chapter,
+      );
+
+      expect(content, isNull);
+      expect(
+        contentDao.contentByKey.containsKey(
+          ReaderChapterContentCacheRepository.cacheKeyFor(
+            book: book,
+            chapter: chapter,
+          ),
+        ),
+        isFalse,
+      );
     });
   });
 }

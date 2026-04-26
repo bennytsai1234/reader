@@ -1,4 +1,4 @@
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
@@ -14,19 +14,20 @@ class ReaderCoordinateMapper {
     required this.slidePages,
   });
 
+  LineLayout? _lineLayoutForChapter(int chapterIndex) {
+    final runtimeChapter = chapterAt(chapterIndex);
+    if (runtimeChapter != null) return runtimeChapter.lineLayout;
+    final pages = pagesForChapter(chapterIndex);
+    if (pages.isEmpty) return null;
+    return LineLayout.fromPages(pages, chapterIndex: chapterIndex);
+  }
+
   ReaderLocation locationFromScrollOffset({
     required int chapterIndex,
     required double localOffset,
   }) {
-    final runtimeChapter = chapterAt(chapterIndex);
-    final pages = pagesForChapter(chapterIndex);
-    final charOffset =
-        runtimeChapter != null
-            ? runtimeChapter.charOffsetFromLocalOffset(localOffset)
-            : ChapterPositionResolver.localOffsetToCharOffset(
-              pages,
-              localOffset,
-            );
+    final layout = _lineLayoutForChapter(chapterIndex);
+    final charOffset = layout?.charOffsetFromLocalOffset(localOffset) ?? 0;
     return ReaderLocation(
       chapterIndex: chapterIndex,
       charOffset: charOffset,
@@ -40,32 +41,20 @@ class ReaderCoordinateMapper {
     final currentSlidePages = slidePages();
     if (pageIndex >= 0 && pageIndex < currentSlidePages.length) {
       final page = currentSlidePages[pageIndex];
-      final runtimeChapter = chapterAt(page.chapterIndex);
-      final chapterPages = pagesForChapter(page.chapterIndex);
-      final charOffset =
-          runtimeChapter != null
-              ? runtimeChapter.charOffsetForPageIndex(page.index)
-              : ChapterPositionResolver.getCharOffsetForPage(
-                chapterPages,
-                page.index,
-              );
+      final layout = _lineLayoutForChapter(page.chapterIndex);
+      final charOffset = layout?.charOffsetForPageIndex(page.index) ?? 0;
       return ReaderLocation(
         chapterIndex: page.chapterIndex,
         charOffset: charOffset,
       ).normalized();
     }
 
-    final runtimeChapter = chapterAt(chapterIndex);
-    final chapterPages = pagesForChapter(chapterIndex);
+    final layout = _lineLayoutForChapter(chapterIndex);
     final safePageIndex =
-        chapterPages.isEmpty ? 0 : pageIndex.clamp(0, chapterPages.length - 1);
-    final charOffset =
-        runtimeChapter != null
-            ? runtimeChapter.charOffsetForPageIndex(safePageIndex)
-            : ChapterPositionResolver.getCharOffsetForPage(
-              chapterPages,
-              safePageIndex,
-            );
+        layout == null || layout.pageGroups.isEmpty
+            ? 0
+            : pageIndex.clamp(0, layout.pageGroups.length - 1);
+    final charOffset = layout?.charOffsetForPageIndex(safePageIndex) ?? 0;
     return ReaderLocation(
       chapterIndex: chapterIndex,
       charOffset: charOffset,
@@ -74,40 +63,25 @@ class ReaderCoordinateMapper {
 
   double localOffsetForLocation(ReaderLocation location) {
     final normalized = location.normalized();
-    final runtimeChapter = chapterAt(normalized.chapterIndex);
-    if (runtimeChapter != null) {
-      return runtimeChapter.localOffsetFromCharOffset(normalized.charOffset);
-    }
-    return ChapterPositionResolver.charOffsetToLocalOffset(
-      pagesForChapter(normalized.chapterIndex),
-      normalized.charOffset,
-    );
+    final layout = _lineLayoutForChapter(normalized.chapterIndex);
+    return layout?.localOffsetForCharOffset(normalized.charOffset) ?? 0.0;
   }
 
   double alignmentForLocation(ReaderLocation location) {
     final normalized = location.normalized();
-    final runtimeChapter = chapterAt(normalized.chapterIndex);
-    if (runtimeChapter != null) {
-      return runtimeChapter.alignmentForCharOffset(normalized.charOffset);
-    }
-    return ChapterPositionResolver.charOffsetToAlignment(
-      pagesForChapter(normalized.chapterIndex),
-      normalized.charOffset,
-    );
+    final layout = _lineLayoutForChapter(normalized.chapterIndex);
+    if (layout == null || layout.contentHeight <= 0) return 0.0;
+    return (layout.localOffsetForCharOffset(normalized.charOffset) /
+            layout.contentHeight)
+        .clamp(0.0, 1.0)
+        .toDouble();
   }
 
   int? pageIndexForLocation(ReaderLocation location) {
     final normalized = location.normalized();
-    final runtimeChapter = chapterAt(normalized.chapterIndex);
-    if (runtimeChapter != null) {
-      return runtimeChapter.getPageIndexByCharIndex(normalized.charOffset);
-    }
-    final pages = pagesForChapter(normalized.chapterIndex);
-    if (pages.isEmpty) return null;
-    return ChapterPositionResolver.findPageIndexByCharOffset(
-      pages,
-      normalized.charOffset,
-    );
+    final layout = _lineLayoutForChapter(normalized.chapterIndex);
+    if (layout == null || layout.pageGroups.isEmpty) return null;
+    return layout.findPageIndexByCharOffset(normalized.charOffset);
   }
 
   ReaderScrollTarget scrollTargetForLocation(ReaderLocation location) {
@@ -143,15 +117,9 @@ class ReaderCoordinateMapper {
         (location ??
                 ReaderLocation(chapterIndex: targetChapterIndex, charOffset: 0))
             .normalized();
-    final runtimeChapter = chapterAt(normalized.chapterIndex);
-    final chapterPages = pagesForChapter(normalized.chapterIndex);
+    final layout = _lineLayoutForChapter(normalized.chapterIndex);
     final chapterPageIndex =
-        runtimeChapter != null
-            ? runtimeChapter.getPageIndexByCharIndex(normalized.charOffset)
-            : ChapterPositionResolver.findPageIndexByCharOffset(
-              chapterPages,
-              normalized.charOffset,
-            );
+        layout?.findPageIndexByCharOffset(normalized.charOffset) ?? 0;
     final globalIndex = currentSlidePages.indexWhere(
       (page) =>
           page.chapterIndex == normalized.chapterIndex &&

@@ -112,9 +112,6 @@ class _FallbackChapterDao implements ChapterDao {
       const <BookChapter>[];
 
   @override
-  Future<String?> getContent(String url) async => null;
-
-  @override
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 import 'download_base.dart';
 import 'download_scheduler.dart';
 import 'package:inkpage_reader/core/models/book.dart';
@@ -67,7 +68,12 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
         }
         await checkPause();
 
-        if (await chapterDao.hasContent(chapter.url)) {
+        final cacheKey = ReaderChapterContentDao.cacheKey(
+          origin: book.origin,
+          bookUrl: book.bookUrl,
+          chapterUrl: chapter.url,
+        );
+        if (await chapterContentDao.hasContent(cacheKey: cacheKey)) {
           if (countsPreCachedChapters) {
             task.successCount++;
           }
@@ -140,7 +146,20 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
       try {
         final content = await sourceService.getContent(source, book, chapter);
         if (content.isNotEmpty) {
-          await chapterDao.saveContent(chapter.url, content);
+          await chapterContentDao.saveContent(
+            cacheKey: ReaderChapterContentDao.cacheKey(
+              origin: book.origin,
+              bookUrl: book.bookUrl,
+              chapterUrl: chapter.url,
+            ),
+            origin: book.origin,
+            bookUrl: book.bookUrl,
+            chapterUrl: chapter.url,
+            chapterIndex: chapter.index,
+            content: content,
+            updatedAt: DateTime.now().millisecondsSinceEpoch,
+            isPersistent: true,
+          );
           return true;
         }
         return false;

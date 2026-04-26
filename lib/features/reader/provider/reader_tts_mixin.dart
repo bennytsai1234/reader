@@ -5,7 +5,7 @@ import 'package:inkpage_reader/features/reader/runtime/read_aloud_controller.dar
 import 'package:inkpage_reader/features/reader/runtime/reader_tts_source.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_tts_follow_coordinator.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_tts_position.dart';
 
@@ -197,7 +197,12 @@ mixin ReaderTtsMixin
 
     final chapterHeight =
         runtimeChapter?.chapterHeight ??
-        ChapterPositionResolver.chapterHeight(pages.cast());
+        (pages.isEmpty
+            ? 0.0
+            : LineLayout.fromPages(
+              pages.cast(),
+              chapterIndex: chapterIndex,
+            ).contentHeight);
     final targetLocalOffset =
         chapterHeight > 0
             ? position.localOffset.clamp(0.0, chapterHeight)

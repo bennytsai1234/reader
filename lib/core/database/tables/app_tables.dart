@@ -248,14 +248,12 @@ class Chapters extends Table {
       text().named('startFragmentId').nullable()();
   TextColumn get endFragmentId => text().named('endFragmentId').nullable()();
   TextColumn get variable => text().nullable()();
-  TextColumn get content => text().nullable()();
-
   @override
   Set<Column> get primaryKey => {url};
 }
 
-// ───────────── Reader transient chapter content cache ─────────────
-class ReaderTempChapterCaches extends Table {
+// ───────────── Reader chapter content store ─────────────
+class ReaderChapterContents extends Table {
   TextColumn get cacheKey => text().named('cacheKey')();
   TextColumn get origin => text()();
   TextColumn get bookUrl => text().named('bookUrl')();
@@ -263,6 +261,8 @@ class ReaderTempChapterCaches extends Table {
   IntColumn get chapterIndex => integer().named('chapterIndex')();
   TextColumn get content => text().nullable()();
   IntColumn get updatedAt => integer().named('updatedAt')();
+  BoolColumn get isPersistent =>
+      boolean().named('isPersistent').withDefault(const Constant(false))();
   IntColumn get failureCount =>
       integer().named('failureCount').withDefault(const Constant(0))();
 

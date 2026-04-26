@@ -1,8 +1,5 @@
-import 'dart:convert';
-
-import 'package:crypto/crypto.dart';
 import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
-import 'package:inkpage_reader/core/database/dao/reader_temp_chapter_cache_dao.dart';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 
@@ -11,14 +8,14 @@ enum ReaderChapterContentCachePolicy { bookshelfLongTerm, transientNetwork }
 class ReaderChapterContentCacheRepository {
   ReaderChapterContentCacheRepository({
     required this.chapterDao,
-    required this.tempCacheDao,
+    required this.contentDao,
     DateTime Function()? now,
     this.transientCacheTtl = const Duration(days: 14),
     this.failureSkipThreshold = 3,
   }) : _now = now ?? DateTime.now;
 
   final ChapterDao chapterDao;
-  final ReaderTempChapterCacheDao tempCacheDao;
+  final ReaderChapterContentDao contentDao;
   final DateTime Function() _now;
   final Duration transientCacheTtl;
   final int failureSkipThreshold;
@@ -35,20 +32,17 @@ class ReaderChapterContentCacheRepository {
     required BookChapter chapter,
     ReaderChapterContentCachePolicy? policy,
   }) async {
-    final inlineContent = chapter.content;
-    if (inlineContent != null && inlineContent.isNotEmpty) {
-      return inlineContent;
-    }
-
     final resolvedPolicy = policy ?? policyFor(book);
-    if (resolvedPolicy == ReaderChapterContentCachePolicy.bookshelfLongTerm) {
-      return chapterDao.getContent(chapter.url);
-    }
-
-    return tempCacheDao.getContent(
+    final storedContent = await contentDao.getContent(
       cacheKey: cacheKeyFor(book: book, chapter: chapter),
-      minUpdatedAt: _transientMinUpdatedAt,
+      minUpdatedAt:
+          resolvedPolicy == ReaderChapterContentCachePolicy.transientNetwork
+              ? _transientMinUpdatedAt
+              : null,
     );
+    return storedContent == null || storedContent.isEmpty
+        ? null
+        : storedContent;
   }
 
   Future<void> saveRawContent({
@@ -61,11 +55,9 @@ class ReaderChapterContentCacheRepository {
     final resolvedPolicy = policy ?? policyFor(book);
     if (resolvedPolicy == ReaderChapterContentCachePolicy.bookshelfLongTerm) {
       await chapterDao.insertChapters(<BookChapter>[chapter]);
-      await chapterDao.saveContent(chapter.url, content);
-      return;
     }
 
-    await tempCacheDao.saveContent(
+    await contentDao.saveContent(
       cacheKey: cacheKeyFor(book: book, chapter: chapter),
       origin: book.origin,
       bookUrl: book.bookUrl,
@@ -73,26 +65,51 @@ class ReaderChapterContentCacheRepository {
       chapterIndex: chapter.index,
       content: content,
       updatedAt: _now().millisecondsSinceEpoch,
+      isPersistent:
+          resolvedPolicy == ReaderChapterContentCachePolicy.bookshelfLongTerm,
     );
   }
 
   Future<void> promoteTransientCacheToBookshelf({
     required Book book,
     required List<BookChapter> chapters,
+    bool insertChapterMetadata = true,
   }) async {
     if (chapters.isEmpty) return;
-    await chapterDao.insertChapters(chapters);
+    if (insertChapterMetadata) {
+      await chapterDao.insertChapters(chapters);
+    }
     if (book.origin == 'local') return;
     for (final chapter in chapters) {
-      final content = await tempCacheDao.getContent(
-        cacheKey: cacheKeyFor(book: book, chapter: chapter),
+      final cacheKey = cacheKeyFor(book: book, chapter: chapter);
+      final content = await contentDao.getContent(
+        cacheKey: cacheKey,
         minUpdatedAt: _transientMinUpdatedAt,
       );
       if (content != null && content.isNotEmpty) {
-        await chapterDao.saveContent(chapter.url, content);
+        await contentDao.saveContent(
+          cacheKey: cacheKey,
+          origin: book.origin,
+          bookUrl: book.bookUrl,
+          chapterUrl: chapter.url,
+          chapterIndex: chapter.index,
+          content: content,
+          updatedAt: _now().millisecondsSinceEpoch,
+          isPersistent: true,
+        );
       }
     }
-    await tempCacheDao.deleteByBook(book.origin, book.bookUrl);
+  }
+
+  Future<Set<int>> cachedChapterIndices({required Book book}) async {
+    return contentDao.getCachedChapterIndices(
+      origin: book.origin,
+      bookUrl: book.bookUrl,
+    );
+  }
+
+  Future<void> deleteCachedContentForBook({required Book book}) async {
+    await contentDao.deleteContentByBook(book.origin, book.bookUrl);
   }
 
   Future<void> recordFetchFailure({
@@ -102,7 +119,7 @@ class ReaderChapterContentCacheRepository {
     if (policyFor(book) == ReaderChapterContentCachePolicy.bookshelfLongTerm) {
       return Future<void>.value();
     }
-    return tempCacheDao.recordFailure(
+    return contentDao.recordFailure(
       cacheKey: cacheKeyFor(book: book, chapter: chapter),
       origin: book.origin,
       bookUrl: book.bookUrl,
@@ -119,14 +136,14 @@ class ReaderChapterContentCacheRepository {
     if (policyFor(book) == ReaderChapterContentCachePolicy.bookshelfLongTerm) {
       return false;
     }
-    final failures = await tempCacheDao.getFailureCount(
+    final failures = await contentDao.getFailureCount(
       cacheKeyFor(book: book, chapter: chapter),
     );
     return failures >= failureSkipThreshold;
   }
 
   Future<int> cleanupTransientCache() {
-    return tempCacheDao.cleanupOlderThan(_transientMinUpdatedAt);
+    return contentDao.cleanupOlderThan(_transientMinUpdatedAt);
   }
 
   int get _transientMinUpdatedAt =>
@@ -135,8 +152,9 @@ class ReaderChapterContentCacheRepository {
   static String cacheKeyFor({
     required Book book,
     required BookChapter chapter,
-  }) {
-    final material = '${book.origin}\n${book.bookUrl}\n${chapter.url}';
-    return sha1.convert(utf8.encode(material)).toString();
-  }
+  }) => ReaderChapterContentDao.cacheKey(
+    origin: book.origin,
+    bookUrl: book.bookUrl,
+    chapterUrl: chapter.url,
+  );
 }

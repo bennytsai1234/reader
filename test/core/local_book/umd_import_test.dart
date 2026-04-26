@@ -18,7 +18,11 @@ void main() {
       expect(result.book.author, '作者');
       expect(result.chapters, hasLength(1));
       expect(result.chapters.first.title, '第一章');
-      expect(result.chapters.first.content, contains('這是正文'));
+      final content = await LocalBookService().getContent(
+        result.book,
+        result.chapters.first,
+      );
+      expect(content, contains('這是正文'));
     } finally {
       if (await file.exists()) {
         await file.delete();
@@ -65,23 +69,11 @@ List<int> _section(int type, List<int> payload, {int flag = 0}) {
 }
 
 List<int> _sectionWithCheck(int type, int check, {int flag = 1}) {
-  return [
-    0x23,
-    type & 0xff,
-    (type >> 8) & 0xff,
-    flag,
-    9,
-    ..._int32(check),
-  ];
+  return [0x23, type & 0xff, (type >> 8) & 0xff, flag, 9, ..._int32(check)];
 }
 
 List<int> _additional(int check, List<int> payload) {
-  return [
-    0x24,
-    ..._int32(check),
-    ..._int32(payload.length + 9),
-    ...payload,
-  ];
+  return [0x24, ..._int32(check), ..._int32(payload.length + 9), ...payload];
 }
 
 List<int> _utf16le(String value) {

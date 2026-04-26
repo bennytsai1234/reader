@@ -162,5 +162,35 @@ void main() {
 
       expect(targetIndex, 2);
     });
+
+    test('全書百分比使用 chapterIndex 加章內 charOffset 比例', () {
+      expect(
+        coordinator.formatReadProgress(
+          chapterIndex: 1,
+          totalChapters: 4,
+          charOffset: 50,
+          chapterEndCharOffset: 100,
+        ),
+        '37.5%',
+      );
+      expect(
+        coordinator.formatReadProgress(
+          chapterIndex: 3,
+          totalChapters: 4,
+          charOffset: 99,
+          chapterEndCharOffset: 100,
+        ),
+        '99.8%',
+      );
+      expect(
+        coordinator.formatReadProgress(
+          chapterIndex: 3,
+          totalChapters: 4,
+          charOffset: 100,
+          chapterEndCharOffset: 100,
+        ),
+        '100.0%',
+      );
+    });
   });
 }

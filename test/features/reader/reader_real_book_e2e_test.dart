@@ -9,6 +9,7 @@ import 'package:inkpage_reader/core/database/dao/book_dao.dart';
 import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
 import 'package:inkpage_reader/core/database/dao/bookmark_dao.dart';
 import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
 import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:inkpage_reader/core/models/book.dart';
@@ -98,7 +99,6 @@ class _ReaderE2eChapterDao implements ChapterDao {
     : _chapters = List<BookChapter>.from(chapters);
 
   final List<BookChapter> _chapters;
-  final Map<String, String> _contentByUrl = <String, String>{};
 
   @override
   Future<List<BookChapter>> getByBook(String bookUrl) async =>
@@ -106,18 +106,6 @@ class _ReaderE2eChapterDao implements ChapterDao {
 
   @override
   Future<List<BookChapter>> getChapters(String bookUrl) => getByBook(bookUrl);
-
-  @override
-  Future<String?> getContent(String url) async {
-    final cached = _contentByUrl[url];
-    if (cached != null && cached.isNotEmpty) return cached;
-    for (final chapter in _chapters) {
-      if (chapter.url == url && (chapter.content?.isNotEmpty ?? false)) {
-        return chapter.content;
-      }
-    }
-    return null;
-  }
 
   @override
   Future<void> insertChapters(List<BookChapter> chapterList) async {
@@ -128,21 +116,76 @@ class _ReaderE2eChapterDao implements ChapterDao {
       } else {
         _chapters.add(chapter);
       }
-      final content = chapter.content;
-      if (content != null && content.isNotEmpty) {
-        _contentByUrl[chapter.url] = content;
-      }
     }
   }
 
   @override
-  Future<void> updateContent(String url, String content) async {
-    _contentByUrl[url] = content;
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _ReaderE2eChapterContentDao implements ReaderChapterContentDao {
+  _ReaderE2eChapterContentDao({
+    required String origin,
+    required List<BookChapter> chapters,
+  }) {
+    for (final chapter in chapters) {
+      final content = chapter.content;
+      if (content == null || content.isEmpty) continue;
+      _contentByKey[ReaderChapterContentDao.cacheKey(
+            origin: origin,
+            bookUrl: chapter.bookUrl,
+            chapterUrl: chapter.url,
+          )] =
+          content;
+    }
+  }
+
+  final Map<String, String> _contentByKey = <String, String>{};
+
+  @override
+  Future<String?> getContent({
+    required String cacheKey,
+    int? minUpdatedAt,
+  }) async {
+    final content = _contentByKey[cacheKey];
+    return content == null || content.isEmpty ? null : content;
   }
 
   @override
-  Future<void> saveContent(String url, String content) =>
-      updateContent(url, content);
+  Future<void> saveContent({
+    required String cacheKey,
+    required String origin,
+    required String bookUrl,
+    required String chapterUrl,
+    required int chapterIndex,
+    required String content,
+    required int updatedAt,
+    bool isPersistent = false,
+  }) async {
+    _contentByKey[cacheKey] = content;
+  }
+
+  @override
+  Future<Set<int>> getCachedChapterIndices({
+    required String origin,
+    required String bookUrl,
+    bool persistentOnly = false,
+  }) async {
+    return <int>{};
+  }
+
+  @override
+  Future<int> getFailureCount(String cacheKey) async => 0;
+
+  @override
+  Future<void> recordFailure({
+    required String cacheKey,
+    required String origin,
+    required String bookUrl,
+    required String chapterUrl,
+    required int chapterIndex,
+    required int updatedAt,
+  }) async {}
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -292,6 +335,9 @@ void _installReaderE2eDi({
 }) {
   if (getIt.isRegistered<BookDao>()) getIt.unregister<BookDao>();
   if (getIt.isRegistered<ChapterDao>()) getIt.unregister<ChapterDao>();
+  if (getIt.isRegistered<ReaderChapterContentDao>()) {
+    getIt.unregister<ReaderChapterContentDao>();
+  }
   if (getIt.isRegistered<ReplaceRuleDao>()) {
     getIt.unregister<ReplaceRuleDao>();
   }
@@ -300,6 +346,12 @@ void _installReaderE2eDi({
 
   getIt.registerSingleton<BookDao>(bookDao);
   getIt.registerSingleton<ChapterDao>(_ReaderE2eChapterDao(chapters));
+  getIt.registerSingleton<ReaderChapterContentDao>(
+    _ReaderE2eChapterContentDao(
+      origin: source?.bookSourceUrl ?? 'local',
+      chapters: chapters,
+    ),
+  );
   getIt.registerSingleton<ReplaceRuleDao>(_ReaderE2eReplaceRuleDao());
   getIt.registerSingleton<BookSourceDao>(_ReaderE2eSourceDao(source));
   getIt.registerSingleton<BookmarkDao>(_ReaderE2eBookmarkDao());

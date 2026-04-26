@@ -1,4 +1,4 @@
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/provider/slide_window.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
@@ -198,13 +198,13 @@ class ReaderContentPipeline {
     if (pageIndex < 0 || pageIndex >= slidePages.length) return null;
     final page = slidePages[pageIndex];
     final newChapterIndex = page.chapterIndex;
-    final localOffset = ChapterPositionResolver.charOffsetToLocalOffset(
-      pagesForChapter(newChapterIndex),
-      ChapterPositionResolver.getCharOffsetForPage(
-        pagesForChapter(newChapterIndex),
-        page.index,
-      ),
+    final layout = _lineLayoutForChapter(
+      chapterIndex: newChapterIndex,
+      chapterAt: chapterAt,
+      pagesForChapter: pagesForChapter,
     );
+    final charOffset = layout?.charOffsetForPageIndex(page.index) ?? 0;
+    final localOffset = layout?.localOffsetForCharOffset(charOffset) ?? 0.0;
 
     if (_isPinnedSlideTargetReached(
       currentPageIndex: pageIndex,
@@ -270,17 +270,14 @@ class ReaderContentPipeline {
     required List<TextPage> Function(int chapterIndex) pagesForChapter,
   }) {
     final normalized = location.normalized();
-    final runtimeChapter = chapterAt(normalized.chapterIndex);
-    final chapterPages = pagesForChapter(normalized.chapterIndex);
-    final chapterPageIndex =
-        runtimeChapter != null
-            ? runtimeChapter.getPageIndexByCharIndex(normalized.charOffset)
-            : chapterPages.isEmpty
-            ? null
-            : ChapterPositionResolver.findPageIndexByCharOffset(
-              chapterPages,
-              normalized.charOffset,
-            );
+    final layout = _lineLayoutForChapter(
+      chapterIndex: normalized.chapterIndex,
+      chapterAt: chapterAt,
+      pagesForChapter: pagesForChapter,
+    );
+    final chapterPageIndex = layout?.findPageIndexByCharOffset(
+      normalized.charOffset,
+    );
     if (chapterPageIndex == null) return null;
     final globalIndex = slidePages.indexWhere(
       (page) =>
@@ -288,5 +285,17 @@ class ReaderContentPipeline {
           page.index == chapterPageIndex,
     );
     return globalIndex >= 0 ? globalIndex : null;
+  }
+
+  LineLayout? _lineLayoutForChapter({
+    required int chapterIndex,
+    required ReaderChapter? Function(int chapterIndex) chapterAt,
+    required List<TextPage> Function(int chapterIndex) pagesForChapter,
+  }) {
+    final runtimeChapter = chapterAt(chapterIndex);
+    if (runtimeChapter != null) return runtimeChapter.lineLayout;
+    final pages = pagesForChapter(chapterIndex);
+    if (pages.isEmpty) return null;
+    return LineLayout.fromPages(pages, chapterIndex: chapterIndex);
   }
 }

@@ -1,11 +1,15 @@
 import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:inkpage_reader/core/models/book.dart';
+import 'package:inkpage_reader/core/services/local_book_service.dart';
 import 'package:inkpage_reader/core/storage/app_storage_paths.dart';
 import 'package:share_plus/share_plus.dart';
 
 class ExportBookService {
   final ChapterDao _chapterDao = getIt<ChapterDao>();
+  final ReaderChapterContentDao _chapterContentDao =
+      getIt<ReaderChapterContentDao>();
 
   /// 匯出全書為 TXT 檔案
   Future<void> exportToTxt(
@@ -21,7 +25,16 @@ class ExportBookService {
     buffer.writeln('---');
 
     for (var i = 0; i < chapters.length; i++) {
-      final content = await _chapterDao.getContent(chapters[i].url);
+      var content = await _chapterContentDao.getContent(
+        cacheKey: ReaderChapterContentDao.cacheKey(
+          origin: book.origin,
+          bookUrl: book.bookUrl,
+          chapterUrl: chapters[i].url,
+        ),
+      );
+      if ((content == null || content.isEmpty) && book.origin == 'local') {
+        content = await LocalBookService().getContent(book, chapters[i]);
+      }
       if (content != null) {
         buffer.writeln('\n${chapters[i].title}\n');
         buffer.writeln(content);

@@ -91,10 +91,6 @@ void main() {
       expect(layout.pageGroups[1].items.single.chapterPosition, 4);
       expect(layout.findPageIndexByCharOffset(4), 1);
       expect(layout.charOffsetForPageIndex(1), 4);
-      expect(
-        layout.charOffsetFromPageLocalOffset(pageIndex: 1, pageLocalOffset: 1),
-        4,
-      );
     });
 
     test(

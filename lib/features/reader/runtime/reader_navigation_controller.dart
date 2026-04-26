@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/core/constant/page_anim.dart';
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
@@ -381,9 +381,15 @@ class ReaderNavigationController {
     if (size == null) return null;
     final chapterIndex = visibleChapterIndex;
     final runtimeChapter = chapterAt(chapterIndex);
+    final pages = pagesForChapter(chapterIndex);
     final chapterHeight =
         runtimeChapter?.chapterHeight ??
-        ChapterPositionResolver.chapterHeight(pagesForChapter(chapterIndex));
+        (pages.isEmpty
+            ? 0.0
+            : LineLayout.fromPages(
+              pages,
+              chapterIndex: chapterIndex,
+            ).contentHeight);
     if (chapterHeight <= 0) return null;
     final delta = scrollDeltaPerFrame(size, dtSeconds);
     final nextLocalOffset = visibleChapterLocalOffset + delta;

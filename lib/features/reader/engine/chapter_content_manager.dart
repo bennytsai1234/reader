@@ -107,6 +107,9 @@ class ChapterContentManager {
   int _maxConcurrentPreloads = 1;
   final Set<int> _priorityChapters = {};
   bool _userInteractionActive = false;
+  final List<int> _backgroundContentQueue = [];
+  bool _backgroundContentPreloadActive = false;
+  bool _backgroundContentPreloadEnabled = false;
 
   /// 章節載入 Completer：協調主載入與靜默預載入，避免重複請求
   final Map<int, Completer<void>> _loadCompleters = {};
@@ -166,6 +169,7 @@ class ChapterContentManager {
 
   /// 是否啟用整本書預載
   bool get wholeBookPreloadEnabled => _wholeBookPreloadEnabled;
+  bool get backgroundContentPreloadEnabled => _backgroundContentPreloadEnabled;
 
   /// 是否正在使用者互動中（例如 scroll drag）
   bool get userInteractionActive => _userInteractionActive;
@@ -224,6 +228,7 @@ class ChapterContentManager {
       return [];
     } finally {
       _activeLoadingChapters.remove(index);
+      _processBackgroundContentQueue();
     }
   }
 
@@ -280,6 +285,7 @@ class ChapterContentManager {
     _userInteractionActive = active;
     if (!active) {
       _processPreloadQueue();
+      _processBackgroundContentQueue();
     }
   }
 
@@ -311,6 +317,25 @@ class ChapterContentManager {
       '(start: $center, chapters: ${_chapters.length})',
     );
     _startPreloading(center, preloadRadius: _chapters.length);
+  }
+
+  void startBackgroundContentPreload({int? startIndex}) {
+    if (_chapters.isEmpty || _disposed) return;
+    _backgroundContentPreloadEnabled = true;
+    final center = (startIndex ?? 0).clamp(0, _chapters.length - 1).toInt();
+    final ordered = <int>[
+      for (var i = center; i < _chapters.length; i++) i,
+      for (var i = 0; i < center; i++) i,
+    ];
+    for (final chapterIndex in ordered) {
+      if (_hasChapterContent(chapterIndex) ||
+          _backgroundContentQueue.contains(chapterIndex) ||
+          _emptyContentChapters.contains(chapterIndex)) {
+        continue;
+      }
+      _backgroundContentQueue.add(chapterIndex);
+    }
+    _processBackgroundContentQueue();
   }
 
   /// 更新預載視窗中心，觸發背景預載
@@ -520,6 +545,7 @@ class ChapterContentManager {
     _disposed = true;
     _onChapterReadyController.close();
     _preloadQueue.clear();
+    _backgroundContentQueue.clear();
     _loadCompleters.clear();
     _emptyContentChapters.clear();
     _pendingRawRepaginateIndexes.clear();
@@ -594,6 +620,7 @@ class ChapterContentManager {
       );
       _loadCompleters.remove(index);
       if (!completer.isCompleted) completer.complete();
+      _processBackgroundContentQueue();
     }
   }
 
@@ -714,6 +741,14 @@ class ChapterContentManager {
         _contentCache.remove(farthest);
       }
     }
+  }
+
+  bool _hasChapterContent(int index) {
+    return _contentCache.containsKey(index) ||
+        _paginatedCache.containsKey(index) ||
+        _activeLoadingChapters.contains(index) ||
+        _silentLoadingChapters.contains(index) ||
+        _loadCompleters.containsKey(index);
   }
 
   void _clearPendingDisplayRepagination() {
@@ -896,6 +931,8 @@ class ChapterContentManager {
               !_userInteractionActive &&
               _preloadQueue.isNotEmpty) {
             _processPreloadQueue();
+          } else if (!_disposed) {
+            _processBackgroundContentQueue();
           }
         }),
       );
@@ -907,6 +944,75 @@ class ChapterContentManager {
         _preloadQueue.isNotEmpty &&
         _activeSilentPreloadCount < _maxConcurrentPreloads) {
       _processPreloadQueue();
+    } else {
+      _processBackgroundContentQueue();
+    }
+  }
+
+  void _processBackgroundContentQueue() {
+    if (!_backgroundContentPreloadEnabled ||
+        _backgroundContentPreloadActive ||
+        _backgroundContentQueue.isEmpty ||
+        _disposed ||
+        _userInteractionActive ||
+        _activeLoadingChapters.isNotEmpty ||
+        _silentLoadingChapters.isNotEmpty ||
+        _preloadQueue.isNotEmpty) {
+      return;
+    }
+
+    while (_backgroundContentQueue.isNotEmpty) {
+      final target = _backgroundContentQueue.removeAt(0);
+      if (_hasChapterContent(target) ||
+          _emptyContentChapters.contains(target)) {
+        continue;
+      }
+      _backgroundContentPreloadActive = true;
+      final completer = Completer<void>();
+      _loadCompleters[target] = completer;
+      unawaited(
+        _preloadChapterContentOnly(target, completer).whenComplete(() {
+          _backgroundContentPreloadActive = false;
+          if (!_disposed) _processBackgroundContentQueue();
+        }),
+      );
+      return;
+    }
+  }
+
+  Future<void> _preloadChapterContentOnly(
+    int index,
+    Completer<void> completer,
+  ) async {
+    if (index < 0 || index >= _chapters.length) return;
+    final trace = Stopwatch()..start();
+    ReaderPerfTrace.mark('chapter $index background content preload start');
+    try {
+      final result = await _fetchFn(index);
+      if (_disposed) return;
+      if (result.content.trim().isEmpty) {
+        AppLog.w(
+          'ChapterContentManager: Background preload chapter $index empty content',
+        );
+        _emptyContentChapters.add(index);
+        return;
+      }
+      _saveContentCache(index, result.content);
+      if (result.displayTitle != null && result.displayTitle!.isNotEmpty) {
+        _displayTitleCache[index] = result.displayTitle!;
+      }
+    } catch (e) {
+      AppLog.e(
+        'ChapterContentManager: Background content preload chapter $index failed: $e',
+      );
+    } finally {
+      trace.stop();
+      ReaderPerfTrace.mark(
+        'chapter $index background content preload done '
+        '(total: ${trace.elapsedMilliseconds}ms)',
+      );
+      _loadCompleters.remove(index);
+      if (!completer.isCompleted) completer.complete();
     }
   }
 

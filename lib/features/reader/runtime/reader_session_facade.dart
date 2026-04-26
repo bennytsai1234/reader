@@ -24,6 +24,9 @@ typedef ReaderCharOffsetJump =
     });
 typedef ReaderChapterContentSeeder =
     void Function(int chapterIndex, String content);
+typedef ReaderChapterContentSaver =
+    Future<void> Function(BookChapter chapter, String content);
+typedef ReaderChapterContentPromoter = Future<void> Function();
 
 class ReaderSessionFacade {
   const ReaderSessionFacade();
@@ -73,6 +76,7 @@ class ReaderSessionFacade {
     required ReaderProgressStore progressStore,
     required BookDao bookDao,
     required ChapterDao chapterDao,
+    ReaderChapterContentPromoter? promoteChapterContent,
     void Function()? onCompleted,
   }) async {
     progressStore.updateBookProgress(
@@ -87,6 +91,7 @@ class ReaderSessionFacade {
     if (chapters.isNotEmpty) {
       await chapterDao.insertChapters(chapters);
     }
+    await promoteChapterContent?.call();
     AppEventBus().fire(AppEventBus.upBookshelf, data: book.bookUrl);
     onCompleted?.call();
   }
@@ -112,6 +117,7 @@ class ReaderSessionFacade {
     required ReaderChapterContentSeeder putChapterContent,
     required BookDao bookDao,
     required ChapterDao chapterDao,
+    ReaderChapterContentSaver? saveChapterContent,
     required void Function(ReaderLocation location) updateCommittedLocation,
     required ReaderChapterLoader loadChapter,
     required ReaderCharOffsetJump jumpToChapterCharOffset,
@@ -131,7 +137,10 @@ class ReaderSessionFacade {
     if (validatedContent != null &&
         resolution.targetChapterIndex >= 0 &&
         resolution.targetChapterIndex < nextChapters.length) {
-      nextChapters[resolution.targetChapterIndex].content = validatedContent;
+      await saveChapterContent?.call(
+        nextChapters[resolution.targetChapterIndex],
+        validatedContent,
+      );
       putChapterContent(resolution.targetChapterIndex, validatedContent);
     }
 

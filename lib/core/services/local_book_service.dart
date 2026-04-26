@@ -76,7 +76,10 @@ class LocalBookService {
     if (ext == 'epub') {
       final meta = await EpubService().parseMetadata(file);
       if (meta.coverBytes != null) {
-        await ResourceService().persistMemoryResource('memory://$bookUrl', meta.coverBytes!);
+        await ResourceService().persistMemoryResource(
+          'memory://$bookUrl',
+          meta.coverBytes!,
+        );
       }
       final book = Book(
         bookUrl: bookUrl,
@@ -126,7 +129,6 @@ class LocalBookService {
             title: parsed.chapters[i].title,
             bookUrl: bookUrl,
             index: i,
-            content: parsed.chapters[i].content,
           ),
       ];
       return LocalBookImportResult(book: book, chapters: chapters);
@@ -141,7 +143,6 @@ class LocalBookService {
     final file = File(path);
     if (!await file.exists()) return '檔案不存在: $path';
 
-
     final ext = p.extension(path).replaceFirst('.', '').toLowerCase();
     if (ext == 'txt') {
       // 根據章節索引 (start, end) 指標讀取 TXT 部分內容 (對標 Android ReadLocalBook.kt)
@@ -150,19 +151,26 @@ class LocalBookService {
           final accessFile = await _getTxtAccessFile(file, path);
           final start = chapter.start!;
           final end = chapter.end!;
-          AppLog.d('LocalBookService: Reading bytes from $start to $end (length: ${end - start})');
+          AppLog.d(
+            'LocalBookService: Reading bytes from $start to $end (length: ${end - start})',
+          );
           await accessFile.setPosition(start);
           final bytes = await accessFile.read(end - start);
           return _decodeBytes(bytes, book.charset ?? 'utf-8');
         });
       }
-      AppLog.d('LocalBookService: Missing offsets for chapter ${chapter.title}');
+      AppLog.d(
+        'LocalBookService: Missing offsets for chapter ${chapter.title}',
+      );
       return '本地 TXT 索引缺失，請重新匯入';
-
     } else if (ext == 'epub') {
       return await EpubService().getChapterContent(file, chapter.url);
     } else if (ext == 'umd') {
-      return chapter.content ?? '';
+      final parsed = await UmdParser(file).parse();
+      if (chapter.index < 0 || chapter.index >= parsed.chapters.length) {
+        return '本地 UMD 章節索引缺失，請重新匯入';
+      }
+      return parsed.chapters[chapter.index].content;
     }
     return '不支援的本地格式: $ext';
   }

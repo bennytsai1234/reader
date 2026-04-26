@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:inkpage_reader/core/constant/page_anim.dart';
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
@@ -47,6 +47,14 @@ class ReaderProgressCoordinator {
        _updateVisibleLocation = updateVisibleLocation,
        _updateCommittedLocation = updateCommittedLocation,
        _persistLocation = persistLocation;
+
+  LineLayout? _lineLayoutForChapter(int chapterIndex) {
+    final runtimeChapter = _chapterAt(chapterIndex);
+    if (runtimeChapter != null) return runtimeChapter.lineLayout;
+    final pages = _pagesForChapter(chapterIndex);
+    if (pages.isEmpty) return null;
+    return LineLayout.fromPages(pages, chapterIndex: chapterIndex);
+  }
 
   /// 更新可見章節位置，並在需要時觸發進度持久化（含 debounce）。
   ///
@@ -150,15 +158,8 @@ class ReaderProgressCoordinator {
     required void Function(int) setCurrentChapterIndex,
   }) {
     setVisibleChapterIndex(chapterIndex);
-    final runtimeChapter = _chapterAt(chapterIndex);
-    final pages = _pagesForChapter(chapterIndex);
-    final pageIndex =
-        runtimeChapter != null
-            ? runtimeChapter.pageIndexAtLocalOffset(localOffset)
-            : ChapterPositionResolver.pageIndexAtLocalOffset(
-              pages,
-              localOffset,
-            );
+    final layout = _lineLayoutForChapter(chapterIndex);
+    final pageIndex = layout?.pageIndexAtLocalOffset(localOffset) ?? 0;
     setCurrentPageIndex(pageIndex);
     setCurrentChapterIndex(chapterIndex);
   }
@@ -185,15 +186,8 @@ class ReaderProgressCoordinator {
     required int chapterIndex,
     required double localOffset,
   }) {
-    final runtimeChapter = _chapterAt(chapterIndex);
-    final pages = _pagesForChapter(chapterIndex);
-    final charOffset =
-        runtimeChapter != null
-            ? runtimeChapter.charOffsetFromLocalOffset(localOffset)
-            : ChapterPositionResolver.localOffsetToCharOffset(
-              pages,
-              localOffset,
-            );
+    final layout = _lineLayoutForChapter(chapterIndex);
+    final charOffset = layout?.charOffsetFromLocalOffset(localOffset) ?? 0;
     return ReaderLocation(
       chapterIndex: chapterIndex,
       charOffset: charOffset,
@@ -207,33 +201,19 @@ class ReaderProgressCoordinator {
   }) {
     if (pageIndex >= 0 && pageIndex < slidePages.length) {
       final page = slidePages[pageIndex];
-      final runtime = _chapterAt(page.chapterIndex);
-      final chapterPages = _pagesForChapter(page.chapterIndex);
-      final charOffset =
-          runtime != null
-              ? runtime.charOffsetForPageIndex(page.index)
-              : ChapterPositionResolver.getCharOffsetForPage(
-                chapterPages,
-                page.index,
-              );
+      final layout = _lineLayoutForChapter(page.chapterIndex);
+      final charOffset = layout?.charOffsetForPageIndex(page.index) ?? 0;
       return ReaderLocation(
         chapterIndex: page.chapterIndex,
         charOffset: charOffset,
       );
     }
-    final runtimeChapter = _chapterAt(chapterIndex);
-    final pages = _pagesForChapter(chapterIndex);
-    final safePageIndex = pageIndex.clamp(
-      0,
-      (pages.length - 1).clamp(0, 1 << 20),
-    );
-    final charOffset =
-        runtimeChapter != null
-            ? runtimeChapter.charOffsetForPageIndex(safePageIndex)
-            : ChapterPositionResolver.getCharOffsetForPage(
-              pages,
-              safePageIndex,
-            );
+    final layout = _lineLayoutForChapter(chapterIndex);
+    final safePageIndex =
+        layout == null || layout.pageGroups.isEmpty
+            ? 0
+            : pageIndex.clamp(0, layout.pageGroups.length - 1);
+    final charOffset = layout?.charOffsetForPageIndex(safePageIndex) ?? 0;
     return ReaderLocation(
       chapterIndex: chapterIndex,
       charOffset: charOffset,

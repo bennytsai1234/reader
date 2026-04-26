@@ -4,7 +4,7 @@ import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
 import 'package:inkpage_reader/core/database/dao/bookmark_dao.dart';
 import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
 import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
-import 'package:inkpage_reader/core/database/dao/reader_temp_chapter_cache_dao.dart';
+import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart';
 import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/book_source.dart';
@@ -31,9 +31,9 @@ abstract class ReaderProviderBase extends ChangeNotifier {
   final BookDao bookDao = getIt<BookDao>();
   final ChapterDao chapterDao = getIt<ChapterDao>();
   final ReplaceRuleDao replaceDao = getIt<ReplaceRuleDao>();
-  final ReaderTempChapterCacheDao? readerTempChapterCacheDao =
-      getIt.isRegistered<ReaderTempChapterCacheDao>()
-          ? getIt<ReaderTempChapterCacheDao>()
+  final ReaderChapterContentDao? readerChapterContentDao =
+      getIt.isRegistered<ReaderChapterContentDao>()
+          ? getIt<ReaderChapterContentDao>()
           : null;
   final BookSourceDao sourceDao = getIt<BookSourceDao>();
   final BookSourceService service = BookSourceService();

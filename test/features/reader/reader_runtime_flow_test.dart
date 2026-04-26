@@ -9,7 +9,7 @@ import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
 import 'package:inkpage_reader/core/di/injection.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_content_facade_mixin.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
@@ -198,7 +198,10 @@ class _ReaderRuntimeHarness extends ReaderProviderBase
     }
     final pages = pagesForChapter(chapterIndex);
     if (pages.isEmpty) return fallback;
-    return ChapterPositionResolver.chapterHeight(pages);
+    return LineLayout.fromPages(
+      pages,
+      chapterIndex: chapterIndex,
+    ).contentHeight;
   }
 
   void setChapterPages(int index, List<TextPage> pages) {

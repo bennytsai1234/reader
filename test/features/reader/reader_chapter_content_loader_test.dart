@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
-import 'package:inkpage_reader/core/database/dao/chapter_dao.dart';
 import 'package:inkpage_reader/core/database/dao/replace_rule_dao.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/book_source.dart';
@@ -8,11 +7,6 @@ import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/models/replace_rule.dart';
 import 'package:inkpage_reader/core/services/book_source_service.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_chapter_content_loader.dart';
-
-class _FakeChapterDao implements ChapterDao {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => null;
-}
 
 class _FakeReplaceRuleDao implements ReplaceRuleDao {
   @override
@@ -23,11 +17,28 @@ class _FakeReplaceRuleDao implements ReplaceRuleDao {
 }
 
 class _FakeBookSourceDao implements BookSourceDao {
+  _FakeBookSourceDao(this.source);
+
+  final BookSource source;
+
   @override
-  Future<BookSource?> getByUrl(String url) async => null;
+  Future<BookSource?> getByUrl(String url) async => source;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _FakeBookSourceService extends Fake implements BookSourceService {
+  @override
+  Future<String> getContent(
+    BookSource source,
+    Book book,
+    BookChapter chapter, {
+    int? pageConcurrency,
+    String? nextChapterUrl,
+  }) async {
+    return '正文第一行\n正文第二行';
+  }
 }
 
 void main() {
@@ -38,7 +49,10 @@ void main() {
         index: 1,
         url: 'chapter-1',
         bookUrl: 'book-1',
-        content: '正文第一行\n正文第二行',
+      );
+      final source = BookSource(
+        bookSourceUrl: 'remote',
+        bookSourceName: 'Remote',
       );
       final loader = ReaderChapterContentLoader(
         book: Book(
@@ -47,10 +61,9 @@ void main() {
           author: 'Author',
           origin: 'remote',
         ),
-        chapterDao: _FakeChapterDao(),
         replaceDao: _FakeReplaceRuleDao(),
-        sourceDao: _FakeBookSourceDao(),
-        service: BookSourceService(),
+        sourceDao: _FakeBookSourceDao(source),
+        service: _FakeBookSourceService(),
         currentChineseConvert: () => 0,
         getSource: () => null,
         setSource: (_) {},

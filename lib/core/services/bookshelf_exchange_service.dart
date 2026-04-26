@@ -59,7 +59,9 @@ class BookshelfExchangeService {
     };
 
     final file = await AppStoragePaths.shareExportFile(fileName);
-    await file.writeAsString(const JsonEncoder.withIndent('  ').convert(payload));
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(payload),
+    );
     return file;
   }
 
@@ -69,10 +71,7 @@ class BookshelfExchangeService {
       fileName: fileName ?? 'bookshelf-export.inkpage.json',
     );
     await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(file.path)],
-        text: 'Inkpage 書架匯出',
-      ),
+      ShareParams(files: [XFile(file.path)], text: 'Inkpage 書架匯出'),
     );
   }
 
@@ -144,16 +143,13 @@ class BookshelfExchangeService {
   }
 
   List<Book> _parseBooks(List<dynamic> raw) {
-    return raw
-        .whereType<Map<String, dynamic>>()
-        .map(Book.fromJson)
-        .toList();
+    return raw.whereType<Map<String, dynamic>>().map(Book.fromJson).toList();
   }
 
   List<BookChapter> _parseChapters(List<dynamic> raw) {
     return raw
         .whereType<Map<String, dynamic>>()
-        .map(BookChapter.fromJson)
+        .map((json) => BookChapter.fromJson(json)..content = null)
         .toList();
   }
 
