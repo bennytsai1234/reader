@@ -1,3 +1,4 @@
+import 'line_layout.dart';
 import 'text_page.dart';
 
 class ChapterPositionResolver {
@@ -8,103 +9,58 @@ class ChapterPositionResolver {
   }
 
   static double chapterHeight(List<TextPage> pages) {
-    return pages.fold(0.0, (sum, page) => sum + pageHeight(page));
+    return LineLayout.fromPages(pages).contentHeight;
   }
 
   static List<double> pageTopOffsets(List<TextPage> pages) {
-    final offsets = <double>[];
-    var current = 0.0;
-    for (final page in pages) {
-      offsets.add(current);
-      current += pageHeight(page);
-    }
-    return offsets;
+    return LineLayout.fromPages(pages).pageTopOffsets;
   }
 
   static double charOffsetToLocalOffset(List<TextPage> pages, int charOffset) {
-    if (pages.isEmpty) return 0.0;
-    final tops = pageTopOffsets(pages);
-    for (var i = 0; i < pages.length; i++) {
-      final page = pages[i];
-      for (final line in page.lines) {
-        if (line.image != null) continue;
-        final lineStart = line.chapterPosition;
-        final lineEnd = lineStart + line.text.length;
-        final containsOffset = charOffset >= lineStart && charOffset < lineEnd;
-        final fallsBeforeLine = charOffset < lineStart;
-        if (containsOffset || fallsBeforeLine) {
-          return tops[i] + line.lineTop;
-        }
-      }
-    }
-    return chapterHeight(pages);
+    return LineLayout.fromPages(pages).localOffsetForCharOffset(charOffset);
   }
 
   static double charOffsetToAlignment(List<TextPage> pages, int charOffset) {
-    final total = chapterHeight(pages);
+    final layout = LineLayout.fromPages(pages);
+    final total = layout.contentHeight;
     if (total <= 0) return 0.0;
-    return (charOffsetToLocalOffset(pages, charOffset) / total).clamp(0.0, 1.0);
+    return (layout.localOffsetForCharOffset(charOffset) / total).clamp(
+      0.0,
+      1.0,
+    );
   }
 
   static int localOffsetToCharOffset(List<TextPage> pages, double localOffset) {
-    if (pages.isEmpty) return 0;
-    final tops = pageTopOffsets(pages);
-    for (var i = 0; i < pages.length; i++) {
-      final page = pages[i];
-      final pageTop = tops[i];
-      for (final line in page.lines) {
-        if (line.image != null) continue;
-        if (pageTop + line.lineBottom > localOffset) {
-          return line.chapterPosition;
-        }
-      }
-    }
-    return pageEndCharOffset(pages.last);
+    return LineLayout.fromPages(pages).charOffsetFromLocalOffset(localOffset);
+  }
+
+  static int? pageLocalOffsetToCharOffset(
+    TextPage page,
+    double pageLocalOffset,
+  ) {
+    return LineLayout.fromPages([page]).charOffsetFromPageLocalOffset(
+      pageIndex: 0,
+      pageLocalOffset: pageLocalOffset,
+    );
   }
 
   static int findPageIndexByCharOffset(List<TextPage> pages, int charOffset) {
-    if (pages.isEmpty) return 0;
-    var best = 0;
-    for (var i = 0; i < pages.length; i++) {
-      final offset = firstCharOffset(pages[i]);
-      if (offset <= charOffset) {
-        best = i;
-      } else {
-        break;
-      }
-    }
-    return best;
+    return LineLayout.fromPages(pages).findPageIndexByCharOffset(charOffset);
   }
 
   static int pageIndexAtLocalOffset(List<TextPage> pages, double localOffset) {
-    if (pages.isEmpty) return 0;
-    final tops = pageTopOffsets(pages);
-    for (var i = 0; i < pages.length; i++) {
-      if (tops[i] + pageHeight(pages[i]) > localOffset) {
-        return i;
-      }
-    }
-    return pages.length - 1;
+    return LineLayout.fromPages(pages).pageIndexAtLocalOffset(localOffset);
   }
 
   static int getCharOffsetForPage(List<TextPage> pages, int pageIndex) {
-    if (pages.isEmpty || pageIndex < 0 || pageIndex >= pages.length) return 0;
-    return firstCharOffset(pages[pageIndex]);
+    return LineLayout.fromPages(pages).charOffsetForPageIndex(pageIndex);
   }
 
   static int pageEndCharOffset(TextPage page) {
-    for (final line in page.lines.reversed) {
-      if (line.image == null) {
-        return line.chapterPosition + line.text.length;
-      }
-    }
-    return firstCharOffset(page);
+    return LineLayout.fromPages([page]).pageEndCharOffset(0);
   }
 
   static int firstCharOffset(TextPage page) {
-    for (final line in page.lines) {
-      if (line.image == null) return line.chapterPosition;
-    }
-    return 0;
+    return LineLayout.fromPages([page]).charOffsetForPageIndex(0);
   }
 }

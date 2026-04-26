@@ -148,14 +148,14 @@ class ReaderSessionFacade {
     updateCommittedLocation(
       ReaderLocation(
         chapterIndex: resolution.targetChapterIndex,
-        charOffset: book.durChapterPos,
+        charOffset: book.charOffset,
       ),
     );
     await loadChapter(resolution.targetChapterIndex, reason: reason);
-    if (book.durChapterPos > 0) {
+    if (book.charOffset > 0) {
       jumpToChapterCharOffset(
         chapterIndex: resolution.targetChapterIndex,
-        charOffset: book.durChapterPos,
+        charOffset: book.charOffset,
         reason: reason,
       );
     }

@@ -3,16 +3,16 @@
 class BookProgress {
   final String name;
   final String author;
-  final int durChapterIndex;
-  final int durChapterPos;
+  final int chapterIndex;
+  final int charOffset;
   final String durChapterTitle;
   final int durChapterTime;
 
   BookProgress({
     required this.name,
     required this.author,
-    required this.durChapterIndex,
-    required this.durChapterPos,
+    required this.chapterIndex,
+    required this.charOffset,
     required this.durChapterTitle,
     required this.durChapterTime,
   });
@@ -21,8 +21,8 @@ class BookProgress {
     return {
       'name': name,
       'author': author,
-      'durChapterIndex': durChapterIndex,
-      'durChapterPos': durChapterPos,
+      'chapterIndex': chapterIndex,
+      'charOffset': charOffset,
       'durChapterTitle': durChapterTitle,
       'durChapterTime': durChapterTime,
     };
@@ -32,11 +32,10 @@ class BookProgress {
     return BookProgress(
       name: json['name'] ?? '',
       author: json['author'] ?? '',
-      durChapterIndex: json['durChapterIndex'] ?? 0,
-      durChapterPos: json['durChapterPos'] ?? 0,
+      chapterIndex: json['chapterIndex'] ?? json['durChapterIndex'] ?? 0,
+      charOffset: json['charOffset'] ?? json['durChapterPos'] ?? 0,
       durChapterTitle: json['durChapterTitle'] ?? '',
       durChapterTime: json['durChapterTime'] ?? 0,
     );
   }
 }
-

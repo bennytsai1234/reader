@@ -9,12 +9,8 @@ import 'package:inkpage_reader/features/reader/runtime/reader_progress_store.dar
 
 class ReaderProgressCandidate {
   final ReaderLocation location;
-  final double? scrollLocalOffsetSnapshot;
 
-  const ReaderProgressCandidate({
-    required this.location,
-    this.scrollLocalOffsetSnapshot,
-  });
+  const ReaderProgressCandidate({required this.location});
 }
 
 /// 管理閱讀進度的更新與持久化。
@@ -29,11 +25,7 @@ class ReaderProgressCoordinator {
   final bool Function() _shouldPersistVisiblePosition;
   final void Function(ReaderLocation location) _updateVisibleLocation;
   final void Function(ReaderLocation location) _updateCommittedLocation;
-  final Future<void> Function(
-    ReaderLocation location, {
-    double? scrollLocalOffsetSnapshot,
-  })
-  _persistLocation;
+  final Future<void> Function(ReaderLocation location) _persistLocation;
 
   Timer? scrollSaveTimer;
   ReaderProgressCandidate? _pendingDebouncedProgress;
@@ -46,11 +38,7 @@ class ReaderProgressCoordinator {
     required bool Function() shouldPersistVisiblePosition,
     required void Function(ReaderLocation location) updateVisibleLocation,
     required void Function(ReaderLocation location) updateCommittedLocation,
-    required Future<void> Function(
-      ReaderLocation location, {
-      double? scrollLocalOffsetSnapshot,
-    })
-    persistLocation,
+    required Future<void> Function(ReaderLocation location) persistLocation,
   }) : _chapterAt = chapterAt,
        _pagesForChapter = pagesForChapter,
        _store = store,
@@ -72,6 +60,7 @@ class ReaderProgressCoordinator {
     required bool isLoading,
     required int currentPageIndex,
     required bool allowProgressCommit,
+    ReaderLocation? anchorLocation,
     required void Function(int ci, double lo, double al) updateVisible,
     required void Function(int ci) updateCurrentChapterIndex,
   }) {
@@ -84,20 +73,19 @@ class ReaderProgressCoordinator {
     if (pageTurnMode != PageAnim.scroll || isLoading) {
       return;
     }
-    final currentLocation = _resolveScrollLocation(
-      chapterIndex: chapterIndex,
-      localOffset: localOffset,
-    );
-    final candidate = ReaderProgressCandidate(
-      location: currentLocation,
-      scrollLocalOffsetSnapshot: localOffset,
-    );
+    final currentLocation =
+        anchorLocation?.normalized().chapterIndex == chapterIndex
+            ? anchorLocation!.normalized()
+            : _resolveScrollLocation(
+              chapterIndex: chapterIndex,
+              localOffset: localOffset,
+            );
+    final candidate = ReaderProgressCandidate(location: currentLocation);
     _updateVisibleLocation(currentLocation);
     if (!_shouldPersistVisiblePosition()) return;
     final durableLocation = _durableLocation();
 
-    if (durableLocation == currentLocation &&
-        !_shouldPersistScrollSnapshot(candidate)) {
+    if (durableLocation == currentLocation) {
       _updateCommittedLocation(currentLocation);
       return;
     }
@@ -114,12 +102,7 @@ class ReaderProgressCoordinator {
       scrollSaveTimer?.cancel();
       scrollSaveTimer = null;
       _pendingDebouncedProgress = null;
-      unawaited(
-        _persistLocation(
-          currentLocation,
-          scrollLocalOffsetSnapshot: localOffset,
-        ),
-      );
+      unawaited(_persistLocation(currentLocation));
     } else {
       scrollSaveTimer?.cancel();
       _pendingDebouncedProgress = candidate;
@@ -128,12 +111,7 @@ class ReaderProgressCoordinator {
         final pending = _pendingDebouncedProgress;
         _pendingDebouncedProgress = null;
         if (pending == null) return;
-        unawaited(
-          _persistLocation(
-            pending.location,
-            scrollLocalOffsetSnapshot: pending.scrollLocalOffsetSnapshot,
-          ),
-        );
+        unawaited(_persistLocation(pending.location));
       });
     }
   }
@@ -160,13 +138,7 @@ class ReaderProgressCoordinator {
 
     _updateCommittedLocation(location);
 
-    unawaited(
-      _persistLocation(
-        location,
-        scrollLocalOffsetSnapshot:
-            pageTurnMode == PageAnim.scroll ? visibleChapterLocalOffset : null,
-      ),
-    );
+    unawaited(_persistLocation(location));
   }
 
   /// 更新 scroll mode 的頁面索引（不觸發持久化）。
@@ -205,26 +177,8 @@ class ReaderProgressCoordinator {
     _pendingDebouncedProgress = null;
     if (pending == null) return null;
 
-    await _persistLocation(
-      pending.location,
-      scrollLocalOffsetSnapshot: pending.scrollLocalOffsetSnapshot,
-    );
+    await _persistLocation(pending.location);
     return pending.location;
-  }
-
-  bool _shouldPersistScrollSnapshot(ReaderProgressCandidate candidate) {
-    final snapshot = candidate.scrollLocalOffsetSnapshot;
-    if (snapshot == null || !snapshot.isFinite || snapshot < 0) {
-      return false;
-    }
-
-    final savedAnchor = _store.lastSavedAnchor;
-    if (savedAnchor == null) return false;
-    if (savedAnchor.location != candidate.location) return true;
-
-    final savedSnapshot = savedAnchor.localOffsetSnapshot;
-    if (savedSnapshot == null) return true;
-    return (savedSnapshot - snapshot).abs() >= 0.5;
   }
 
   ReaderLocation _resolveScrollLocation({

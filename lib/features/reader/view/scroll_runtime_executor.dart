@@ -1,5 +1,4 @@
 import 'package:flutter/widgets.dart';
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:inkpage_reader/features/reader/reader_provider.dart';
 import 'package:inkpage_reader/features/reader/view/scroll_execution_adapter.dart';
@@ -10,7 +9,7 @@ class ScrollRuntimeExecutor {
   ScrollRuntimeExecutor({
     required this.provider,
     required this.itemScrollController,
-    required this.pageKeys,
+    required this.itemKeys,
     required this.scrollExecution,
     required this.scrollRestoreRunner,
     required this.isMounted,
@@ -19,7 +18,7 @@ class ScrollRuntimeExecutor {
 
   final ReaderProvider provider;
   final ItemScrollController itemScrollController;
-  final Map<String, GlobalKey> pageKeys;
+  final Map<String, GlobalKey> itemKeys;
   final ScrollExecutionAdapter scrollExecution;
   final ScrollRestoreRunner scrollRestoreRunner;
   final bool Function() isMounted;
@@ -75,7 +74,10 @@ class ScrollRuntimeExecutor {
       isMounted: isMounted,
       isScrollControllerAttached: () => itemScrollController.isAttached,
       ensureChapterVisible: () {
-        itemScrollController.jumpTo(index: chapterIndex, alignment: 0);
+        itemScrollController.jumpTo(
+          index: provider.scrollItemIndexForChapter(chapterIndex),
+          alignment: 0,
+        );
       },
       deferRestore: () => provider.deferPendingScrollRestore(token),
       cancelRestore:
@@ -117,17 +119,7 @@ class ScrollRuntimeExecutor {
         );
       },
       hasTargetPageContext: (targetChapterIndex) {
-        final runtimeChapter = provider.chapterAt(targetChapterIndex);
-        final pages = provider.pagesForChapter(targetChapterIndex);
-        final pageIndex =
-            runtimeChapter != null
-                ? runtimeChapter.pageIndexAtLocalOffset(localOffset)
-                : ChapterPositionResolver.pageIndexAtLocalOffset(
-                  pages,
-                  localOffset,
-                );
-        return pageKeys['$targetChapterIndex:$pageIndex']?.currentContext !=
-            null;
+        return _hasTargetItemContext(targetChapterIndex, localOffset);
       },
     );
   }
@@ -183,10 +175,13 @@ class ScrollRuntimeExecutor {
       return;
     }
 
-    itemScrollController.jumpTo(index: chapterIndex, alignment: 0);
+    itemScrollController.jumpTo(
+      index: provider.scrollItemIndexForChapter(chapterIndex),
+      alignment: 0,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!isMounted() || generation != _jumpGeneration) return;
-      if (!_hasTargetPageContext(chapterIndex, localOffset)) {
+      if (!_hasTargetItemContext(chapterIndex, localOffset)) {
         if (retries <= 0) {
           onCompleted?.call();
           return;
@@ -213,17 +208,14 @@ class ScrollRuntimeExecutor {
     });
   }
 
-  bool _hasTargetPageContext(int chapterIndex, double localOffset) {
-    final runtimeChapter = provider.chapterAt(chapterIndex);
-    final pages = provider.pagesForChapter(chapterIndex);
-    final pageIndex =
-        runtimeChapter != null
-            ? runtimeChapter.pageIndexAtLocalOffset(localOffset)
-            : ChapterPositionResolver.pageIndexAtLocalOffset(
-              pages,
-              localOffset,
-            );
-    return pageKeys['$chapterIndex:$pageIndex']?.currentContext != null;
+  bool _hasTargetItemContext(int chapterIndex, double localOffset) {
+    final itemIndex = provider.scrollItemIndexForLocalOffset(
+      chapterIndex: chapterIndex,
+      localOffset: localOffset,
+    );
+    final item = provider.scrollItemAt(itemIndex);
+    if (item == null) return false;
+    return itemKeys[item.key]?.currentContext != null;
   }
 
   void scrollToTtsHighlight() {
@@ -237,7 +229,7 @@ class ScrollRuntimeExecutor {
       reason: ReaderCommandReason.tts,
     );
     itemScrollController.scrollTo(
-      index: command.target.chapterIndex,
+      index: provider.scrollItemIndexForChapter(command.target.chapterIndex),
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
     );

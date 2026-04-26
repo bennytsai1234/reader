@@ -12,8 +12,8 @@ Book _makeBook() => Book(
   name: 'Test Book',
   author: 'Author',
   origin: 'local',
-  durChapterIndex: 0,
-  durChapterPos: 0,
+  chapterIndex: 0,
+  charOffset: 0,
 );
 
 ReaderProgressCoordinator _makeCoordinator({
@@ -29,15 +29,14 @@ ReaderProgressCoordinator _makeCoordinator({
     store: ReaderProgressStore(),
     durableLocation:
         () => ReaderLocation(
-          chapterIndex: b.durChapterIndex,
-          charOffset: b.durChapterPos,
+          chapterIndex: b.chapterIndex,
+          charOffset: b.charOffset,
         ),
     shouldPersistVisiblePosition: shouldPersist ?? () => true,
     updateVisibleLocation: (_) {},
     updateCommittedLocation: (_) {},
     persistLocation:
-        (location, {double? scrollLocalOffsetSnapshot}) =>
-            onPersistLocation?.call(location) ?? Future<void>.value(),
+        (location) => onPersistLocation?.call(location) ?? Future<void>.value(),
   );
 }
 
@@ -70,8 +69,8 @@ void main() {
         ReaderLocation? committedLocation;
         final book =
             _makeBook()
-              ..durChapterIndex = 0
-              ..durChapterPos = 0;
+              ..chapterIndex = 0
+              ..charOffset = 0;
 
         final coordinator = ReaderProgressCoordinator(
           chapterAt: (_) => null,
@@ -79,13 +78,13 @@ void main() {
           store: ReaderProgressStore(),
           durableLocation:
               () => ReaderLocation(
-                chapterIndex: book.durChapterIndex,
-                charOffset: book.durChapterPos,
+                chapterIndex: book.chapterIndex,
+                charOffset: book.charOffset,
               ),
           shouldPersistVisiblePosition: () => true,
           updateVisibleLocation: (_) {},
           updateCommittedLocation: (location) => committedLocation = location,
-          persistLocation: (_, {double? scrollLocalOffsetSnapshot}) async {},
+          persistLocation: (_) async {},
         );
 
         coordinator.updateVisibleChapterPosition(
@@ -102,7 +101,7 @@ void main() {
 
         expect(committedLocation, isNotNull);
         expect(committedLocation!.chapterIndex, 0);
-        expect(book.durChapterPos, 0);
+        expect(book.charOffset, 0);
         coordinator.dispose();
       },
     );
@@ -135,8 +134,8 @@ void main() {
     test('flushPendingProgress 會寫出 debounce 中的最後位置', () async {
       final book =
           _makeBook()
-            ..durChapterIndex = 0
-            ..durChapterPos = 20;
+            ..chapterIndex = 0
+            ..charOffset = 20;
       final store = ReaderProgressStore();
       await store.persistCharOffset(
         write: (_, __, ___, ____) async {},
@@ -149,22 +148,20 @@ void main() {
       );
 
       ReaderLocation? persistedLocation;
-      double? persistedSnapshot;
       final coordinator = ReaderProgressCoordinator(
         chapterAt: (_) => null,
         pagesForChapter: (_) => _buildScrollPages(),
         store: store,
         durableLocation:
             () => ReaderLocation(
-              chapterIndex: book.durChapterIndex,
-              charOffset: book.durChapterPos,
+              chapterIndex: book.chapterIndex,
+              charOffset: book.charOffset,
             ),
         shouldPersistVisiblePosition: () => true,
         updateVisibleLocation: (_) {},
         updateCommittedLocation: (_) {},
-        persistLocation: (location, {double? scrollLocalOffsetSnapshot}) async {
+        persistLocation: (location) async {
           persistedLocation = location;
-          persistedSnapshot = scrollLocalOffsetSnapshot;
         },
       );
 
@@ -186,7 +183,6 @@ void main() {
       expect(flushed!.chapterIndex, 0);
       expect(flushed.charOffset, 52);
       expect(persistedLocation, flushed);
-      expect(persistedSnapshot, 100.0);
       coordinator.dispose();
     });
 
@@ -257,7 +253,7 @@ void main() {
         shouldPersistVisiblePosition: () => true,
         updateVisibleLocation: (location) => visibleLocation = location,
         updateCommittedLocation: (location) => committedLocation = location,
-        persistLocation: (location, {double? scrollLocalOffsetSnapshot}) async {
+        persistLocation: (location) async {
           persistedLocation = location;
           persistCalled = true;
         },
@@ -295,8 +291,8 @@ void main() {
       var persistCalled = false;
       final book =
           _makeBook()
-            ..durChapterIndex = 0
-            ..durChapterPos = 0;
+            ..chapterIndex = 0
+            ..charOffset = 0;
 
       final coordinator = ReaderProgressCoordinator(
         chapterAt: (_) => null,
@@ -304,13 +300,13 @@ void main() {
         store: ReaderProgressStore(),
         durableLocation:
             () => ReaderLocation(
-              chapterIndex: book.durChapterIndex,
-              charOffset: book.durChapterPos,
+              chapterIndex: book.chapterIndex,
+              charOffset: book.charOffset,
             ),
         shouldPersistVisiblePosition: () => true,
         updateVisibleLocation: (_) {},
         updateCommittedLocation: (_) {},
-        persistLocation: (_, {double? scrollLocalOffsetSnapshot}) async {
+        persistLocation: (_) async {
           persistCalled = true;
         },
       );

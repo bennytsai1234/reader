@@ -21,8 +21,8 @@ void main() {
       final book = Book(
         bookUrl: 'book',
         name: 'Book',
-        durChapterIndex: 0,
-        durChapterPos: 0,
+        chapterIndex: 0,
+        charOffset: 0,
       );
       final state = ReaderSessionState(
         initialLocation: const ReaderLocation(chapterIndex: 0, charOffset: 0),
@@ -63,12 +63,12 @@ void main() {
         coordinator.durableLocation,
         const ReaderLocation(chapterIndex: 1, charOffset: 24),
       );
-      expect(book.durChapterIndex, 1);
-      expect(book.durChapterPos, 24);
-      expect(book.readerAnchorJson, isNotNull);
+      expect(book.chapterIndex, 1);
+      expect(book.charOffset, 24);
+      expect(book.readerAnchorJson, isNull);
       expect(writes.single.chapterIndex, 1);
       expect(writes.single.charOffset, 24);
-      expect(writes.single.readerAnchorJson, isNotNull);
+      expect(writes.single.readerAnchorJson, isNull);
     });
 
     test('updatePhase 會推進 session state machine', () {

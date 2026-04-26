@@ -227,24 +227,24 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _durChapterIndexMeta = const VerificationMeta(
-    'durChapterIndex',
+  static const VerificationMeta _chapterIndexMeta = const VerificationMeta(
+    'chapterIndex',
   );
   @override
-  late final GeneratedColumn<int> durChapterIndex = GeneratedColumn<int>(
-    'durChapterIndex',
+  late final GeneratedColumn<int> chapterIndex = GeneratedColumn<int>(
+    'chapterIndex',
     aliasedName,
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
-  static const VerificationMeta _durChapterPosMeta = const VerificationMeta(
-    'durChapterPos',
+  static const VerificationMeta _charOffsetMeta = const VerificationMeta(
+    'charOffset',
   );
   @override
-  late final GeneratedColumn<int> durChapterPos = GeneratedColumn<int>(
-    'durChapterPos',
+  late final GeneratedColumn<int> charOffset = GeneratedColumn<int>(
+    'charOffset',
     aliasedName,
     false,
     type: DriftSqlType.int,
@@ -392,8 +392,8 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     lastCheckCount,
     totalChapterNum,
     durChapterTitle,
-    durChapterIndex,
-    durChapterPos,
+    chapterIndex,
+    charOffset,
     readerAnchorJson,
     durChapterTime,
     wordCount,
@@ -547,22 +547,19 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         ),
       );
     }
-    if (data.containsKey('durChapterIndex')) {
+    if (data.containsKey('chapterIndex')) {
       context.handle(
-        _durChapterIndexMeta,
-        durChapterIndex.isAcceptableOrUnknown(
-          data['durChapterIndex']!,
-          _durChapterIndexMeta,
+        _chapterIndexMeta,
+        chapterIndex.isAcceptableOrUnknown(
+          data['chapterIndex']!,
+          _chapterIndexMeta,
         ),
       );
     }
-    if (data.containsKey('durChapterPos')) {
+    if (data.containsKey('charOffset')) {
       context.handle(
-        _durChapterPosMeta,
-        durChapterPos.isAcceptableOrUnknown(
-          data['durChapterPos']!,
-          _durChapterPosMeta,
-        ),
+        _charOffsetMeta,
+        charOffset.isAcceptableOrUnknown(data['charOffset']!, _charOffsetMeta),
       );
     }
     if (data.containsKey('readerAnchorJson')) {
@@ -740,15 +737,15 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.string,
         data['${effectivePrefix}durChapterTitle'],
       ),
-      durChapterIndex:
+      chapterIndex:
           attachedDatabase.typeMapping.read(
             DriftSqlType.int,
-            data['${effectivePrefix}durChapterIndex'],
+            data['${effectivePrefix}chapterIndex'],
           )!,
-      durChapterPos:
+      charOffset:
           attachedDatabase.typeMapping.read(
             DriftSqlType.int,
-            data['${effectivePrefix}durChapterPos'],
+            data['${effectivePrefix}charOffset'],
           )!,
       readerAnchorJson: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -840,8 +837,8 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<int> lastCheckCount;
   final Value<int> totalChapterNum;
   final Value<String?> durChapterTitle;
-  final Value<int> durChapterIndex;
-  final Value<int> durChapterPos;
+  final Value<int> chapterIndex;
+  final Value<int> charOffset;
   final Value<String?> readerAnchorJson;
   final Value<int> durChapterTime;
   final Value<String?> wordCount;
@@ -875,8 +872,8 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.lastCheckCount = const Value.absent(),
     this.totalChapterNum = const Value.absent(),
     this.durChapterTitle = const Value.absent(),
-    this.durChapterIndex = const Value.absent(),
-    this.durChapterPos = const Value.absent(),
+    this.chapterIndex = const Value.absent(),
+    this.charOffset = const Value.absent(),
     this.readerAnchorJson = const Value.absent(),
     this.durChapterTime = const Value.absent(),
     this.wordCount = const Value.absent(),
@@ -911,8 +908,8 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.lastCheckCount = const Value.absent(),
     this.totalChapterNum = const Value.absent(),
     this.durChapterTitle = const Value.absent(),
-    this.durChapterIndex = const Value.absent(),
-    this.durChapterPos = const Value.absent(),
+    this.chapterIndex = const Value.absent(),
+    this.charOffset = const Value.absent(),
     this.readerAnchorJson = const Value.absent(),
     this.durChapterTime = const Value.absent(),
     this.wordCount = const Value.absent(),
@@ -948,8 +945,8 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<int>? lastCheckCount,
     Expression<int>? totalChapterNum,
     Expression<String>? durChapterTitle,
-    Expression<int>? durChapterIndex,
-    Expression<int>? durChapterPos,
+    Expression<int>? chapterIndex,
+    Expression<int>? charOffset,
     Expression<String>? readerAnchorJson,
     Expression<int>? durChapterTime,
     Expression<String>? wordCount,
@@ -984,8 +981,8 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (lastCheckCount != null) 'lastCheckCount': lastCheckCount,
       if (totalChapterNum != null) 'totalChapterNum': totalChapterNum,
       if (durChapterTitle != null) 'durChapterTitle': durChapterTitle,
-      if (durChapterIndex != null) 'durChapterIndex': durChapterIndex,
-      if (durChapterPos != null) 'durChapterPos': durChapterPos,
+      if (chapterIndex != null) 'chapterIndex': chapterIndex,
+      if (charOffset != null) 'charOffset': charOffset,
       if (readerAnchorJson != null) 'readerAnchorJson': readerAnchorJson,
       if (durChapterTime != null) 'durChapterTime': durChapterTime,
       if (wordCount != null) 'wordCount': wordCount,
@@ -1022,8 +1019,8 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<int>? lastCheckCount,
     Value<int>? totalChapterNum,
     Value<String?>? durChapterTitle,
-    Value<int>? durChapterIndex,
-    Value<int>? durChapterPos,
+    Value<int>? chapterIndex,
+    Value<int>? charOffset,
     Value<String?>? readerAnchorJson,
     Value<int>? durChapterTime,
     Value<String?>? wordCount,
@@ -1058,8 +1055,8 @@ class BooksCompanion extends UpdateCompanion<Book> {
       lastCheckCount: lastCheckCount ?? this.lastCheckCount,
       totalChapterNum: totalChapterNum ?? this.totalChapterNum,
       durChapterTitle: durChapterTitle ?? this.durChapterTitle,
-      durChapterIndex: durChapterIndex ?? this.durChapterIndex,
-      durChapterPos: durChapterPos ?? this.durChapterPos,
+      chapterIndex: chapterIndex ?? this.chapterIndex,
+      charOffset: charOffset ?? this.charOffset,
       readerAnchorJson: readerAnchorJson ?? this.readerAnchorJson,
       durChapterTime: durChapterTime ?? this.durChapterTime,
       wordCount: wordCount ?? this.wordCount,
@@ -1148,11 +1145,11 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (durChapterTitle.present) {
       map['durChapterTitle'] = Variable<String>(durChapterTitle.value);
     }
-    if (durChapterIndex.present) {
-      map['durChapterIndex'] = Variable<int>(durChapterIndex.value);
+    if (chapterIndex.present) {
+      map['chapterIndex'] = Variable<int>(chapterIndex.value);
     }
-    if (durChapterPos.present) {
-      map['durChapterPos'] = Variable<int>(durChapterPos.value);
+    if (charOffset.present) {
+      map['charOffset'] = Variable<int>(charOffset.value);
     }
     if (readerAnchorJson.present) {
       map['readerAnchorJson'] = Variable<String>(readerAnchorJson.value);
@@ -1216,8 +1213,8 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('lastCheckCount: $lastCheckCount, ')
           ..write('totalChapterNum: $totalChapterNum, ')
           ..write('durChapterTitle: $durChapterTitle, ')
-          ..write('durChapterIndex: $durChapterIndex, ')
-          ..write('durChapterPos: $durChapterPos, ')
+          ..write('chapterIndex: $chapterIndex, ')
+          ..write('charOffset: $charOffset, ')
           ..write('readerAnchorJson: $readerAnchorJson, ')
           ..write('durChapterTime: $durChapterTime, ')
           ..write('wordCount: $wordCount, ')
@@ -1261,8 +1258,8 @@ class _$BookInsertable implements Insertable<Book> {
       lastCheckCount: Value(_object.lastCheckCount),
       totalChapterNum: Value(_object.totalChapterNum),
       durChapterTitle: Value(_object.durChapterTitle),
-      durChapterIndex: Value(_object.durChapterIndex),
-      durChapterPos: Value(_object.durChapterPos),
+      chapterIndex: Value(_object.chapterIndex),
+      charOffset: Value(_object.charOffset),
       readerAnchorJson: Value(_object.readerAnchorJson),
       durChapterTime: Value(_object.durChapterTime),
       wordCount: Value(_object.wordCount),
@@ -9467,8 +9464,8 @@ typedef $$BooksTableCreateCompanionBuilder =
       Value<int> lastCheckCount,
       Value<int> totalChapterNum,
       Value<String?> durChapterTitle,
-      Value<int> durChapterIndex,
-      Value<int> durChapterPos,
+      Value<int> chapterIndex,
+      Value<int> charOffset,
       Value<String?> readerAnchorJson,
       Value<int> durChapterTime,
       Value<String?> wordCount,
@@ -9504,8 +9501,8 @@ typedef $$BooksTableUpdateCompanionBuilder =
       Value<int> lastCheckCount,
       Value<int> totalChapterNum,
       Value<String?> durChapterTitle,
-      Value<int> durChapterIndex,
-      Value<int> durChapterPos,
+      Value<int> chapterIndex,
+      Value<int> charOffset,
       Value<String?> readerAnchorJson,
       Value<int> durChapterTime,
       Value<String?> wordCount,
@@ -9636,13 +9633,13 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get durChapterIndex => $composableBuilder(
-    column: $table.durChapterIndex,
+  ColumnFilters<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get durChapterPos => $composableBuilder(
-    column: $table.durChapterPos,
+  ColumnFilters<int> get charOffset => $composableBuilder(
+    column: $table.charOffset,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9812,13 +9809,13 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get durChapterIndex => $composableBuilder(
-    column: $table.durChapterIndex,
+  ColumnOrderings<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get durChapterPos => $composableBuilder(
-    column: $table.durChapterPos,
+  ColumnOrderings<int> get charOffset => $composableBuilder(
+    column: $table.charOffset,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9964,13 +9961,13 @@ class $$BooksTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get durChapterIndex => $composableBuilder(
-    column: $table.durChapterIndex,
+  GeneratedColumn<int> get chapterIndex => $composableBuilder(
+    column: $table.chapterIndex,
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get durChapterPos => $composableBuilder(
-    column: $table.durChapterPos,
+  GeneratedColumn<int> get charOffset => $composableBuilder(
+    column: $table.charOffset,
     builder: (column) => column,
   );
 
@@ -10065,8 +10062,8 @@ class $$BooksTableTableManager
                 Value<int> lastCheckCount = const Value.absent(),
                 Value<int> totalChapterNum = const Value.absent(),
                 Value<String?> durChapterTitle = const Value.absent(),
-                Value<int> durChapterIndex = const Value.absent(),
-                Value<int> durChapterPos = const Value.absent(),
+                Value<int> chapterIndex = const Value.absent(),
+                Value<int> charOffset = const Value.absent(),
                 Value<String?> readerAnchorJson = const Value.absent(),
                 Value<int> durChapterTime = const Value.absent(),
                 Value<String?> wordCount = const Value.absent(),
@@ -10100,8 +10097,8 @@ class $$BooksTableTableManager
                 lastCheckCount: lastCheckCount,
                 totalChapterNum: totalChapterNum,
                 durChapterTitle: durChapterTitle,
-                durChapterIndex: durChapterIndex,
-                durChapterPos: durChapterPos,
+                chapterIndex: chapterIndex,
+                charOffset: charOffset,
                 readerAnchorJson: readerAnchorJson,
                 durChapterTime: durChapterTime,
                 wordCount: wordCount,
@@ -10137,8 +10134,8 @@ class $$BooksTableTableManager
                 Value<int> lastCheckCount = const Value.absent(),
                 Value<int> totalChapterNum = const Value.absent(),
                 Value<String?> durChapterTitle = const Value.absent(),
-                Value<int> durChapterIndex = const Value.absent(),
-                Value<int> durChapterPos = const Value.absent(),
+                Value<int> chapterIndex = const Value.absent(),
+                Value<int> charOffset = const Value.absent(),
                 Value<String?> readerAnchorJson = const Value.absent(),
                 Value<int> durChapterTime = const Value.absent(),
                 Value<String?> wordCount = const Value.absent(),
@@ -10172,8 +10169,8 @@ class $$BooksTableTableManager
                 lastCheckCount: lastCheckCount,
                 totalChapterNum: totalChapterNum,
                 durChapterTitle: durChapterTitle,
-                durChapterIndex: durChapterIndex,
-                durChapterPos: durChapterPos,
+                chapterIndex: chapterIndex,
+                charOffset: charOffset,
                 readerAnchorJson: readerAnchorJson,
                 durChapterTime: durChapterTime,
                 wordCount: wordCount,

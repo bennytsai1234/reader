@@ -206,7 +206,7 @@ void main() {
       expect(command.anchor.pageIndexSnapshot, 2);
     });
 
-    test('jumpToAnchor 會保留 anchor snapshot metadata', () {
+    test('jumpToAnchor 會保留 anchor 文字座標 metadata', () {
       runtime.jumpToAnchor(
         isScrollMode: true,
         anchor: const ReaderAnchor(
@@ -225,10 +225,7 @@ void main() {
         const ReaderLocation(chapterIndex: 1, charOffset: 8),
       );
       expect(command.anchor.pageIndexSnapshot, 1);
-      expect(
-        command.anchor.localOffsetSnapshot,
-        chapter1.localOffsetFromCharOffset(8),
-      );
+      expect(command.anchor.localOffsetSnapshot, isNull);
       expect(command.anchor.layoutSignature, 'scroll:320x640');
     });
 

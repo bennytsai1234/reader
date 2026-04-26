@@ -150,10 +150,7 @@ void main() {
         chapter1.localOffsetFromCharOffset(8),
       );
       expect(scrollCommand.anchor.pageIndexSnapshot, 1);
-      expect(
-        scrollCommand.anchor.localOffsetSnapshot,
-        chapter1.localOffsetFromCharOffset(8),
-      );
+      expect(scrollCommand.anchor.localOffsetSnapshot, isNull);
     });
 
     test('slide viewport command 會把 anchor 轉成對應全域頁索引', () {
@@ -234,10 +231,7 @@ void main() {
       );
       expect(command.anchor.layoutSignature, 'scroll:320x640');
       expect(command.anchor.pageIndexSnapshot, 1);
-      expect(
-        command.anchor.localOffsetSnapshot,
-        chapter1.localOffsetFromCharOffset(8),
-      );
+      expect(command.anchor.localOffsetSnapshot, isNull);
     });
   });
 }

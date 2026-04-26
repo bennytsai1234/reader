@@ -119,7 +119,7 @@ class BookInfoHeader extends StatelessWidget {
                           style: actionButtonStyle,
                           icon: const Icon(Icons.menu_book_rounded, size: 18),
                           label: Text(
-                            book.durChapterIndex == 0 && book.durChapterPos == 0
+                            book.chapterIndex == 0 && book.charOffset == 0
                                 ? '開始閱讀'
                                 : '繼續閱讀',
                           ),

@@ -46,8 +46,8 @@ void main() {
         charOffset: 345,
       );
 
-      expect(book.durChapterIndex, 1);
-      expect(book.durChapterPos, 345);
+      expect(book.chapterIndex, 1);
+      expect(book.charOffset, 345);
       expect(book.durChapterTitle, 'c1');
       expect(
         store.lastSavedLocation,
@@ -62,10 +62,10 @@ void main() {
       expect(savedChapter, 1);
       expect(savedTitle, 'c1');
       expect(savedOffset, 345);
-      expect(savedAnchorJson, isNotNull);
+      expect(savedAnchorJson, isNull);
     });
 
-    test('persistCharOffset 會保留提供的 anchor snapshot', () async {
+    test('persistCharOffset 會忽略提供的 anchor snapshot', () async {
       final store = ReaderProgressStore();
       final book = Book(name: 'book', author: 'author', bookUrl: 'url');
       final chapters = [BookChapter(title: 'c0', index: 0)];
@@ -88,14 +88,12 @@ void main() {
         store.lastSavedAnchor,
         const ReaderAnchor(
           location: ReaderLocation(chapterIndex: 0, charOffset: 120),
-          pageIndexSnapshot: 3,
-          localOffsetSnapshot: 240,
-          layoutSignature: 'sig',
         ),
       );
+      expect(book.readerAnchorJson, isNull);
     });
 
-    test('updateBookProgress 未提供 anchor 時會保留既有 readerAnchorJson', () {
+    test('updateBookProgress 會清空既有 readerAnchorJson', () {
       final store = ReaderProgressStore();
       final book = Book(name: 'book', author: 'author', bookUrl: 'url')
         ..readerAnchorJson = '{"chapterIndex":1,"charOffset":88}';
@@ -107,10 +105,10 @@ void main() {
         title: 'c1',
       );
 
-      expect(book.durChapterIndex, 1);
-      expect(book.durChapterPos, 120);
+      expect(book.chapterIndex, 1);
+      expect(book.charOffset, 120);
       expect(book.durChapterTitle, 'c1');
-      expect(book.readerAnchorJson, '{"chapterIndex":1,"charOffset":88}');
+      expect(book.readerAnchorJson, isNull);
     });
 
     test('persistCharOffset 寫入失敗時不拋出例外（並靜默記錄）', () async {
@@ -140,14 +138,14 @@ void main() {
       );
 
       // In-memory state should still be updated (only durable write failed)
-      expect(book.durChapterPos, 100);
+      expect(book.charOffset, 100);
       expect(
         store.lastSavedLocation,
         const ReaderLocation(chapterIndex: 0, charOffset: 100),
       );
     });
 
-    test('rememberAnchor 會同步更新 lastSavedAnchor 與 lastSavedLocation', () {
+    test('rememberAnchor 只記住章節與字元座標', () {
       final store = ReaderProgressStore();
 
       store.rememberAnchor(
@@ -162,8 +160,6 @@ void main() {
         store.lastSavedAnchor,
         const ReaderAnchor(
           location: ReaderLocation(chapterIndex: 2, charOffset: 640),
-          pageIndexSnapshot: 4,
-          localOffsetSnapshot: 512,
         ),
       );
       expect(

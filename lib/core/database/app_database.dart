@@ -102,7 +102,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase._internal() : super(_openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -134,6 +134,14 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 10) {
         await m.createTable(readerTempChapterCaches);
+      }
+      if (from < 11) {
+        await customStatement(
+          'ALTER TABLE books RENAME COLUMN "durChapterIndex" TO "chapterIndex"',
+        );
+        await customStatement(
+          'ALTER TABLE books RENAME COLUMN "durChapterPos" TO "charOffset"',
+        );
       }
     },
     beforeOpen: (details) async {

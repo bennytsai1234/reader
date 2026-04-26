@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:inkpage_reader/features/reader/reader_provider.dart';
@@ -93,9 +92,7 @@ class PageViewWidget extends StatelessWidget {
               for (int i = 0; i < page.lines.length; i++) {
                 final line = page.lines[i];
                 if (tapY >= line.lineTop && tapY < line.lineBottom) {
-                  if (line.image == null) {
-                    onLineTap!(line.chapterPosition);
-                  }
+                  onLineTap!(line.chapterPosition);
                   break;
                 }
               }
@@ -146,29 +143,6 @@ class PageViewWidget extends StatelessWidget {
                     ),
           ),
         ),
-        // 2. 圖片互動層 (原 Android：支援點擊查看圖片)
-        ...page.lines.where((l) => l.image != null).map((line) {
-          final img = line.image!;
-          return Positioned(
-            left: provider.textPadding + img.left,
-            top: currentPaddingTop + line.lineTop,
-            width: img.width,
-            height: img.height,
-            child: GestureDetector(
-              onTap: () => _showImageDialog(context, img.url),
-              child: CachedNetworkImage(
-                imageUrl: img.url,
-                fit: BoxFit.contain,
-                placeholder:
-                    (context, url) =>
-                        const Center(child: CircularProgressIndicator()),
-                errorWidget:
-                    (context, url, error) =>
-                        const Icon(Icons.broken_image, color: Colors.grey),
-              ),
-            ),
-          );
-        }),
       ],
     );
 
@@ -278,27 +252,6 @@ class PageViewWidget extends StatelessWidget {
       ),
     );
   }
-
-  void _showImageDialog(BuildContext context, String url) {
-    showDialog(
-      context: context,
-      builder:
-          (context) => Dialog(
-            backgroundColor: Colors.transparent,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CachedNetworkImage(imageUrl: url),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('關閉'),
-                ),
-              ],
-            ),
-          ),
-    );
-  }
 }
 
 class _TextPagePainter extends CustomPainter {
@@ -392,8 +345,6 @@ class _TextPagePainter extends CustomPainter {
     final width = size.width - paddingLeft * 2;
 
     for (var line in targetPage.lines) {
-      if (line.image != null) continue;
-
       // 處理 TTS 高亮（對位 Android：朗讀時背景高亮）
       // 同時限制章節索引，避免多章節合併時不同 chapter 的相同 chapterPosition 誤觸發
       final lineStart = line.chapterPosition;

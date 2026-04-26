@@ -259,7 +259,6 @@ class ReadAloudController extends ChangeNotifier {
     if (targetChapter == null || targetChapter.isEmpty) return;
     final textLines = targetChapter.pages
         .expand((page) => page.lines)
-        .where((line) => line.image == null)
         .toList(growable: false);
     if (lineIndex < 0 || lineIndex >= textLines.length) return;
     startFromOffset(

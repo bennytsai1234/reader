@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/services/app_log_service.dart';
@@ -22,14 +20,12 @@ class ReaderProgressStore {
     String? title,
     String? readerAnchorJson,
   }) {
-    book.durChapterIndex = chapterIndex;
-    book.durChapterPos = charOffset;
+    book.chapterIndex = chapterIndex;
+    book.charOffset = charOffset;
     if (title != null) {
       book.durChapterTitle = title;
     }
-    if (readerAnchorJson != null) {
-      book.readerAnchorJson = readerAnchorJson;
-    }
+    book.readerAnchorJson = readerAnchorJson;
   }
 
   bool shouldSaveImmediately({
@@ -67,18 +63,15 @@ class ReaderProgressStore {
           chapterIndex: chapterIndex,
           charOffset: charOffset,
         ).normalized();
-    final resolvedAnchor = (anchor ?? ReaderAnchor.location(currentLocation))
-        .normalized()
-        .copyWith(location: currentLocation);
     updateBookProgress(
       book: book,
       chapterIndex: chapterIndex,
       charOffset: charOffset,
       title: title,
-      readerAnchorJson: jsonEncode(resolvedAnchor.toJson()),
+      readerAnchorJson: null,
     );
     _lastSavedLocation = currentLocation;
-    _lastSavedAnchor = resolvedAnchor;
+    _lastSavedAnchor = ReaderAnchor.location(currentLocation);
     try {
       await write(chapterIndex, title, charOffset, book.readerAnchorJson);
     } catch (e, stack) {
@@ -91,7 +84,7 @@ class ReaderProgressStore {
   }
 
   void rememberAnchor(ReaderAnchor anchor) {
-    _lastSavedAnchor = anchor.normalized();
+    _lastSavedAnchor = ReaderAnchor.location(anchor.normalized().location);
     _lastSavedLocation = _lastSavedAnchor!.location;
   }
 }

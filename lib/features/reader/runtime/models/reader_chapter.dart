@@ -1,5 +1,6 @@
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter_metrics.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/read_aloud_segment.dart';
@@ -11,8 +12,10 @@ class ReaderChapter {
   final String title;
   final List<TextPage> pages;
   final int contentLength;
+  final List<PageGroup> pageGroups;
   final List<int> pageStartOffsets;
   final List<int> pageEndOffsets;
+  final LineLayout lineLayout;
   final ReaderChapterMetrics metrics;
 
   ReaderChapter({
@@ -23,34 +26,37 @@ class ReaderChapter {
     int? contentLength,
     List<int>? pageStartOffsets,
     List<int>? pageEndOffsets,
+    LineLayout? lineLayout,
     ReaderChapterMetrics? metrics,
-  }) : pageStartOffsets = List<int>.unmodifiable(
+  }) : lineLayout =
+           lineLayout ?? LineLayout.fromPages(pages, chapterIndex: index),
+       pageGroups = List<PageGroup>.unmodifiable(
+         (lineLayout ?? LineLayout.fromPages(pages, chapterIndex: index))
+             .pageGroups,
+       ),
+       pageStartOffsets = List<int>.unmodifiable(
          pageStartOffsets ??
-             pages
-                 .map(ChapterPositionResolver.firstCharOffset)
-                 .toList(growable: false),
+             (lineLayout ?? LineLayout.fromPages(pages, chapterIndex: index))
+                 .pageStartOffsets,
        ),
        pageEndOffsets = List<int>.unmodifiable(
          pageEndOffsets ??
-             pages
-                 .map(ChapterPositionResolver.pageEndCharOffset)
-                 .toList(growable: false),
+             (lineLayout ?? LineLayout.fromPages(pages, chapterIndex: index))
+                 .pageEndOffsets,
        ),
        contentLength =
            contentLength ??
-           (pages.isEmpty
-               ? 0
-               : ChapterPositionResolver.pageEndCharOffset(pages.last)),
+           (lineLayout ?? LineLayout.fromPages(pages, chapterIndex: index))
+               .endCharOffset,
        metrics = metrics ?? ReaderChapterMetrics.fromPages(pages);
 
-  int get pageCount => pages.length;
-  int get lastIndex => pages.isEmpty ? -1 : pages.length - 1;
-  bool get isEmpty => pages.isEmpty;
+  int get pageCount => pageGroups.length;
+  int get lastIndex => pageGroups.isEmpty ? -1 : pageGroups.length - 1;
+  bool get isEmpty => pageGroups.isEmpty;
   TextPage? get firstPage => pages.isEmpty ? null : pages.first;
   TextPage? get lastPage => pages.isEmpty ? null : pages.last;
   int get lastReadLength => getReadLength(lastIndex);
   double get chapterHeight => metrics.contentHeight;
-  late final List<TextLine> _allTextLines = allLines();
 
   late final List<ReaderParagraph> paragraphs = _buildParagraphs();
   late final List<ReaderParagraph> pageParagraphs = _buildPageParagraphs();
@@ -73,22 +79,14 @@ class ReaderChapter {
   }
 
   int getReadLength(int pageIndex) {
-    if (pages.isEmpty || pageIndex < 0) return 0;
-    final safeIndex = pageIndex.clamp(0, pages.length - 1);
+    if (pageGroups.isEmpty || pageIndex < 0) return 0;
+    final safeIndex = pageIndex.clamp(0, pageGroups.length - 1);
     return pageStartOffsets[safeIndex];
   }
 
   int getPageIndexByCharIndex(int charIndex) {
-    if (pages.isEmpty) return -1;
-    var best = 0;
-    for (var i = 0; i < pageStartOffsets.length; i++) {
-      if (pageStartOffsets[i] <= charIndex) {
-        best = i;
-      } else {
-        break;
-      }
-    }
-    return best;
+    if (pageGroups.isEmpty) return -1;
+    return lineLayout.findPageIndexByCharOffset(charIndex);
   }
 
   TextLine? lineAtCharOffset(int charOffset) {
@@ -98,21 +96,7 @@ class ReaderChapter {
   ({TextLine line, int pageIndex, int lineIndex})? locateLineAtCharOffset(
     int charOffset,
   ) {
-    for (final line in _allTextLines) {
-      if (line.image != null) continue;
-      final lineEnd = line.chapterPosition + line.text.length;
-      if (charOffset >= line.chapterPosition && charOffset < lineEnd) {
-        for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
-          final page = pages[pageIndex];
-          for (var lineIndex = 0; lineIndex < page.lines.length; lineIndex++) {
-            if (identical(page.lines[lineIndex], line)) {
-              return (line: line, pageIndex: pageIndex, lineIndex: lineIndex);
-            }
-          }
-        }
-      }
-    }
-    return null;
+    return lineLayout.locateLineAtCharOffset(charOffset);
   }
 
   ReaderParagraph? paragraphAtCharOffset(
@@ -128,38 +112,11 @@ class ReaderChapter {
   }
 
   int charOffsetFromLocalOffset(double localOffset) {
-    if (pages.isEmpty) return 0;
-    final safeLocalOffset = localOffset.clamp(0.0, chapterHeight).toDouble();
-    for (var i = 0; i < pages.length; i++) {
-      final page = pages[i];
-      final pageTop = metrics.pageTopOffsets[i];
-      for (final line in page.lines) {
-        if (line.image != null) continue;
-        if (pageTop + line.lineBottom > safeLocalOffset) {
-          return line.chapterPosition;
-        }
-      }
-    }
-    return contentLength;
+    return lineLayout.charOffsetFromLocalOffset(localOffset);
   }
 
   double localOffsetFromCharOffset(int charOffset) {
-    if (pages.isEmpty) return 0.0;
-    for (var i = 0; i < pages.length; i++) {
-      final page = pages[i];
-      final pageTop = metrics.pageTopOffsets[i];
-      for (final line in page.lines) {
-        if (line.image != null) continue;
-        final lineStart = line.chapterPosition;
-        final lineEnd = lineStart + line.text.length;
-        final containsOffset = charOffset >= lineStart && charOffset < lineEnd;
-        final fallsBeforeLine = charOffset < lineStart;
-        if (containsOffset || fallsBeforeLine) {
-          return pageTop + line.lineTop;
-        }
-      }
-    }
-    return chapterHeight;
+    return lineLayout.localOffsetForCharOffset(charOffset);
   }
 
   double alignmentForCharOffset(int charOffset) {
@@ -169,21 +126,15 @@ class ReaderChapter {
   }
 
   int pageIndexAtLocalOffset(double localOffset) {
-    if (pages.isEmpty) return -1;
-    final safeLocalOffset = localOffset.clamp(0.0, chapterHeight).toDouble();
-    for (var i = 0; i < pages.length; i++) {
-      final pageHeight = pageHeightAt(i);
-      if (metrics.pageTopOffsets[i] + pageHeight > safeLocalOffset) {
-        return i;
-      }
-    }
-    return pages.length - 1;
+    return pageGroups.isEmpty
+        ? -1
+        : lineLayout.pageIndexAtLocalOffset(localOffset);
   }
 
   int charOffsetForPageIndex(int pageIndex) {
-    if (pages.isEmpty) return 0;
-    final safeIndex = pageIndex.clamp(0, pages.length - 1);
-    return pageStartOffsets[safeIndex];
+    if (pageGroups.isEmpty) return 0;
+    final safeIndex = pageIndex.clamp(0, pageGroups.length - 1);
+    return pageGroups[safeIndex].firstCharOffset;
   }
 
   int nextPageStartCharOffset(int charOffset) {
@@ -199,23 +150,18 @@ class ReaderChapter {
   }
 
   double localOffsetForPageIndex(int pageIndex) {
-    if (pages.isEmpty) return 0.0;
+    if (pageGroups.isEmpty) return 0.0;
     final charOffset = charOffsetForPageIndex(pageIndex);
     return localOffsetFromCharOffset(charOffset);
   }
 
   double pageHeightAt(int pageIndex) {
-    final page = pageAt(pageIndex);
-    if (page == null) return 0.0;
-    return ChapterPositionResolver.pageHeight(page);
+    return lineLayout.pageHeightAt(pageIndex);
   }
 
   bool isCharOffsetVisibleInPage(int charOffset, int pageIndex) {
-    final page = pageAt(pageIndex);
-    if (page == null) return false;
-    final start = firstCharOffset(page);
-    final end = pageEndCharOffset(page);
-    return charOffset >= start && charOffset <= end;
+    if (pageIndex < 0 || pageIndex >= pageGroups.length) return false;
+    return pageGroups[pageIndex].containsCharOffset(charOffset);
   }
 
   ({
@@ -321,17 +267,12 @@ class ReaderChapter {
   }
 
   List<TextLine> allLines() {
-    final lines = <TextLine>[];
-    for (final page in pages) {
-      lines.addAll(page.lines);
-    }
-    return lines;
+    return lineLayout.allLines();
   }
 
   String getContent() {
     return pages
         .expand((page) => page.lines)
-        .where((line) => line.image == null)
         .map((line) => line.text + (line.isParagraphEnd ? '\n' : ''))
         .join();
   }
@@ -341,7 +282,6 @@ class ReaderChapter {
     return pages
         .skip(pageIndex)
         .expand((page) => page.lines)
-        .where((line) => line.image == null)
         .map((line) => line.text + (line.isParagraphEnd ? '\n' : ''))
         .join();
   }
@@ -358,7 +298,6 @@ class ReaderChapter {
     for (var index = pageIndex; index <= endIndex; index++) {
       final page = pages[index];
       for (final line in page.lines) {
-        if (line.image != null) continue;
         buffer.write(line.text);
         if (line.isParagraphEnd || pageSplit) {
           buffer.write('\n');
@@ -390,10 +329,7 @@ class ReaderChapter {
   }
 
   bool containsCharOffset(int charOffset) {
-    if (pages.isEmpty) return false;
-    final first = firstCharOffset(pages.first);
-    final last = pageEndCharOffset(pages.last);
-    return charOffset >= first && charOffset <= last;
+    return lineLayout.containsCharOffset(charOffset);
   }
 
   int pageEndCharOffset(TextPage page) {
@@ -401,16 +337,7 @@ class ReaderChapter {
   }
 
   List<TextLine> visibleLinesFrom(int startCharOffset) {
-    final lines = <TextLine>[];
-    for (final page in pages) {
-      for (final line in page.lines) {
-        if (line.image != null) continue;
-        if (line.chapterPosition >= startCharOffset) {
-          lines.add(line);
-        }
-      }
-    }
-    return lines;
+    return lineLayout.visibleLinesFrom(startCharOffset);
   }
 
   ({
@@ -422,7 +349,6 @@ class ReaderChapter {
     final visibleSegments = <({TextLine line, int startOffset})>[];
     for (final page in pages) {
       for (final line in page.lines) {
-        if (line.image != null) continue;
         final lineStart = line.chapterPosition;
         final lineEnd = lineStart + line.text.length;
         if (startCharOffset <= lineStart) {
@@ -478,7 +404,6 @@ class ReaderChapter {
       final page = pages[pageIndex];
       for (var lineIndex = 0; lineIndex < page.lines.length; lineIndex++) {
         final line = page.lines[lineIndex];
-        if (line.image != null) continue;
         final lineStart = line.chapterPosition;
         final lineEnd = lineStart + line.text.length;
         if (lineEnd <= startCharOffset) continue;
@@ -528,8 +453,6 @@ class ReaderChapter {
       int? firstLineIndex;
 
       for (final line in paragraph.textLines) {
-        if (line.image != null) continue;
-
         final lineStart = line.chapterPosition;
         final lineEnd = lineStart + line.text.length;
         if (lineEnd <= startCharOffset) continue;
@@ -581,7 +504,7 @@ class ReaderChapter {
   List<ReaderParagraph> _buildParagraphs() {
     final grouped = <int, List<TextLine>>{};
     for (final line in allLines()) {
-      if (line.image != null || line.paragraphNum <= 0) continue;
+      if (line.paragraphNum <= 0) continue;
       grouped.putIfAbsent(line.paragraphNum, () => <TextLine>[]).add(line);
     }
     final entries =
@@ -596,7 +519,7 @@ class ReaderChapter {
     for (final page in pages) {
       final grouped = <int, List<TextLine>>{};
       for (final line in page.lines) {
-        if (line.image != null || line.paragraphNum <= 0) continue;
+        if (line.paragraphNum <= 0) continue;
         grouped.putIfAbsent(line.paragraphNum, () => <TextLine>[]).add(line);
       }
       final pageParagraphs =

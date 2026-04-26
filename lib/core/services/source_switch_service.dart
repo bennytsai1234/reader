@@ -131,7 +131,7 @@ class SourceSwitchService {
     }
 
     final alignmentBook = currentBook.copyWith(
-      durChapterIndex: targetChapterIndex ?? currentBook.durChapterIndex,
+      chapterIndex: targetChapterIndex ?? currentBook.chapterIndex,
       durChapterTitle: targetChapterTitle ?? currentBook.durChapterTitle,
     );
     final hydratedBook = await _service.getBookInfo(source, candidate.toBook());
@@ -141,7 +141,7 @@ class SourceSwitchService {
     }
 
     final migratedBook = alignmentBook.migrateTo(hydratedBook, chapters);
-    final resolvedTargetIndex = migratedBook.durChapterIndex.clamp(
+    final resolvedTargetIndex = migratedBook.chapterIndex.clamp(
       0,
       chapters.length - 1,
     );

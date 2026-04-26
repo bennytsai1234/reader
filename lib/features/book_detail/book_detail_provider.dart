@@ -181,7 +181,7 @@ class BookDetailProvider extends ChangeNotifier {
   Future<OfflineCacheQueueResult> queueDownloadFromCurrent() async {
     return _queueOfflineCache(
       resolveChapters: (_) {
-        final startIndex = book.durChapterIndex.clamp(0, _allChapters.length);
+        final startIndex = book.chapterIndex.clamp(0, _allChapters.length);
         return _allChapters
             .where((chapter) => chapter.index >= startIndex)
             .toList();

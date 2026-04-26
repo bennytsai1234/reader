@@ -110,8 +110,8 @@ class _ReaderRuntimeHarness extends ReaderProviderBase
     this.chapters = chapters;
     _sessionState = ReaderSessionState(
       initialLocation: ReaderLocation(
-        chapterIndex: book.durChapterIndex,
-        charOffset: book.durChapterPos,
+        chapterIndex: book.chapterIndex,
+        charOffset: book.charOffset,
       ),
     );
     _progressCoordinator = ReaderProgressCoordinator(
@@ -124,9 +124,7 @@ class _ReaderRuntimeHarness extends ReaderProviderBase
           (location) => _sessionState.updateVisibleLocation(location),
       updateCommittedLocation:
           (location) => _sessionState.updateCommittedLocation(location),
-      persistLocation:
-          (location, {double? scrollLocalOffsetSnapshot}) async =>
-              persistLocation(location),
+      persistLocation: (location) async => persistLocation(location),
     );
     contentCallbacks = ContentCallbacks(
       refreshChapterRuntime: (_) {},
@@ -278,8 +276,8 @@ class _ReaderRuntimeHarness extends ReaderProviderBase
   Future<void> persistLocation(ReaderLocation location) async {
     _sessionState.updateCommittedLocation(location);
     _sessionState.updateDurableLocation(location);
-    book.durChapterIndex = location.chapterIndex;
-    book.durChapterPos = location.charOffset;
+    book.chapterIndex = location.chapterIndex;
+    book.charOffset = location.charOffset;
   }
 
   void jumpToPosition({
@@ -586,8 +584,8 @@ void main() {
         book: Book(
           bookUrl: 'book',
           name: 'Book',
-          durChapterIndex: 1,
-          durChapterPos: 12,
+          chapterIndex: 1,
+          charOffset: 12,
         ),
         chapters: [
           BookChapter(title: 'c0', index: 0, bookUrl: 'book'),
@@ -602,7 +600,7 @@ void main() {
         ...harness.pagesForChapter(1),
       ]);
 
-      harness.book.durChapterPos = 0;
+      harness.book.charOffset = 0;
       harness.jumpToPosition(
         chapterIndex: harness.committedLocation.chapterIndex,
         charOffset: harness.committedLocation.charOffset,
@@ -618,7 +616,7 @@ void main() {
 
     test('repaginate 後 restore 仍以 charOffset 對齊，不會漂移到舊 pageIndex', () {
       final harness = _ReaderRuntimeHarness(
-        book: Book(bookUrl: 'book', name: 'Book', durChapterPos: 12),
+        book: Book(bookUrl: 'book', name: 'Book', charOffset: 12),
         chapters: [BookChapter(title: 'c1', index: 0, bookUrl: 'book')],
       );
       harness.pageTurnMode = PageAnim.slide;
@@ -643,12 +641,12 @@ void main() {
 
       expect(firstPageTarget, 1);
       expect(harness.lastSlideJump, 2);
-      expect(harness.book.durChapterPos, 12);
+      expect(harness.book.charOffset, 12);
     });
 
     test('scroll 與 slide 切換時會維持同一個 charOffset 語意', () {
       final harness = _ReaderRuntimeHarness(
-        book: Book(bookUrl: 'book', name: 'Book', durChapterPos: 12),
+        book: Book(bookUrl: 'book', name: 'Book', charOffset: 12),
         chapters: [BookChapter(title: 'c0', index: 0, bookUrl: 'book')],
       );
       harness.setChapterPages(0, _buildPages(0, [0, 8, 16], title: 'c0'));
@@ -680,8 +678,8 @@ void main() {
         book: Book(
           bookUrl: 'book',
           name: 'Book',
-          durChapterIndex: 0,
-          durChapterPos: 0,
+          chapterIndex: 0,
+          charOffset: 0,
         ),
         chapters: [BookChapter(title: 'c0', index: 0, bookUrl: 'book')],
       );
@@ -695,8 +693,8 @@ void main() {
         alignment: 0.0,
       );
 
-      expect(harness.book.durChapterIndex, 0);
-      expect(harness.book.durChapterPos, 0);
+      expect(harness.book.chapterIndex, 0);
+      expect(harness.book.charOffset, 0);
       expect(harness.persistedRequests, isEmpty);
     });
 

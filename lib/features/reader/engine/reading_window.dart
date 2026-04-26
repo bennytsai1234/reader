@@ -125,7 +125,6 @@ class ReadingWindow {
     final pageTop = _pageTop(pageIndex);
 
     for (final line in page.lines) {
-      if (line.image != null) continue;
       if (line.chapterPosition >= charOffset) {
         return (pageTop + line.lineTop).clamp(0.0, double.infinity);
       }
@@ -145,7 +144,6 @@ class ReadingWindow {
     final pageTop = _pageTop(pageIndex);
 
     for (final line in page.lines) {
-      if (line.image != null) continue;
       if (pageTop + line.lineBottom > scrollY) {
         return line.chapterPosition;
       }
@@ -170,7 +168,8 @@ class ReadingWindow {
   }
 
   /// 計算總高度
-  double get totalHeight => cumulativeHeights.isEmpty ? 0.0 : cumulativeHeights.last;
+  double get totalHeight =>
+      cumulativeHeights.isEmpty ? 0.0 : cumulativeHeights.last;
 
   // --- 視窗比較與補償計算 ---
 
@@ -244,9 +243,10 @@ class ReadingWindow {
     final chapterOrderIndex = chapterOrder.indexOf(chapterIndex);
     if (chapterOrderIndex < 0) return null;
 
-    final nextChapterStart = chapterOrderIndex + 1 < chapterOrder.length
-        ? chapterStartIndex[chapterOrder[chapterOrderIndex + 1]]
-        : null;
+    final nextChapterStart =
+        chapterOrderIndex + 1 < chapterOrder.length
+            ? chapterStartIndex[chapterOrder[chapterOrderIndex + 1]]
+            : null;
     final end = (nextChapterStart ?? pages.length) - 1;
     return (start, end);
   }
@@ -272,7 +272,7 @@ class ReadingWindow {
 
   static int _firstCharOffset(TextPage page) {
     for (final line in page.lines) {
-      if (line.image == null) return line.chapterPosition;
+      return line.chapterPosition;
     }
     return 0;
   }

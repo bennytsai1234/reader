@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/bookmark.dart';
@@ -9,21 +7,14 @@ import 'package:inkpage_reader/features/reader/runtime/models/reader_open_target
 
 void main() {
   group('ReaderOpenTarget', () {
-    test('resume 會保留與 durable location 一致的 snapshot metadata', () {
+    test('resume 只使用 durable chapterIndex 與 charOffset', () {
       final book = Book(
         bookUrl: 'url',
         name: 'book',
-        durChapterIndex: 3,
-        durChapterPos: 128,
-        readerAnchorJson: jsonEncode(
-          const ReaderAnchor(
-            location: ReaderLocation(chapterIndex: 3, charOffset: 128),
-            pageIndexSnapshot: 5,
-            localOffsetSnapshot: 320,
-            layoutSignature: 'slide:390:844',
-            contentHash: '3:8:2048:0:2048',
-          ).toJson(),
-        ),
+        chapterIndex: 3,
+        charOffset: 128,
+        readerAnchorJson:
+            '{"chapterIndex":3,"charOffset":128,"localOffsetSnapshot":320}',
       );
 
       final target = ReaderOpenTarget.resume(book);
@@ -32,10 +23,6 @@ void main() {
         target.anchor,
         const ReaderAnchor(
           location: ReaderLocation(chapterIndex: 3, charOffset: 128),
-          pageIndexSnapshot: 5,
-          localOffsetSnapshot: 320,
-          layoutSignature: 'slide:390:844',
-          contentHash: '3:8:2048:0:2048',
         ),
       );
       expect(target.location, target.anchor.location);
@@ -45,17 +32,10 @@ void main() {
       final book = Book(
         bookUrl: 'url',
         name: 'book',
-        durChapterIndex: 3,
-        durChapterPos: 128,
-        readerAnchorJson: jsonEncode(
-          const ReaderAnchor(
-            location: ReaderLocation(chapterIndex: 3, charOffset: 64),
-            pageIndexSnapshot: 5,
-            localOffsetSnapshot: 320,
-            layoutSignature: 'slide:390:844',
-            contentHash: '3:8:2048:0:2048',
-          ).toJson(),
-        ),
+        chapterIndex: 3,
+        charOffset: 128,
+        readerAnchorJson:
+            '{"chapterIndex":3,"charOffset":64,"localOffsetSnapshot":320}',
       );
 
       final target = ReaderOpenTarget.resume(book);

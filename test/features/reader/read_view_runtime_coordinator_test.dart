@@ -288,7 +288,7 @@ void main() {
       expect(first.command.target.localOffset, 48);
       expect(first.command.reason, ReaderCommandReason.restore);
       expect(first.command.anchor.location.chapterIndex, 2);
-      expect(first.command.anchor.localOffsetSnapshot, 48);
+      expect(first.command.anchor.localOffsetSnapshot, isNull);
       expect(second, isNull);
       expect(provider.pendingScrollRestoreChapterIndex, 2);
       expect(provider.pendingScrollRestoreLocalOffset, 48);

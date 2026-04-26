@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/book_group.dart';
 import 'package:inkpage_reader/core/models/bookmark.dart';
 import 'package:inkpage_reader/core/models/book_progress.dart';
@@ -15,7 +16,11 @@ void main() {
     });
 
     test('Bookmark serialization', () {
-      final bookmark = Bookmark(time: 123456, bookName: 'Book A', chapterName: 'Ch 1');
+      final bookmark = Bookmark(
+        time: 123456,
+        bookName: 'Book A',
+        chapterName: 'Ch 1',
+      );
       final json = bookmark.toJson();
       final fromJson = Bookmark.fromJson(json);
       expect(fromJson.time, 123456);
@@ -26,19 +31,39 @@ void main() {
       final progress = BookProgress(
         name: 'Book B',
         author: 'Author B',
-        durChapterIndex: 5,
-        durChapterPos: 100,
+        chapterIndex: 5,
+        charOffset: 100,
         durChapterTime: 999,
         durChapterTitle: 'Chapter 5',
       );
       final json = progress.toJson();
       final fromJson = BookProgress.fromJson(json);
       expect(fromJson.name, 'Book B');
-      expect(fromJson.durChapterIndex, 5);
+      expect(fromJson.chapterIndex, 5);
+    });
+
+    test('Book progress coordinate json supports legacy keys', () {
+      final book = Book.fromJson({
+        'bookUrl': 'book',
+        'name': 'Book B',
+        'durChapterIndex': 5,
+        'durChapterPos': 100,
+      });
+
+      expect(book.chapterIndex, 5);
+      expect(book.charOffset, 100);
+      expect(book.toJson().containsKey('durChapterIndex'), isFalse);
+      expect(book.toJson().containsKey('durChapterPos'), isFalse);
+      expect(book.toJson()['chapterIndex'], 5);
+      expect(book.toJson()['charOffset'], 100);
     });
 
     test('ReadRecord serialization', () {
-      final record = ReadRecord(deviceId: 'dev1', bookName: 'Book C', readTime: 3600);
+      final record = ReadRecord(
+        deviceId: 'dev1',
+        bookName: 'Book C',
+        readTime: 3600,
+      );
       final json = record.toJson();
       final fromJson = ReadRecord.fromJson(json);
       expect(fromJson.deviceId, 'dev1');

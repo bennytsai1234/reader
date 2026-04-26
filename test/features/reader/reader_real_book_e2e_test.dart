@@ -258,20 +258,15 @@ class _ReaderWidgetScrollProbe extends ReaderProvider {
           chapterIndex: visibleChapterIndex,
           charOffset: charOffset,
         ).normalized();
-    final anchorJson =
-        '{"chapterIndex":${location.chapterIndex},'
-        '"charOffset":${location.charOffset},'
-        '"localOffsetSnapshot":${visibleChapterLocalOffset.toStringAsFixed(2)}}';
-
-    book.durChapterIndex = location.chapterIndex;
-    book.durChapterPos = location.charOffset;
-    book.readerAnchorJson = anchorJson;
+    book.chapterIndex = location.chapterIndex;
+    book.charOffset = location.charOffset;
+    book.readerAnchorJson = null;
     await progressDao.updateProgress(
       book.bookUrl,
       location.chapterIndex,
       chapters[location.chapterIndex].title,
       location.charOffset,
-      readerAnchorJson: anchorJson,
+      readerAnchorJson: null,
     );
   }
 }
@@ -462,7 +457,7 @@ _ScrollRoundTripTarget _targetAfterTenAndHalfContentLines(
   for (var pageIndex = 0; pageIndex < chapter.pages.length; pageIndex++) {
     final pageTop = chapter.metrics.pageTopOffsets[pageIndex];
     for (final line in chapter.pages[pageIndex].lines) {
-      if (line.image != null || line.isTitle || line.text.trim().isEmpty) {
+      if (line.isTitle || line.text.trim().isEmpty) {
         continue;
       }
       lines.add((top: pageTop + line.lineTop, line: line));
@@ -569,8 +564,8 @@ _buildWidgetFixture() {
       author: '測試',
       origin: 'fixture://local',
       originName: '固定本地測試書',
-      durChapterIndex: _targetChapterIndex,
-      durChapterPos: 0,
+      chapterIndex: _targetChapterIndex,
+      charOffset: 0,
       isInBookshelf: true,
     ),
     chapters: chapters,
@@ -590,8 +585,8 @@ Future<void> _expectRealScrollRoundTrip({
   );
 
   final liveBook = book.copyWith(
-    durChapterIndex: _targetChapterIndex,
-    durChapterPos: 0,
+    chapterIndex: _targetChapterIndex,
+    charOffset: 0,
     readerAnchorJson: null,
     isInBookshelf: true,
   );
@@ -626,9 +621,9 @@ Future<void> _expectRealScrollRoundTrip({
   expect(bookDao.updates, isNotEmpty);
   expect(bookDao.updates.last.chapterIndex, _targetChapterIndex);
   expect(bookDao.updates.last.pos, target.expectedCharOffset);
-  expect(bookDao.updates.last.readerAnchorJson, isNotNull);
-  expect(liveBook.durChapterIndex, _targetChapterIndex);
-  expect(liveBook.durChapterPos, target.expectedCharOffset);
+  expect(bookDao.updates.last.readerAnchorJson, isNull);
+  expect(liveBook.chapterIndex, _targetChapterIndex);
+  expect(liveBook.charOffset, target.expectedCharOffset);
   firstController.dispose();
 
   _installReaderE2eDi(bookDao: bookDao, chapters: chapters, source: source);
@@ -678,8 +673,8 @@ Future<void> _expectRealWidgetScrollRoundTrip({
   );
 
   final liveBook = book.copyWith(
-    durChapterIndex: _targetChapterIndex,
-    durChapterPos: 0,
+    chapterIndex: _targetChapterIndex,
+    charOffset: 0,
     readerAnchorJson: null,
     isInBookshelf: true,
   );
@@ -727,9 +722,9 @@ Future<void> _expectRealWidgetScrollRoundTrip({
   expect(bookDao.updates, isNotEmpty);
   expect(bookDao.updates.last.chapterIndex, _targetChapterIndex);
   expect(bookDao.updates.last.pos, expectedCharOffset);
-  expect(bookDao.updates.last.readerAnchorJson, isNotNull);
-  expect(liveBook.durChapterIndex, _targetChapterIndex);
-  expect(liveBook.durChapterPos, expectedCharOffset);
+  expect(bookDao.updates.last.readerAnchorJson, isNull);
+  expect(liveBook.chapterIndex, _targetChapterIndex);
+  expect(liveBook.charOffset, expectedCharOffset);
 
   await tester.pumpWidget(const SizedBox.shrink());
   await tester.pump();

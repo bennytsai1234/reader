@@ -197,10 +197,10 @@ class Books extends Table {
       integer().named('totalChapterNum').withDefault(const Constant(0))();
   TextColumn get durChapterTitle =>
       text().named('durChapterTitle').nullable()();
-  IntColumn get durChapterIndex =>
-      integer().named('durChapterIndex').withDefault(const Constant(0))();
-  IntColumn get durChapterPos =>
-      integer().named('durChapterPos').withDefault(const Constant(0))();
+  IntColumn get chapterIndex =>
+      integer().named('chapterIndex').withDefault(const Constant(0))();
+  IntColumn get charOffset =>
+      integer().named('charOffset').withDefault(const Constant(0))();
   TextColumn get readerAnchorJson =>
       text().named('readerAnchorJson').nullable()();
   IntColumn get durChapterTime =>

@@ -1,4 +1,6 @@
 import 'package:flutter/widgets.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_scroll_item.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_scroll_layout.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -8,6 +10,8 @@ typedef ReaderVisibleScrollUpdate =
       double localOffset,
       double alignment,
       List<int> visibleChapterIndexes,
+      ReaderLocation? anchorLocation,
+      bool isAnchorConfirmed,
     });
 
 class ReaderViewportLayoutUpdate {
@@ -89,6 +93,75 @@ class ReaderViewportExecutionBridge {
       localOffset: localOffset,
       alignment: 0.0,
       visibleChapterIndexes: visible.map((item) => item.index).toList(),
+      anchorLocation: null,
+      isAnchorConfirmed: false,
+    );
+  }
+
+  ReaderVisibleScrollUpdate? resolveVisibleScrollItemUpdate({
+    required Iterable<ItemPosition> positions,
+    required double viewportHeight,
+    required List<ReaderScrollItem> scrollItems,
+    required double Function(int chapterIndex) chapterHeightFor,
+  }) {
+    if (scrollItems.isEmpty) return null;
+    final normalizedViewportHeight = viewportHeight <= 0 ? 1.0 : viewportHeight;
+    final visible =
+        positions
+            .where(
+              (item) =>
+                  item.index >= 0 &&
+                  item.index < scrollItems.length &&
+                  item.itemTrailingEdge > 0 &&
+                  item.itemLeadingEdge < 1,
+            )
+            .toList()
+          ..sort((a, b) => a.itemLeadingEdge.compareTo(b.itemLeadingEdge));
+    if (visible.isEmpty) return null;
+
+    final visibleChapterIndexes = <int>[];
+    for (final position in visible) {
+      final chapterIndex = scrollItems[position.index].chapterIndex;
+      if (!visibleChapterIndexes.contains(chapterIndex)) {
+        visibleChapterIndexes.add(chapterIndex);
+      }
+    }
+
+    final anchorY = normalizedViewportHeight * ReaderScrollLayout.anchorRatio;
+    for (final position in visible) {
+      final item = scrollItems[position.index];
+      final itemTop = position.itemLeadingEdge * normalizedViewportHeight;
+      final itemBottom = position.itemTrailingEdge * normalizedViewportHeight;
+      if (!item.isTextLine || itemBottom <= anchorY) continue;
+
+      final yInsideItem = (anchorY - itemTop).clamp(0.0, item.extent);
+      if (itemTop <= anchorY && yInsideItem >= item.linePaintHeight) {
+        continue;
+      }
+
+      final chapterHeight = chapterHeightFor(item.chapterIndex);
+      final alignment =
+          chapterHeight <= 0
+              ? 0.0
+              : (item.localTop / chapterHeight).clamp(0.0, 1.0).toDouble();
+      return (
+        chapterIndex: item.chapterIndex,
+        localOffset: item.localTop,
+        alignment: alignment,
+        visibleChapterIndexes: visibleChapterIndexes,
+        anchorLocation: item.location,
+        isAnchorConfirmed: true,
+      );
+    }
+
+    final firstItem = scrollItems[visible.first.index];
+    return (
+      chapterIndex: firstItem.chapterIndex,
+      localOffset: firstItem.localTop,
+      alignment: 0.0,
+      visibleChapterIndexes: visibleChapterIndexes,
+      anchorLocation: null,
+      isAnchorConfirmed: false,
     );
   }
 }

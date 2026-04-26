@@ -68,7 +68,7 @@ void main() {
 
     test('非最後一頁不顯示 100.0%（避免誤導）', () {
       final page = TextPage(
-        index: 3,  // 第4頁，但不是最後一頁（pageSize=5）
+        index: 3, // 第4頁，但不是最後一頁（pageSize=5）
         lines: [],
         title: '最後章',
         chapterIndex: 9,
@@ -96,19 +96,14 @@ void main() {
       expect(copied.title, '新標題');
       expect(copied.index, 2);
       expect(copied.chapterIndex, 1); // 未改變
-      expect(copied.chapterSize, 5);  // 未改變
+      expect(copied.chapterSize, 5); // 未改變
     });
   });
 
   group('TextLine', () {
     test('建立 TextLine 時預設值正確', () {
-      final line = TextLine(
-        text: '測試文字',
-        width: 100,
-        height: 20,
-      );
+      final line = TextLine(text: '測試文字', width: 100, height: 20);
       expect(line.chapterPosition, 0);
-      expect(line.image, isNull);
       expect(line.isTitle, false);
       expect(line.paragraphNum, 0);
     });

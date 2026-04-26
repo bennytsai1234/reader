@@ -30,8 +30,8 @@ class BookBase {
   int lastCheckCount; // 最近一次發現新章節數量
   int totalChapterNum; // 章節總數
   String? durChapterTitle; // 目前章節標題
-  int durChapterIndex; // 目前章節索引
-  int durChapterPos; // 目前閱讀位置 (首行字索引)
+  int chapterIndex; // 目前章節索引
+  int charOffset; // 目前閱讀位置 (首行字索引)
   String? readerAnchorJson; // 本機精準閱讀錨點
   int durChapterTime; // 最近一次閱讀時間
   String? wordCount; // 字數
@@ -69,8 +69,8 @@ class BookBase {
     this.lastCheckCount = 0,
     this.totalChapterNum = 0,
     this.durChapterTitle,
-    this.durChapterIndex = 0,
-    this.durChapterPos = 0,
+    this.chapterIndex = 0,
+    this.charOffset = 0,
     this.readerAnchorJson,
     this.durChapterTime = 0,
     this.wordCount,

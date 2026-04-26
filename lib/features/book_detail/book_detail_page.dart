@@ -302,12 +302,12 @@ class BookDetailPage extends StatelessWidget {
                     _showDownloadQueuedSnackBar(context, result.message);
                   },
                 ),
-                if (provider.book.durChapterIndex < provider.totalChapterCount)
+                if (provider.book.chapterIndex < provider.totalChapterCount)
                   ListTile(
                     leading: const Icon(Icons.playlist_play_rounded),
                     title: const Text('從目前進度往後快取'),
                     subtitle: Text(
-                      '從第 ${provider.book.durChapterIndex + 1} 章開始',
+                      '從第 ${provider.book.chapterIndex + 1} 章開始',
                     ),
                     onTap: () async {
                       Navigator.pop(sheetContext);

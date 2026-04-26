@@ -48,10 +48,10 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
   final ItemScrollController _itemScrollController = ItemScrollController();
   final ItemPositionsListener _itemPositionsListener =
       ItemPositionsListener.create();
-  final Map<String, GlobalKey> _pageKeys = {};
+  final Map<String, GlobalKey> _scrollItemKeys = {};
   Timer? _userScrollResetTimer;
   late final ScrollExecutionAdapter _scrollExecution = ScrollExecutionAdapter(
-    pageKeys: _pageKeys,
+    itemKeys: _scrollItemKeys,
     onStateChanged: () {
       if (mounted) {
         setState(() {});
@@ -75,7 +75,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
     _scrollRuntimeExecutor = ScrollRuntimeExecutor(
       provider: widget.provider,
       itemScrollController: _itemScrollController,
-      pageKeys: _pageKeys,
+      itemKeys: _scrollItemKeys,
       scrollExecution: _scrollExecution,
       scrollRestoreRunner: _scrollRestoreRunner,
       isMounted: () => mounted,
@@ -138,7 +138,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       _fadeCtrl.forward();
     }
     if (runtimeUpdate.didModeChange) {
-      _pageKeys.clear();
+      _scrollItemKeys.clear();
       _userScrollResetTimer?.cancel();
     }
     p.reconcileVisibleScrollLoads();
@@ -186,20 +186,20 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
       topInset: p.scrollViewportTopInset,
       bottomInset: p.scrollViewportBottomInset,
     );
-    final update = _executionBridge.resolveVisibleScrollUpdate(
+    final update = _executionBridge.resolveVisibleScrollItemUpdate(
       positions: _itemPositionsListener.itemPositions.value,
       viewportHeight: scrollViewportHeight,
+      scrollItems: p.buildScrollItems(),
       chapterHeightFor: p.estimatedChapterContentHeight,
-      chapterItemExtentFor: p.estimatedChapterItemExtent,
     );
     if (update == null) return;
-    final pageAnchor = _scrollExecution.resolveAnchorLocation(provider: p);
     p.handleVisibleScrollState(
-      chapterIndex: pageAnchor?.chapterIndex ?? update.chapterIndex,
-      localOffset: pageAnchor?.localOffset ?? update.localOffset,
+      chapterIndex: update.chapterIndex,
+      localOffset: update.localOffset,
       alignment: update.alignment,
       visibleChapterIndexes: update.visibleChapterIndexes,
-      isAnchorConfirmed: pageAnchor != null,
+      isAnchorConfirmed: update.isAnchorConfirmed,
+      anchorLocation: update.anchorLocation,
       anchorPadding: ReaderScrollLayout.anchorPadding(
         viewportHeight: containerHeight,
         topInset: p.scrollViewportTopInset,
@@ -313,7 +313,7 @@ class _ReadViewRuntimeState extends State<ReadViewRuntime>
                 ? ScrollModeDelegate(
                   itemScrollController: _itemScrollController,
                   itemPositionsListener: _itemPositionsListener,
-                  pageKeys: _pageKeys,
+                  itemKeys: _scrollItemKeys,
                   isUserScrolling: () => _viewportRuntime.isUserScrolling,
                 )
                 : const PageModeDelegate();

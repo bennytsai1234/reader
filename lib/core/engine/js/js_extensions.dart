@@ -576,8 +576,9 @@ class JsExtensions extends JsExtensionsBase {
       case 'type':
         book.type = _asInt(value, fallback: book.type);
         return;
+      case 'chapterIndex':
       case 'durChapterIndex':
-        book.durChapterIndex = _asInt(value, fallback: book.durChapterIndex);
+        book.chapterIndex = _asInt(value, fallback: book.chapterIndex);
         return;
       case 'variable':
         book.variable = _asNullableString(value);

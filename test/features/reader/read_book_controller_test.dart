@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +19,6 @@ import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/engine/page_view_widget.dart';
 import 'package:inkpage_reader/features/reader/provider/reader_provider_base.dart';
 import 'package:inkpage_reader/features/reader/reader_provider.dart';
-import 'package:inkpage_reader/features/reader/runtime/models/reader_anchor.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_scroll_layout.dart';
 import 'package:inkpage_reader/features/reader/widgets/reader/reader_bottom_menu.dart';
@@ -234,8 +232,8 @@ Book _makeBook() => Book(
   name: 'Test Book',
   author: 'Author',
   origin: 'local',
-  durChapterIndex: 0,
-  durChapterPos: 0,
+  chapterIndex: 0,
+  charOffset: 0,
 );
 
 Book _makeBookWithOrigin(String origin) => Book(
@@ -243,8 +241,8 @@ Book _makeBookWithOrigin(String origin) => Book(
   name: 'Test Book',
   author: 'Author',
   origin: origin,
-  durChapterIndex: 0,
-  durChapterPos: 0,
+  chapterIndex: 0,
+  charOffset: 0,
 );
 
 List<BookChapter> _fakeChaptersFromDao = [];
@@ -345,7 +343,7 @@ Future<void> _expectScrollResumeRoundTripAtChapterTen({
   );
   const scrolledLocalOffset = lineHeight * scrolledLines;
   const expectedCharOffset = 10 * charsPerLine;
-  const expectedRestoredLocalOffset = scrolledLocalOffset;
+  const expectedRestoredLocalOffset = lineHeight * 10;
 
   _fakeChaptersFromDao = chapters;
   final firstController = _ScrollModeSeededReaderProvider(
@@ -370,9 +368,9 @@ Future<void> _expectScrollResumeRoundTripAtChapterTen({
   expect(_FakeBookDao.updates, isNotEmpty);
   expect(_FakeBookDao.updates.last.chapterIndex, targetChapterIndex);
   expect(_FakeBookDao.updates.last.pos, expectedCharOffset);
-  expect(book.durChapterIndex, targetChapterIndex);
-  expect(book.durChapterPos, expectedCharOffset);
-  expect(book.readerAnchorJson, isNotNull);
+  expect(book.chapterIndex, targetChapterIndex);
+  expect(book.charOffset, expectedCharOffset);
+  expect(book.readerAnchorJson, isNull);
   firstController.dispose();
   await Future<void>.delayed(const Duration(milliseconds: 10));
 
@@ -552,8 +550,8 @@ void main() {
     test('ReaderProvider 預設會從書籍 durable location resume', () async {
       final book =
           _makeBook()
-            ..durChapterIndex = 2
-            ..durChapterPos = 144;
+            ..chapterIndex = 2
+            ..charOffset = 144;
       final controller = ReaderProvider(book: book);
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
@@ -817,8 +815,8 @@ void main() {
           name: 'Test Book',
           author: 'Author',
           origin: 'source://missing',
-          durChapterIndex: 0,
-          durChapterPos: 0,
+          chapterIndex: 0,
+          charOffset: 0,
         );
         final controller = ReadBookController(
           book: remoteBook,
@@ -965,7 +963,7 @@ void main() {
       controller.dispose();
     });
 
-    test('slide 切換到 scroll 會保留 charOffset 語意並建立 chapter jump', () async {
+    test('slide 切換到 scroll 只用目前 page 的 charOffset 建立 chapter jump', () async {
       _fakeChaptersFromDao = [
         BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
       ];
@@ -978,6 +976,9 @@ void main() {
       controller.slidePages = [...controller.chapterPagesCache[0]!];
       controller.currentPageIndex = 1;
       controller.currentChapterIndex = 0;
+      controller.visibleChapterLocalOffset = controller
+          .chapterAt(0)!
+          .localOffsetFromCharOffset(16);
 
       controller.setPageTurnMode(PageAnim.scroll);
 
@@ -987,13 +988,17 @@ void main() {
       expect(pending!.chapterIndex, 0);
       expect(pending.reason, ReaderCommandReason.settingsRepaginate);
       expect(
+        pending.localOffset,
+        controller.chapterAt(0)!.localOffsetFromCharOffset(8),
+      );
+      expect(
         controller.committedLocation,
         const ReaderLocation(chapterIndex: 0, charOffset: 8),
       );
       controller.dispose();
     });
 
-    test('scroll 切換到 slide 會保留 charOffset 語意並建立 slide jump', () async {
+    test('scroll 切換到 slide 只用可見 line 的 charOffset 建立 slide jump', () async {
       _fakeChaptersFromDao = [
         BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
       ];
@@ -1005,6 +1010,7 @@ void main() {
       controller.refreshChapterRuntime(0);
       controller.visibleChapterIndex = 0;
       controller.currentChapterIndex = 0;
+      controller.currentPageIndex = 2;
       controller.visibleChapterLocalOffset = controller
           .chapterAt(0)!
           .localOffsetFromCharOffset(8);
@@ -1692,7 +1698,7 @@ void main() {
       controller.dispose();
     });
 
-    test('scroll flush 會在同一 charOffset 下重寫 localOffsetSnapshot', () async {
+    test('scroll flush 不會在同一 charOffset 下重寫像素快照', () async {
       _fakeChaptersFromDao = [
         BookChapter(title: 'c0', index: 0, bookUrl: 'http://test.com/book'),
       ];
@@ -1720,6 +1726,7 @@ void main() {
         visibleChapterIndexes: const [0],
       );
       await controller.persistExitProgress();
+      final updateCountAfterExit = _FakeBookDao.updates.length;
 
       controller.handleVisibleScrollState(
         chapterIndex: 0,
@@ -1729,12 +1736,10 @@ void main() {
       );
       await controller.flushNow();
 
-      final saved = ReaderAnchor.fromJson(
-        Map<String, dynamic>.from(jsonDecode(book.readerAnchorJson!) as Map),
-      );
-      expect(saved.location.chapterIndex, 0);
-      expect(saved.location.charOffset, 200);
-      expect(saved.localOffsetSnapshot, closeTo(216.5, 0.5));
+      expect(_FakeBookDao.updates.length, updateCountAfterExit);
+      expect(book.chapterIndex, 0);
+      expect(book.charOffset, 200);
+      expect(book.readerAnchorJson, isNull);
       controller.dispose();
     });
 
@@ -1927,8 +1932,8 @@ void main() {
       await controller.addCurrentBookToBookshelf();
 
       expect(controller.book.isInBookshelf, isTrue);
-      expect(controller.book.durChapterIndex, 0);
-      expect(controller.book.durChapterPos, 18);
+      expect(controller.book.chapterIndex, 0);
+      expect(controller.book.charOffset, 18);
       expect(controller.book.durChapterTitle, 'c0');
       expect(_FakeBookDao.upserts, hasLength(1));
       expect(_FakeChapterDao.insertedBatches, hasLength(1));

@@ -121,6 +121,46 @@ List<TextPage> _buildPages() {
   ];
 }
 
+List<TextPage> _buildMultiLinePages() {
+  return [
+    TextPage(
+      index: 0,
+      title: 'c0',
+      chapterIndex: 0,
+      pageSize: 1,
+      lines: [
+        TextLine(
+          text: 'A' * 40,
+          width: 100,
+          height: 40,
+          chapterPosition: 0,
+          lineTop: 0,
+          lineBottom: 40,
+          paragraphNum: 1,
+        ),
+        TextLine(
+          text: 'B' * 40,
+          width: 100,
+          height: 40,
+          chapterPosition: 40,
+          lineTop: 40,
+          lineBottom: 80,
+          paragraphNum: 1,
+        ),
+        TextLine(
+          text: 'C' * 40,
+          width: 100,
+          height: 40,
+          chapterPosition: 80,
+          lineTop: 80,
+          lineBottom: 120,
+          paragraphNum: 1,
+        ),
+      ],
+    ),
+  ];
+}
+
 void main() {
   setUpAll(() {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -138,9 +178,7 @@ void main() {
         );
   });
 
-  testWidgets('resolveAnchorLocation 會以 page anchor 計算章內 localOffset', (
-    tester,
-  ) async {
+  testWidgets('resolveAnchorLocation 會回報 viewport 頂部可見文字行', (tester) async {
     final provider = ReaderProvider(
       book: _makeBook(),
       initialChapters: [
@@ -151,11 +189,11 @@ void main() {
     provider.chapterPagesCache[0] = _buildPages();
     provider.refreshChapterRuntime(0);
 
-    final pageKeys = <String, GlobalKey>{
-      '0:0': GlobalKey(),
-      '0:1': GlobalKey(),
+    final itemKeys = <String, GlobalKey>{
+      'line:0:0:0': GlobalKey(),
+      'line:0:1:0': GlobalKey(),
     };
-    final adapter = ScrollExecutionAdapter(pageKeys: pageKeys);
+    final adapter = ScrollExecutionAdapter(itemKeys: itemKeys);
     final scrollController = ScrollController(initialScrollOffset: 90);
 
     addTearDown(provider.dispose);
@@ -171,8 +209,8 @@ void main() {
               controller: scrollController,
               child: Column(
                 children: [
-                  SizedBox(key: pageKeys['0:0'], height: 100),
-                  SizedBox(key: pageKeys['0:1'], height: 100),
+                  SizedBox(key: itemKeys['line:0:0:0'], height: 100),
+                  SizedBox(key: itemKeys['line:0:1:0'], height: 100),
                 ],
               ),
             ),
@@ -187,10 +225,14 @@ void main() {
     expect(location, isNotNull);
     expect(location!.chapterIndex, 0);
     expect(location.pageIndex, 0);
-    expect(location.localOffset, closeTo(90, 0.1));
+    expect(location.localOffset, 0);
+    expect(location.location?.chapterIndex, 0);
+    expect(location.location?.charOffset, 0);
   });
 
-  testWidgets('resolveAnchorLocation 在 anchor 落於頁間空隙時會退到最近可見頁', (tester) async {
+  testWidgets('resolveAnchorLocation 在 anchor 落於空隙時會退到下一個可見文字行', (
+    tester,
+  ) async {
     final provider = ReaderProvider(
       book: _makeBook(),
       initialChapters: [
@@ -201,11 +243,11 @@ void main() {
     provider.chapterPagesCache[0] = _buildPages();
     provider.refreshChapterRuntime(0);
 
-    final pageKeys = <String, GlobalKey>{
-      '0:0': GlobalKey(),
-      '0:1': GlobalKey(),
+    final itemKeys = <String, GlobalKey>{
+      'line:0:0:0': GlobalKey(),
+      'line:0:1:0': GlobalKey(),
     };
-    final adapter = ScrollExecutionAdapter(pageKeys: pageKeys);
+    final adapter = ScrollExecutionAdapter(itemKeys: itemKeys);
     final scrollController = ScrollController(initialScrollOffset: 100);
 
     addTearDown(provider.dispose);
@@ -221,9 +263,9 @@ void main() {
               controller: scrollController,
               child: Column(
                 children: [
-                  SizedBox(key: pageKeys['0:0'], height: 100),
+                  SizedBox(key: itemKeys['line:0:0:0'], height: 100),
                   const SizedBox(height: 40),
-                  SizedBox(key: pageKeys['0:1'], height: 100),
+                  SizedBox(key: itemKeys['line:0:1:0'], height: 100),
                 ],
               ),
             ),
@@ -239,5 +281,61 @@ void main() {
     expect(location!.chapterIndex, 0);
     expect(location.pageIndex, 1);
     expect(location.localOffset, closeTo(100, 0.1));
+    expect(location.location?.chapterIndex, 0);
+    expect(location.location?.charOffset, 100);
+  });
+
+  testWidgets('resolveAnchorLocation 會直接回報實際 line item 的 charOffset', (
+    tester,
+  ) async {
+    final provider = ReaderProvider(
+      book: _makeBook(),
+      initialChapters: [
+        BookChapter(title: 'c0', index: 0, bookUrl: 'https://example.com/book'),
+      ],
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+    provider.chapterPagesCache[0] = _buildMultiLinePages();
+    provider.refreshChapterRuntime(0);
+
+    final itemKeys = <String, GlobalKey>{
+      'line:0:0:0': GlobalKey(),
+      'line:0:0:1': GlobalKey(),
+      'line:0:0:2': GlobalKey(),
+    };
+    final adapter = ScrollExecutionAdapter(itemKeys: itemKeys);
+    final scrollController = ScrollController(initialScrollOffset: 45);
+
+    addTearDown(provider.dispose);
+    addTearDown(scrollController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 60,
+            child: SingleChildScrollView(
+              controller: scrollController,
+              child: Column(
+                children: [
+                  SizedBox(key: itemKeys['line:0:0:0'], height: 40),
+                  SizedBox(key: itemKeys['line:0:0:1'], height: 40),
+                  SizedBox(key: itemKeys['line:0:0:2'], height: 40),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final location = adapter.resolveAnchorLocation(provider: provider);
+
+    expect(location, isNotNull);
+    expect(location!.localOffset, 40);
+    expect(location.location?.chapterIndex, 0);
+    expect(location.location?.charOffset, 40);
   });
 }

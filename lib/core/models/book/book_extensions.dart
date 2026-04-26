@@ -22,7 +22,7 @@ extension BookExtensions on BookBase {
   }
 
   // --- 類型感知 (對齊 Android BookType 位元) ---
-  bool get isAudio => type == 2;  // type 2 = 有聲書 (legacy, audio module removed)
+  bool get isAudio => type == 2; // type 2 = 有聲書 (legacy, audio module removed)
   bool get isImage => (type & BookType.image) != 0;
   bool get isText => (type & BookType.text) != 0;
   bool get isEpub => bookUrl.toLowerCase().endsWith('.epub');
@@ -31,8 +31,12 @@ extension BookExtensions on BookBase {
 
   // --- 顯示輔助 ---
   String getRealAuthor() => BookHelp.formatBookAuthor(author);
-  String? getDisplayCover() => (customCoverUrl == null || customCoverUrl!.isEmpty) ? coverUrl : customCoverUrl;
-  String? getDisplayIntro() => (customIntro == null || customIntro!.isEmpty) ? intro : customIntro;
+  String? getDisplayCover() =>
+      (customCoverUrl == null || customCoverUrl!.isEmpty)
+          ? coverUrl
+          : customCoverUrl;
+  String? getDisplayIntro() =>
+      (customIntro == null || customIntro!.isEmpty) ? intro : customIntro;
 
   /// 轉換為 SearchBook (對標 Android Book.toSearchBook)
   SearchBook toSearchBook() {
@@ -77,14 +81,14 @@ extension BookExtensions on BookBase {
   int get simulatedTotalChapterNum {
     if (readConfig?.readSimulating ?? false) {
       // 這裡應實作真正的模擬邏輯：起始章節 + (今天 - 開始日期) * 每日章節
-      return totalChapterNum; 
+      return totalChapterNum;
     }
     return totalChapterNum;
   }
 
   String get durChapterPercent {
     if (totalChapterNum <= 0) return '0.0%';
-    final percent = (durChapterIndex / totalChapterNum) * 100;
+    final percent = (chapterIndex / totalChapterNum) * 100;
     return '${percent.toStringAsFixed(1)}%';
   }
 }
@@ -99,7 +103,7 @@ extension BookBitwiseExtension on BookBase {
     if (groupIdMask <= 0) return true;
     return (group & groupIdMask) != 0;
   }
+
   void addGroup(int groupIdMask) => group |= groupIdMask;
   void removeGroup(int groupIdMask) => group &= ~groupIdMask;
 }
-

@@ -120,7 +120,7 @@ void main() {
     expect(find.text('離線快取'), findsNothing);
   });
 
-  testWidgets('BookInfoHeader continue reading 會帶入 durChapterPos', (
+  testWidgets('BookInfoHeader continue reading 會帶入 charOffset', (
     tester,
   ) async {
     final provider = BookDetailProvider(
@@ -135,8 +135,8 @@ void main() {
         sources: const <String>['測試書源'],
       ),
     );
-    provider.book.durChapterIndex = 3;
-    provider.book.durChapterPos = 1200;
+    provider.book.chapterIndex = 3;
+    provider.book.charOffset = 1200;
     ReaderOpenTarget? receivedTarget;
 
     await tester.pumpWidget(

@@ -1,40 +1,3 @@
-/// TextImage - 圖片資訊 (原 Android ReadBookViewModel.saveImage)
-class TextImage {
-  final String url;
-  final double width;
-  final double height;
-  final double left;
-  final double top;
-
-  TextImage({
-    required this.url,
-    this.width = 0,
-    this.height = 0,
-    this.left = 0,
-    this.top = 0,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'url': url,
-      'width': width,
-      'height': height,
-      'left': left,
-      'top': top,
-    };
-  }
-
-  factory TextImage.fromJson(Map<String, dynamic> json) {
-    return TextImage(
-      url: json['url'] ?? '',
-      width: (json['width'] ?? 0).toDouble(),
-      height: (json['height'] ?? 0).toDouble(),
-      left: (json['left'] ?? 0).toDouble(),
-      top: (json['top'] ?? 0).toDouble(),
-    );
-  }
-}
-
 /// TextLine - 單行文字資訊
 /// (原 Android ui/book/read/page/entities/TextLine.kt)
 class TextLine {
@@ -49,7 +12,6 @@ class TextLine {
   final double lineTop;
   final double lineBottom;
   final int paragraphNum;
-  final TextImage? image; // 深度還原：支援行內圖片互動
 
   TextLine({
     required this.text,
@@ -63,7 +25,6 @@ class TextLine {
     this.lineTop = 0,
     this.lineBottom = 0,
     this.paragraphNum = 0,
-    this.image,
   });
 
   Map<String, dynamic> toJson() {
@@ -79,7 +40,6 @@ class TextLine {
       'lineTop': lineTop,
       'lineBottom': lineBottom,
       'paragraphNum': paragraphNum,
-      'image': image?.toJson(),
     };
   }
 
@@ -96,9 +56,6 @@ class TextLine {
       lineTop: (json['lineTop'] ?? 0).toDouble(),
       lineBottom: (json['lineBottom'] ?? 0).toDouble(),
       paragraphNum: json['paragraphNum'] ?? 0,
-      image: json['image'] is Map<String, dynamic>
-          ? TextImage.fromJson(json['image'])
-          : (json['image'] is Map ? TextImage.fromJson(Map<String, dynamic>.from(json['image'])) : null),
     );
   }
 }
@@ -178,10 +135,13 @@ class TextPage {
       chapterIndex: json['chapterIndex'] ?? 0,
       chapterSize: json['chapterSize'] ?? 0,
       pageSize: json['pageSize'] ?? 0,
-      lines: rawLines
-          .map((line) => TextLine.fromJson(Map<String, dynamic>.from(line as Map)))
-          .toList(),
+      lines:
+          rawLines
+              .map(
+                (line) =>
+                    TextLine.fromJson(Map<String, dynamic>.from(line as Map)),
+              )
+              .toList(),
     );
   }
 }
-

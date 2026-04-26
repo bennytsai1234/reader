@@ -1,4 +1,4 @@
-import 'package:inkpage_reader/features/reader/engine/chapter_position_resolver.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 
 class ReaderChapterMetrics {
@@ -23,12 +23,13 @@ class ReaderChapterMetrics {
   }) {
     final normalizedSeparatorExtent =
         separatorExtent.clamp(0.0, double.infinity).toDouble();
-    final contentHeight = ChapterPositionResolver.chapterHeight(pages);
+    final lineLayout = LineLayout.fromPages(pages);
+    final contentHeight = lineLayout.contentHeight;
     return ReaderChapterMetrics(
       contentHeight: contentHeight,
       separatorExtent: normalizedSeparatorExtent,
       itemExtent: contentHeight + normalizedSeparatorExtent,
-      pageTopOffsets: ChapterPositionResolver.pageTopOffsets(pages),
+      pageTopOffsets: lineLayout.pageTopOffsets,
       isEstimated: isEstimated,
     );
   }

@@ -27,8 +27,8 @@ extension BookLogic on Book {
     lastCheckCount = other.lastCheckCount;
     totalChapterNum = other.totalChapterNum;
     durChapterTitle = other.durChapterTitle;
-    durChapterIndex = other.durChapterIndex;
-    durChapterPos = other.durChapterPos;
+    chapterIndex = other.chapterIndex;
+    charOffset = other.charOffset;
     readerAnchorJson = other.readerAnchorJson;
     durChapterTime = other.durChapterTime;
     wordCount = other.wordCount;
@@ -71,10 +71,10 @@ extension BookLogic on Book {
 
   /// 書籍遷移邏輯 (原 Android Book.migrateTo)
   Book migrateTo(Book newBook, List<BookChapter>? toc) {
-    var alignedIndex = durChapterIndex;
+    var alignedIndex = chapterIndex;
     if (toc != null && toc.isNotEmpty) {
       alignedIndex = _getDurChapter(
-        durChapterIndex,
+        chapterIndex,
         durChapterTitle,
         toc,
         totalChapterNum,
@@ -82,13 +82,12 @@ extension BookLogic on Book {
     }
 
     return newBook.copyWith(
-      durChapterIndex: alignedIndex,
+      chapterIndex: alignedIndex,
       durChapterTitle:
           (toc != null && alignedIndex < toc.length)
               ? toc[alignedIndex].title
               : durChapterTitle,
-      durChapterPos: durChapterPos,
-      readerAnchorJson: readerAnchorJson,
+      charOffset: charOffset,
       durChapterTime: durChapterTime,
       group: group,
       order: order,

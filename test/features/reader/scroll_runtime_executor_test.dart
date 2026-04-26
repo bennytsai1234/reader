@@ -93,8 +93,8 @@ class _RecordingReaderProvider extends ReaderProvider {
           name: 'Test Book',
           author: 'Author',
           origin: 'local',
-          durChapterIndex: 0,
-          durChapterPos: 12,
+          chapterIndex: 0,
+          charOffset: 12,
         ),
       );
 
@@ -190,8 +190,8 @@ void main() {
       final executor = ScrollRuntimeExecutor(
         provider: provider,
         itemScrollController: ItemScrollController(),
-        pageKeys: const {},
-        scrollExecution: const ScrollExecutionAdapter(pageKeys: {}),
+        itemKeys: const {},
+        scrollExecution: const ScrollExecutionAdapter(itemKeys: {}),
         scrollRestoreRunner: const ScrollRestoreRunner(),
         isMounted: () => true,
         viewportHeight: () => 600,
@@ -217,8 +217,8 @@ void main() {
     final executor = ScrollRuntimeExecutor(
       provider: provider,
       itemScrollController: ItemScrollController(),
-      pageKeys: const {},
-      scrollExecution: const ScrollExecutionAdapter(pageKeys: {}),
+      itemKeys: const {},
+      scrollExecution: const ScrollExecutionAdapter(itemKeys: {}),
       scrollRestoreRunner: const _CompletingScrollRestoreRunner(),
       isMounted: () => true,
       viewportHeight: () => 600,

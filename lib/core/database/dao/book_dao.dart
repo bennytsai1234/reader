@@ -89,9 +89,9 @@ class BookDao extends DatabaseAccessor<AppDatabase> with _$BookDaoMixin {
   }) {
     return (update(books)..where((t) => t.bookUrl.equals(bookUrl))).write(
       BooksCompanion(
-        durChapterIndex: Value(chapterIndex),
+        chapterIndex: Value(chapterIndex),
         durChapterTitle: Value(chapterTitle),
-        durChapterPos: Value(pos),
+        charOffset: Value(pos),
         readerAnchorJson: Value(readerAnchorJson),
         durChapterTime: Value(DateTime.now().millisecondsSinceEpoch),
       ),

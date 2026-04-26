@@ -34,7 +34,6 @@ class ReaderChapterFingerprint {
         ..write(ChapterPositionResolver.pageEndCharOffset(page));
 
       for (final line in page.lines) {
-        final image = line.image;
         buffer
           ..write('|l:')
           ..write(line.chapterPosition)
@@ -53,20 +52,7 @@ class ReaderChapterFingerprint {
           ..write(':')
           ..write(line.shouldJustify ? 1 : 0)
           ..write(':')
-          ..write(line.paragraphNum)
-          ..write(':')
-          ..write(image == null ? 0 : 1);
-        if (image != null) {
-          buffer
-            ..write(':')
-            ..write(scale(image.width))
-            ..write(':')
-            ..write(scale(image.height))
-            ..write(':')
-            ..write(scale(image.left))
-            ..write(':')
-            ..write(scale(image.top));
-        }
+          ..write(line.paragraphNum);
       }
     }
 
