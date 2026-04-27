@@ -21,7 +21,7 @@ class LineItem {
     int? endChapterPosition,
   }) : _endChapterPosition = endChapterPosition;
 
-  bool get isText => line.text.isNotEmpty;
+  bool get isText => line.text.isNotEmpty && !line.isTitle;
   int get endChapterPosition =>
       _endChapterPosition ?? chapterPosition + _sourceTextLength(line);
 
@@ -197,7 +197,7 @@ class LineLayout {
   }
 
   int findPageIndexByCharOffset(int charOffset) {
-    if (pageGroups.isEmpty) return 0;
+    if (pageGroups.isEmpty || textItems.isEmpty) return 0;
     var best = 0;
     for (final group in pageGroups) {
       final offset = group.firstCharOffset;
@@ -254,6 +254,7 @@ class LineLayout {
   }
 
   double localOffsetForCharOffset(int charOffset) {
+    if (textItems.isEmpty) return 0.0;
     final item = itemAtCharOffset(charOffset);
     return item?.localTop ?? contentHeight;
   }

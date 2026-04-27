@@ -73,6 +73,9 @@ class ReaderRuntime extends ChangeNotifier {
   ReaderState state;
 
   bool _disposed = false;
+  PageAddress? _pendingNeighborAdvanceOrigin;
+  int _pendingNeighborAdvanceDirection = 0;
+  String? _pendingUserNotice;
 
   PageResolver get debugResolver => _resolver;
 
@@ -85,6 +88,12 @@ class ReaderRuntime extends ChangeNotifier {
   String titleFor(int index) => _repository.titleFor(index);
 
   String chapterUrlAt(int index) => chapterAt(index)?.url ?? '';
+
+  String? takeUserNotice() {
+    final notice = _pendingUserNotice;
+    _pendingUserNotice = null;
+    return notice;
+  }
 
   Future<void> openBook() async {
     _setState(state.copyWith(phase: ReaderPhase.loading, clearError: true));
@@ -124,6 +133,10 @@ class ReaderRuntime extends ChangeNotifier {
     );
   }
 
+  Future<void> relayout(ReadStyle style, Size viewportSize) {
+    return updateStyle(style, viewportSize);
+  }
+
   Future<void> reloadContentPreservingLocation() async {
     final location = state.visibleLocation;
     _repository.clearContentCache();
@@ -159,6 +172,7 @@ class ReaderRuntime extends ChangeNotifier {
     ReaderLocation location, {
     bool immediateSave = true,
   }) async {
+    _clearPendingNeighborAdvance();
     final generation = state.layoutGeneration;
     _setState(state.copyWith(phase: ReaderPhase.layingOut, clearError: true));
     try {
@@ -207,10 +221,22 @@ class ReaderRuntime extends ChangeNotifier {
   bool moveToNextPage() {
     final window = state.pageWindow;
     final next = window?.next;
-    if (window == null || next == null || next.isPlaceholder) {
+    if (window == null) return false;
+    if (next == null) {
+      _clearPendingNeighborAdvance();
+      return false;
+    }
+    if (next.isPlaceholder) {
+      if (next.isLoading) {
+        _rememberPendingNeighborAdvance(current: window.current, forward: true);
+      } else {
+        _clearPendingNeighborAdvance();
+        _emitUserNotice('下一章載入失敗，請再試一次或返回目錄');
+      }
       _scheduleMissingNeighborPreload(forward: true);
       return false;
     }
+    _clearPendingNeighborAdvance();
     final newNext = _resolver.nextPageOrPlaceholder(next);
     final newWindow = PageWindow(
       prev: window.current,
@@ -236,13 +262,30 @@ class ReaderRuntime extends ChangeNotifier {
     return true;
   }
 
+  bool moveToNextTile() => moveToNextPage();
+
   bool moveToPrevPage() {
     final window = state.pageWindow;
     final prev = window?.prev;
-    if (window == null || prev == null || prev.isPlaceholder) {
+    if (window == null) return false;
+    if (prev == null) {
+      _clearPendingNeighborAdvance();
+      return false;
+    }
+    if (prev.isPlaceholder) {
+      if (prev.isLoading) {
+        _rememberPendingNeighborAdvance(
+          current: window.current,
+          forward: false,
+        );
+      } else {
+        _clearPendingNeighborAdvance();
+        _emitUserNotice('上一章載入失敗，請再試一次或返回目錄');
+      }
       _scheduleMissingNeighborPreload(forward: false);
       return false;
     }
+    _clearPendingNeighborAdvance();
     final newPrev = _resolver.prevPageOrPlaceholder(prev);
     final newWindow = PageWindow(
       prev: newPrev,
@@ -266,6 +309,54 @@ class ReaderRuntime extends ChangeNotifier {
     _progressController.schedule(location);
     unawaited(_preloadScheduler.scheduleScrollSettled(prev));
     return true;
+  }
+
+  bool moveToPrevTile() => moveToPrevPage();
+
+  Future<void> prefetchForward() async {
+    final window = state.pageWindow;
+    if (window == null) return;
+    final next = window.next;
+    if (next == null) return;
+    if (next.isPlaceholder) {
+      await _preloadScheduler.scheduleLayout(next.chapterIndex);
+      if (!_disposed) {
+        await refreshNeighbors();
+      }
+      return;
+    }
+    if (window.current.pageIndex >= window.current.pageSize - 2) {
+      await _preloadScheduler.scheduleDirectional(
+        fromChapterIndex: window.current.chapterIndex,
+        forward: true,
+      );
+      if (!_disposed) {
+        await refreshNeighbors();
+      }
+    }
+  }
+
+  Future<void> prefetchBackward() async {
+    final window = state.pageWindow;
+    if (window == null) return;
+    final prev = window.prev;
+    if (prev == null) return;
+    if (prev.isPlaceholder) {
+      await _preloadScheduler.scheduleLayout(prev.chapterIndex);
+      if (!_disposed) {
+        await refreshNeighbors();
+      }
+      return;
+    }
+    if (window.current.pageIndex <= 1) {
+      await _preloadScheduler.scheduleDirectional(
+        fromChapterIndex: window.current.chapterIndex,
+        forward: false,
+      );
+      if (!_disposed) {
+        await refreshNeighbors();
+      }
+    }
   }
 
   ReaderLocation resolveVisibleLocation({
@@ -339,6 +430,7 @@ class ReaderRuntime extends ChangeNotifier {
         ),
       ),
     );
+    _maybeAutoAdvancePendingNeighbor();
   }
 
   Future<void> flushProgress() => _progressController.flush();
@@ -382,6 +474,58 @@ class ReaderRuntime extends ChangeNotifier {
         if (!_disposed) unawaited(refreshNeighbors());
       }),
     );
+  }
+
+  void _rememberPendingNeighborAdvance({
+    required TextPage current,
+    required bool forward,
+  }) {
+    _pendingNeighborAdvanceOrigin = _resolver.addressOf(current);
+    _pendingNeighborAdvanceDirection = forward ? 1 : -1;
+  }
+
+  void _clearPendingNeighborAdvance() {
+    _pendingNeighborAdvanceOrigin = null;
+    _pendingNeighborAdvanceDirection = 0;
+  }
+
+  void _maybeAutoAdvancePendingNeighbor() {
+    final direction = _pendingNeighborAdvanceDirection;
+    final origin = _pendingNeighborAdvanceOrigin;
+    final window = state.pageWindow;
+    if (direction == 0 || origin == null || window == null) return;
+
+    final currentAddress = _resolver.addressOf(window.current);
+    if (currentAddress.chapterIndex != origin.chapterIndex ||
+        currentAddress.pageIndex != origin.pageIndex) {
+      _clearPendingNeighborAdvance();
+      return;
+    }
+
+    final forward = direction > 0;
+    final neighbor = forward ? window.next : window.prev;
+    if (neighbor == null) {
+      _clearPendingNeighborAdvance();
+      return;
+    }
+    if (neighbor.isLoading) return;
+    if (neighbor.errorMessage != null) {
+      _clearPendingNeighborAdvance();
+      _emitUserNotice(forward ? '下一章載入失敗，請再試一次或返回目錄' : '上一章載入失敗，請再試一次或返回目錄');
+      return;
+    }
+
+    if (forward) {
+      moveToNextPage();
+    } else {
+      moveToPrevPage();
+    }
+  }
+
+  void _emitUserNotice(String message) {
+    if (_disposed || message.isEmpty) return;
+    _pendingUserNotice = message;
+    notifyListeners();
   }
 
   void _setState(ReaderState next) {

@@ -24,15 +24,15 @@ class ChapterLayout {
         height: 1,
       );
     }
-    var best = pages.first;
-    for (final page in pages) {
-      if (charOffset >= page.startCharOffset &&
-          charOffset <= page.endCharOffset) {
-        return page;
-      }
+    final bodyPages = pages.where((page) => page.hasBodyContent).toList();
+    if (bodyPages.isEmpty) return pages.first;
+    var best = bodyPages.first;
+    for (final page in bodyPages) {
       if (page.startCharOffset <= charOffset) {
         best = page;
+        continue;
       }
+      break;
     }
     return best;
   }

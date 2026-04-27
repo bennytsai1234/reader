@@ -20,6 +20,7 @@ import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/models/reader_tap_action.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_open_target.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_chapter_navigation_resolver.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_page_exit_coordinator.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_progress_controller.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_progress_store.dart';
@@ -112,6 +113,7 @@ class _ReaderPageState extends State<ReaderPage>
   }
 
   void _handleControllerChanged() {
+    _drainRuntimeNotice();
     if (mounted) setState(() {});
   }
 
@@ -351,11 +353,16 @@ class _ReaderPageState extends State<ReaderPage>
 
   Future<void> _jumpRelativeChapter(int delta) async {
     final runtime = _runtime;
-    if (runtime == null) return;
-    final target =
-        (runtime.state.visibleLocation.chapterIndex + delta)
-            .clamp(0, (runtime.chapterCount - 1).clamp(0, 1 << 20))
-            .toInt();
+    if (runtime == null || runtime.chapterCount <= 0) return;
+    final target = ReaderChapterNavigationResolver.resolveRelativeTarget(
+      currentChapterIndex: runtime.state.visibleLocation.chapterIndex,
+      chapterCount: runtime.chapterCount,
+      delta: delta,
+    );
+    if (target == null) {
+      _showNotice(delta < 0 ? '已經是第一章' : '已經是最後一章');
+      return;
+    }
     await _jumpToChapter(target);
   }
 
@@ -366,6 +373,21 @@ class _ReaderPageState extends State<ReaderPage>
         index.clamp(0, (runtime.chapterCount - 1).clamp(0, 1 << 20)).toInt();
     await runtime.jumpToChapter(safeIndex);
     _menu.completeChapterNavigation();
+  }
+
+  void _drainRuntimeNotice() {
+    final runtime = _runtime;
+    final notice = runtime?.takeUserNotice();
+    if (!mounted || notice == null || notice.isEmpty) return;
+    _showNotice(notice);
+  }
+
+  void _showNotice(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (!mounted || messenger == null) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _toggleAutoPage() {

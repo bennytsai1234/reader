@@ -10,12 +10,14 @@ import 'package:inkpage_reader/core/models/book_source.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/services/book_source_service.dart';
 import 'package:inkpage_reader/features/reader/engine/book_content.dart';
+import 'package:inkpage_reader/features/reader/engine/chapter_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_repository.dart';
 import 'package:inkpage_reader/features/reader/engine/layout_engine.dart';
 import 'package:inkpage_reader/features/reader/engine/layout_spec.dart';
 import 'package:inkpage_reader/features/reader/engine/page_resolver.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/page_window.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_preload_scheduler.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_progress_controller.dart';
@@ -179,6 +181,61 @@ void main() {
       );
       expect(ragged.lines.any((line) => line.shouldJustify), isFalse);
     });
+
+    test(
+      'ChapterLayout.pageForCharOffset skips title-only pages for durable offset restore',
+      () {
+        final layout = ChapterLayout(
+          chapterIndex: 0,
+          contentHash: 'hash',
+          layoutSignature: 'sig',
+          lines: const <TextLine>[],
+          pages: <TextPage>[
+            TextPage(
+              index: 0,
+              title: 'long title',
+              chapterIndex: 0,
+              startCharOffset: 0,
+              endCharOffset: 8,
+              lines: <TextLine>[
+                TextLine(
+                  text: '很長很長的章節標題',
+                  width: 100,
+                  height: 40,
+                  isTitle: true,
+                  chapterPosition: 0,
+                  lineTop: 0,
+                  lineBottom: 40,
+                  startCharOffset: 0,
+                  endCharOffset: 8,
+                ),
+              ],
+            ),
+            TextPage(
+              index: 1,
+              title: 'long title',
+              chapterIndex: 0,
+              startCharOffset: 0,
+              endCharOffset: 12,
+              lines: <TextLine>[
+                TextLine(
+                  text: '正文第一行',
+                  width: 100,
+                  height: 40,
+                  chapterPosition: 0,
+                  lineTop: 0,
+                  lineBottom: 40,
+                  startCharOffset: 0,
+                  endCharOffset: 4,
+                ),
+              ],
+            ),
+          ],
+        );
+
+        expect(layout.pageForCharOffset(0).pageIndex, 1);
+      },
+    );
 
     test(
       'runtime opens only current window and keeps lookAhead optional',
@@ -430,7 +487,7 @@ void main() {
     );
 
     test(
-      'missing cross-chapter neighbor refreshes after loading completes',
+      'missing cross-chapter neighbor auto-advances after loading completes',
       () async {
         final book = Book(bookUrl: 'delayed-book', origin: 'local', name: 'd');
         final bookDao = _FakeBookDao();
@@ -501,16 +558,57 @@ void main() {
         gate.complete();
         for (var i = 0; i < 20; i++) {
           await Future<void>.delayed(const Duration(milliseconds: 10));
-          if (runtime.state.pageWindow!.next?.isPlaceholder == false) break;
+          if (runtime.state.pageWindow!.current.chapterIndex == 1) break;
         }
 
-        final next = runtime.state.pageWindow!.next!;
-        expect(next.isPlaceholder, isFalse);
-        expect(next.chapterIndex, 1);
-        expect(runtime.moveToNextPage(), isTrue);
+        expect(runtime.state.pageWindow!.current.chapterIndex, 1);
         expect(runtime.state.visibleLocation.chapterIndex, 1);
 
         runtime.dispose();
+      },
+    );
+
+    test(
+      'error placeholder emits actionable notice instead of moving',
+      () async {
+        final env = _RuntimeEnv();
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final current = runtime.state.pageWindow!.current;
+        final before = runtime.state.visibleLocation;
+        runtime.state = runtime.state.copyWith(
+          pageWindow: PageWindow(
+            prev: null,
+            current: current,
+            next: TextPage(
+              index: 0,
+              chapterIndex: 1,
+              title: 'c1',
+              isLoading: false,
+              errorMessage: 'boom',
+              height: current.height,
+              startCharOffset: 0,
+              endCharOffset: 0,
+              lines: <TextLine>[
+                TextLine(
+                  text: '章節載入失敗，翻頁重試',
+                  width: 120,
+                  height: 20,
+                  isTitle: true,
+                  chapterPosition: 0,
+                  startCharOffset: 0,
+                  endCharOffset: 0,
+                  lineTop: current.height / 2,
+                  lineBottom: current.height / 2 + 20,
+                ),
+              ],
+            ),
+          ),
+        );
+
+        expect(runtime.moveToNextPage(), isFalse);
+        expect(runtime.state.visibleLocation, before);
+        expect(runtime.takeUserNotice(), '下一章載入失敗，請再試一次或返回目錄');
       },
     );
 

@@ -6,6 +6,8 @@ import 'layout_spec.dart';
 import 'text_page.dart';
 
 class LayoutEngine {
+  static const String _lineStartForbidden = '。，、：；！？）》」』〉】〗;:!?)]}>';
+  static const String _lineEndForbidden = '（《「『〈【〖([{<';
   final Map<String, ChapterLayout> _cache = <String, ChapterLayout>{};
 
   ChapterLayout layout(
@@ -124,53 +126,97 @@ class LayoutEngine {
     final laidOutText = indentText.isEmpty ? text : '$indentText$text';
     final indentLength = indentText.length;
     final painter = TextPainter(
-      text: TextSpan(text: laidOutText, style: style),
+      text: const TextSpan(text: ''),
       textDirection: TextDirection.ltr,
       textScaler: TextScaler.noScaling,
       maxLines: null,
-    )..layout(maxWidth: maxWidth);
-    final metrics = painter.computeLineMetrics();
+    );
     final lines = <TextLine>[];
+    var localStart = 0;
+    var lineTop = top;
+    var lineIndex = 0;
 
-    var searchOffset = 0;
-    for (var i = 0; i < metrics.length; i++) {
-      final metric = metrics[i];
-      final boundary = painter.getLineBoundary(
-        TextPosition(offset: searchOffset.clamp(0, laidOutText.length)),
+    while (localStart < laidOutText.length) {
+      final remaining = laidOutText.substring(localStart);
+      painter.text = TextSpan(text: remaining, style: style);
+      painter.layout(maxWidth: maxWidth);
+      final metrics = painter.computeLineMetrics();
+      if (metrics.isEmpty) break;
+      final metric = metrics.first;
+      final charsConsumed = _lineCharsConsumed(
+        painter: painter,
+        remaining: remaining,
       );
-      final localStart = boundary.start.clamp(0, laidOutText.length).toInt();
+      if (charsConsumed <= 0) break;
       final localEnd =
-          boundary.end.clamp(localStart, laidOutText.length).toInt();
-      searchOffset =
-          localEnd >= laidOutText.length ? laidOutText.length : localEnd;
+          (localStart + charsConsumed)
+              .clamp(localStart + 1, laidOutText.length)
+              .toInt();
       final lineText = laidOutText.substring(localStart, localEnd);
       final contentStart =
           (localStart - indentLength).clamp(0, text.length).toInt();
       final contentEnd =
           (localEnd - indentLength).clamp(contentStart, text.length).toInt();
-      final lineTop = top + metric.baseline - metric.ascent;
-      final lineBottom = top + metric.baseline + metric.descent;
+      final lineHeight =
+          metric.height > 0
+              ? metric.height
+              : (style.fontSize ?? 0) * (style.height ?? 1.0);
+      final lineBottom = lineTop + lineHeight;
+      final isParagraphEnd = localEnd >= laidOutText.length;
       lines.add(
         TextLine(
           text: lineText,
           width: metric.width,
-          height: lineBottom - lineTop,
+          height: lineHeight,
           isTitle: isTitle,
-          isParagraphStart: i == 0,
-          isParagraphEnd: i == metrics.length - 1,
-          shouldJustify: !isTitle && textFullJustify && i < metrics.length - 1,
+          isParagraphStart: lineIndex == 0,
+          isParagraphEnd: isParagraphEnd,
+          shouldJustify: !isTitle && textFullJustify && !isParagraphEnd,
           chapterPosition: startOffset + contentStart,
           lineTop: lineTop,
           lineBottom: lineBottom,
           paragraphNum: paragraphNum,
           startCharOffset: startOffset + contentStart,
           endCharOffset: startOffset + contentEnd,
-          baseline: top + metric.baseline,
+          baseline: lineTop + metric.baseline,
         ),
       );
-      if (searchOffset >= laidOutText.length) break;
+      localStart = localEnd;
+      lineTop = lineBottom;
+      lineIndex += 1;
     }
     return lines;
+  }
+
+  int _lineCharsConsumed({
+    required TextPainter painter,
+    required String remaining,
+  }) {
+    if (remaining.isEmpty) return 0;
+    var boundary = painter.getLineBoundary(const TextPosition(offset: 0));
+    var end = boundary.end.clamp(0, remaining.length).toInt();
+    if (end <= 0 && remaining.length > 1) {
+      boundary = painter.getLineBoundary(const TextPosition(offset: 1));
+      end = boundary.end.clamp(0, remaining.length).toInt();
+    }
+    if (end <= 0) return 0;
+
+    if (end < remaining.length) {
+      final nextChar = remaining.substring(end, end + 1);
+      if (_lineStartForbidden.contains(nextChar) && end > 1) {
+        end -= 1;
+      }
+    }
+    if (end > 1) {
+      final lastChar = remaining.substring(end - 1, end);
+      if (_lineEndForbidden.contains(lastChar)) {
+        end -= 1;
+      }
+    }
+    if (end <= 0) {
+      end = remaining.isEmpty ? 0 : 1;
+    }
+    return end.clamp(0, remaining.length).toInt();
   }
 
   List<TextPage> _paginate({

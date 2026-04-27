@@ -199,7 +199,7 @@ class PageResolver {
 
   TextPage placeholderPageFor(int chapterIndex) {
     final error = _layoutErrors[chapterIndex];
-    final message = error == null ? '載入中...' : '章節載入失敗';
+    final message = error == null ? '載入中...' : '章節載入失敗，翻頁重試';
     final height =
         layoutSpec.contentHeight <= 0 ? 1.0 : layoutSpec.contentHeight;
     final top = (height / 2 - layoutSpec.style.fontSize).clamp(0.0, height);

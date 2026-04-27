@@ -172,6 +172,8 @@ class TextPage {
   final bool isLoading;
   final String? errorMessage;
   bool get isPlaceholder => isLoading || errorMessage != null;
+  bool get hasBodyContent =>
+      lines.any((line) => !line.isTitle && line.text.isNotEmpty);
 
   int get lineSize => lines.length;
 
@@ -194,7 +196,10 @@ class TextPage {
 
   bool containsCharOffset(int charOffset) {
     if (lines.isEmpty) return charOffset == startCharOffset;
-    return charOffset >= startCharOffset && charOffset <= endCharOffset;
+    if (charOffset < startCharOffset || charOffset > endCharOffset) {
+      return false;
+    }
+    return charOffset < endCharOffset || isChapterEnd;
   }
 
   TextPage copyWith({

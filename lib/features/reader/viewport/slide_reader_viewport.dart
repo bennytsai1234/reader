@@ -3,8 +3,9 @@ import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
+import 'package:inkpage_reader/features/reader/runtime/tile_key.dart';
 
-import 'reader_painter.dart';
+import 'reader_tile_layer.dart';
 
 class SlideReaderViewport extends StatefulWidget {
   const SlideReaderViewport({
@@ -65,30 +66,74 @@ class _SlideReaderViewportState extends State<SlideReaderViewport> {
   }
 
   void _handlePageChanged(int index) {
-    if (_recentering) return;
-    if (index == 1) return;
-    final moved =
-        index > 1
-            ? widget.runtime.moveToNextPage()
-            : widget.runtime.moveToPrevPage();
-    if (!moved) {
-      _jumpBackToCenter();
-      return;
-    }
-    final page = widget.runtime.state.pageWindow?.current;
-    if (page != null) {
-      widget.runtime.handleSlidePageSettled(page);
-    }
-    _jumpBackToCenter();
-  }
-
-  void _jumpBackToCenter() {
+    if (_recentering || index == 1) return;
+    final forward = index > 1;
     _recentering = true;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _controller.jumpToPage(1);
-      _recentering = false;
+      if (_controller.hasClients) {
+        _controller.jumpToPage(1);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final moved =
+            forward
+                ? widget.runtime.moveToNextTile()
+                : widget.runtime.moveToPrevTile();
+        if (moved) {
+          final page = widget.runtime.state.pageWindow?.current;
+          if (page != null) {
+            widget.runtime.handleSlidePageSettled(page);
+          }
+        }
+        _recentering = false;
+      });
     });
+  }
+
+  TileKey _tileKey(TextPage tile) {
+    return TileKey(
+      chapterIndex: tile.chapterIndex,
+      tileIndex: tile.pageIndex,
+      startOffset: tile.startCharOffset,
+      endOffset: tile.endCharOffset,
+      layoutRevision: widget.runtime.state.layoutGeneration,
+    );
+  }
+
+  Widget _buildTile(TextPage tile) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapUp: widget.onTapUp,
+      child: ReaderTileLayer(
+        tile: tile,
+        tileKey: _tileKey(tile),
+        style: widget.style,
+        backgroundColor: widget.backgroundColor,
+        textColor: widget.textColor,
+        expand: true,
+      ),
+    );
+  }
+
+  Widget _buildEdgePlaceholder({required String message}) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapUp: widget.onTapUp,
+      child: ColoredBox(
+        color: widget.backgroundColor,
+        child: Center(
+          child: Text(
+            message,
+            style: TextStyle(
+              color: widget.textColor.withValues(alpha: 0.7),
+              fontSize: widget.style.fontSize,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -110,33 +155,22 @@ class _SlideReaderViewportState extends State<SlideReaderViewport> {
         ),
       );
     }
-    final pages = <TextPage?>[window.prev, window.current, window.next];
-    return PageView.builder(
+
+    final pages = <Widget>[
+      window.prev == null
+          ? _buildEdgePlaceholder(message: '已經是第一頁')
+          : _buildTile(window.prev!),
+      _buildTile(window.current),
+      window.next == null
+          ? _buildEdgePlaceholder(message: '已經是最後一頁')
+          : _buildTile(window.next!),
+    ];
+
+    return PageView(
       controller: _controller,
       physics: const BouncingScrollPhysics(),
-      itemCount: pages.length,
       onPageChanged: _handlePageChanged,
-      itemBuilder: (context, index) {
-        final page = pages[index];
-        if (page == null) {
-          return ColoredBox(color: widget.backgroundColor);
-        }
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapUp: widget.onTapUp,
-          child: RepaintBoundary(
-            child: CustomPaint(
-              painter: ReaderPainter(
-                backgroundColor: widget.backgroundColor,
-                textColor: widget.textColor,
-                style: widget.style,
-                singlePage: page,
-              ),
-              child: const SizedBox.expand(),
-            ),
-          ),
-        );
-      },
+      children: pages,
     );
   }
 }
