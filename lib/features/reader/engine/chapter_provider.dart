@@ -103,7 +103,7 @@ class ChapterProvider {
     int textIndent = 2,
     double titleTopSpacing = 0.0,
     double titleBottomSpacing = 10.0,
-    bool textFullJustify = true,
+    bool textFullJustify = false,
     double padding = 16.0,
     double contentPaddingTop = 0.0,
     double contentPaddingBottom = 0.0,
@@ -128,7 +128,6 @@ class ChapterProvider {
       contentStyle,
       metrics,
       textIndent,
-      textFullJustify,
       cursor,
     );
     return _assemblePages(
@@ -153,7 +152,7 @@ class ChapterProvider {
     int textIndent = 2,
     double titleTopSpacing = 0.0,
     double titleBottomSpacing = 10.0,
-    bool textFullJustify = true,
+    bool textFullJustify = false,
     double padding = 16.0,
     double contentPaddingTop = 0.0,
     double contentPaddingBottom = 0.0,
@@ -322,7 +321,7 @@ class ChapterProvider {
             height: metrics.contentLineHeight,
             isParagraphStart: isFirstLine,
             isParagraphEnd: isLastLine,
-            shouldJustify: textFullJustify && !isLastLine,
+            shouldJustify: false,
             chapterPosition: cursor.chapterPos,
             paragraphNum: pIdx,
             spacingAfter:
@@ -399,7 +398,6 @@ class ChapterProvider {
     TextStyle contentStyle,
     PaginationMetrics metrics,
     int textIndent,
-    bool textFullJustify,
     _PaginationCursor cursor,
   ) async {
     final drafts = <_DraftLine>[];
@@ -446,7 +444,7 @@ class ChapterProvider {
             height: metrics.contentLineHeight,
             isParagraphStart: isFirstLine,
             isParagraphEnd: isLastLine,
-            shouldJustify: textFullJustify && !isLastLine,
+            shouldJustify: false,
             chapterPosition: cursor.chapterPos,
             paragraphNum: pIdx,
             spacingAfter:

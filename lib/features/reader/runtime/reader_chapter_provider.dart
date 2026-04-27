@@ -65,7 +65,7 @@ class ReaderChapterProvider {
       contentStyle: contentStyle,
       paragraphSpacing: paragraphSpacing,
       textIndent: textIndent,
-      textFullJustify: textFullJustify,
+      textFullJustify: false,
     );
 
     return ReaderChapter(

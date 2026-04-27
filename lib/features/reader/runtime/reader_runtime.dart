@@ -127,6 +127,41 @@ class ReaderRuntime extends ChangeNotifier {
     await jumpToLocation(state.visibleLocation, immediateSave: false);
   }
 
+  Future<void> applyPresentation({
+    required LayoutSpec spec,
+    required ReaderMode mode,
+  }) async {
+    final needLayout = state.layoutSpec.layoutSignature != spec.layoutSignature;
+    final needMode = state.mode != mode;
+    if (!needLayout && !needMode) return;
+
+    _clearPendingNeighborAdvance();
+    var generation = state.layoutGeneration;
+    if (needLayout) {
+      generation = _preloadScheduler.bumpGeneration();
+      _resolver.updateLayoutSpec(spec);
+      _layoutEngine.invalidateWhere((layout) {
+        return layout.layoutSignature != spec.layoutSignature;
+      });
+    }
+
+    final location = state.visibleLocation;
+    _setState(
+      state.copyWith(
+        phase: ReaderPhase.switchingMode,
+        mode: mode,
+        layoutSpec: spec,
+        layoutGeneration: generation,
+        clearError: true,
+      ),
+    );
+    await jumpToLocation(location, immediateSave: false);
+    if (!_disposed &&
+        (state.mode != mode || state.phase != ReaderPhase.ready)) {
+      _setState(state.copyWith(mode: mode, phase: ReaderPhase.ready));
+    }
+  }
+
   Future<void> updateStyle(ReadStyle style, Size viewportSize) {
     return updateLayoutSpec(
       LayoutSpec.fromViewport(viewportSize: viewportSize, style: style),
@@ -367,7 +402,16 @@ class ReaderRuntime extends ChangeNotifier {
     final window = state.pageWindow;
     if (window == null) return state.visibleLocation;
     final anchorY = viewportHeight * anchorFraction;
-    var visualY = -pageOffset + anchorY;
+    if (pageOffset > 0 && window.prev != null) {
+      final prev = window.prev!;
+      final prevTop = pageOffset - prev.height;
+      final prevBottom = pageOffset;
+      if (anchorY >= prevTop && anchorY < prevBottom) {
+        return _locationInPage(prev, anchorY - prevTop);
+      }
+    }
+
+    var visualY = anchorY - pageOffset;
     for (final page in window.paintForwardPages) {
       if (visualY <= page.height) {
         return _locationInPage(page, visualY);

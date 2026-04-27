@@ -55,6 +55,9 @@ class ReaderPainter extends CustomPainter {
         (size.width - style.paddingLeft - style.paddingRight)
             .clamp(1.0, double.infinity)
             .toDouble();
+    final contentRect = Rect.fromLTWH(left, top, contentWidth, page.height);
+    canvas.save();
+    canvas.clipRect(contentRect);
     for (final line in page.lines) {
       if (top + line.bottom < 0 || top + line.top > size.height) continue;
       final offset = Offset(left, top + line.top);
@@ -65,6 +68,7 @@ class ReaderPainter extends CustomPainter {
         painter.paint(canvas, offset);
       }
     }
+    canvas.restore();
     if (debugOverlay) {
       final debugPainter = TextPainter(
         text: TextSpan(

@@ -9,6 +9,7 @@ import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
 import 'package:inkpage_reader/features/reader/runtime/tile_key.dart';
 
 import 'reader_tile_layer.dart';
+import 'reader_viewport_controller.dart';
 
 class ScrollReaderViewport extends StatefulWidget {
   const ScrollReaderViewport({
@@ -18,6 +19,7 @@ class ScrollReaderViewport extends StatefulWidget {
     required this.textColor,
     required this.style,
     this.onTapUp,
+    this.controller,
   });
 
   final ReaderRuntime runtime;
@@ -25,6 +27,7 @@ class ScrollReaderViewport extends StatefulWidget {
   final Color textColor;
   final ReadStyle style;
   final GestureTapUpCallback? onTapUp;
+  final ReaderViewportController? controller;
 
   @override
   State<ScrollReaderViewport> createState() => _ScrollReaderViewportState();
@@ -53,6 +56,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
             }
           });
     widget.runtime.addListener(_onRuntimeChanged);
+    _attachController();
   }
 
   @override
@@ -65,20 +69,38 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
       _offset.value = 0;
       _lastCurrentPageKey = _pageKey(widget.runtime.state.pageWindow?.current);
     }
+    if (oldWidget.controller != widget.controller) {
+      _detachController(oldWidget.controller);
+      _attachController();
+    }
   }
 
   @override
   void dispose() {
     widget.runtime.removeListener(_onRuntimeChanged);
+    _detachController(widget.controller);
     _flingController.dispose();
     _offset.dispose();
     super.dispose();
+  }
+
+  void _attachController() {
+    widget.controller?.scrollBy = _animateScrollBy;
+  }
+
+  void _detachController(ReaderViewportController? controller) {
+    controller?.scrollBy = null;
   }
 
   void _onRuntimeChanged() {
     if (!mounted) return;
     final currentPageKey = _pageKey(widget.runtime.state.pageWindow?.current);
     final currentPageChanged = currentPageKey != _lastCurrentPageKey;
+    if (widget.runtime.state.phase == ReaderPhase.layingOut ||
+        widget.runtime.state.phase == ReaderPhase.switchingMode ||
+        (currentPageChanged && !_suppressExternalPageReset)) {
+      _flingController.stop();
+    }
     if (widget.runtime.state.phase == ReaderPhase.layingOut ||
         widget.runtime.state.phase == ReaderPhase.switchingMode) {
       _scrollOffset = 0;
@@ -202,6 +224,22 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
           friction: 0.018,
         ),
       ),
+    );
+  }
+
+  void _animateScrollBy(double delta) {
+    if (delta == 0) return;
+    _flingController.stop();
+    _lastFlingPosition = 0;
+    _flingController.value = 0;
+    unawaited(
+      _flingController
+          .animateTo(
+            delta,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(_commitVisibleLocation),
     );
   }
 

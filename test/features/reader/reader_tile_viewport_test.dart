@@ -94,7 +94,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     });
 
-    testWidgets('slide recenters before committing the next tile window', (
+    testWidgets('slide recenters and commits the next tile window once', (
       tester,
     ) async {
       final env = _RuntimeEnv(mode: ReaderMode.slide);
@@ -122,17 +122,18 @@ void main() {
       pageView.controller!.jumpToPage(2);
       await tester.pump();
 
-      expect(env.runtime.state.pageWindow!.current.pageIndex, before.pageIndex);
       expect(
-        env.runtime.state.pageWindow!.current.chapterIndex,
-        before.chapterIndex,
+        '${env.runtime.state.pageWindow!.current.chapterIndex}:${env.runtime.state.pageWindow!.current.pageIndex}',
+        isNot('${before.chapterIndex}:${before.pageIndex}'),
       );
+      final after =
+          '${env.runtime.state.pageWindow!.current.chapterIndex}:${env.runtime.state.pageWindow!.current.pageIndex}';
 
       await tester.pump();
 
       expect(
         '${env.runtime.state.pageWindow!.current.chapterIndex}:${env.runtime.state.pageWindow!.current.pageIndex}',
-        isNot('${before.chapterIndex}:${before.pageIndex}'),
+        after,
       );
 
       await env.runtime.flushProgress();
@@ -214,7 +215,7 @@ ReadStyle _style(ReaderPageMode mode) {
     paddingLeft: 16,
     paddingRight: 16,
     textIndent: 2,
-    textFullJustify: true,
+    textFullJustify: false,
     pageMode: mode,
   );
 }

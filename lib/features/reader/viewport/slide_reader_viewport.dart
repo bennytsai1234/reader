@@ -30,11 +30,13 @@ class SlideReaderViewport extends StatefulWidget {
 class _SlideReaderViewportState extends State<SlideReaderViewport> {
   late PageController _controller;
   bool _recentering = false;
+  late int _lastLayoutGeneration;
 
   @override
   void initState() {
     super.initState();
     _controller = PageController(initialPage: 1);
+    _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
     widget.runtime.addListener(_onRuntimeChanged);
   }
 
@@ -44,6 +46,9 @@ class _SlideReaderViewportState extends State<SlideReaderViewport> {
     if (oldWidget.runtime != widget.runtime) {
       oldWidget.runtime.removeListener(_onRuntimeChanged);
       widget.runtime.addListener(_onRuntimeChanged);
+      _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
+      _resetController();
+    } else if (oldWidget.style.pageMode != widget.style.pageMode) {
       _resetController();
     }
   }
@@ -57,6 +62,12 @@ class _SlideReaderViewportState extends State<SlideReaderViewport> {
 
   void _onRuntimeChanged() {
     if (!mounted) return;
+    final layoutChanged =
+        _lastLayoutGeneration != widget.runtime.state.layoutGeneration;
+    if (layoutChanged) {
+      _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
+      _resetController();
+    }
     setState(() {});
   }
 
@@ -70,25 +81,20 @@ class _SlideReaderViewportState extends State<SlideReaderViewport> {
     final forward = index > 1;
     _recentering = true;
 
+    if (_controller.hasClients) {
+      _controller.jumpToPage(1);
+    }
+    final moved =
+        forward
+            ? widget.runtime.moveToNextTile()
+            : widget.runtime.moveToPrevTile();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (_controller.hasClients) {
+      _recentering = false;
+      if (!moved && _controller.hasClients) {
         _controller.jumpToPage(1);
       }
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final moved =
-            forward
-                ? widget.runtime.moveToNextTile()
-                : widget.runtime.moveToPrevTile();
-        if (moved) {
-          final page = widget.runtime.state.pageWindow?.current;
-          if (page != null) {
-            widget.runtime.handleSlidePageSettled(page);
-          }
-        }
-        _recentering = false;
-      });
     });
   }
 
@@ -168,7 +174,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport> {
 
     return PageView(
       controller: _controller,
-      physics: const BouncingScrollPhysics(),
+      physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
       onPageChanged: _handlePageChanged,
       children: pages,
     );

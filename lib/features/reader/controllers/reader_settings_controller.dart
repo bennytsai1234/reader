@@ -20,7 +20,7 @@ class ReaderSettingsController extends ChangeNotifier {
   double paragraphSpacing = 1.0;
   double letterSpacing = 0.0;
   int textIndent = 2;
-  bool textFullJustify = true;
+  bool textFullJustify = false;
   double textPadding = 16.0;
   int themeIndex = 0;
   int lastDayThemeIndex = 0;
@@ -44,7 +44,7 @@ class ReaderSettingsController extends ChangeNotifier {
     paragraphSpacing = snapshot.paragraphSpacing;
     letterSpacing = snapshot.letterSpacing;
     textIndent = snapshot.textIndent;
-    textFullJustify = snapshot.textFullJustify;
+    textFullJustify = false;
     themeIndex = snapshot.themeIndex;
     brightness = snapshot.brightness;
     pageTurnMode = snapshot.pageTurnMode;
@@ -78,7 +78,7 @@ class ReaderSettingsController extends ChangeNotifier {
       paddingRight: textPadding,
       bold: false,
       textIndent: textIndent,
-      textFullJustify: textFullJustify,
+      textFullJustify: false,
       selectText: selectText,
       pageMode: ReaderPageMode.fromPageAnim(pageTurnMode),
     );
@@ -118,12 +118,6 @@ class ReaderSettingsController extends ChangeNotifier {
   void setLetterSpacing(double value) {
     letterSpacing = value;
     unawaited(_prefsRepository.saveLetterSpacing(value));
-    notifyListeners();
-  }
-
-  void setTextFullJustify(bool value) {
-    textFullJustify = value;
-    unawaited(_prefsRepository.saveTextFullJustify(value));
     notifyListeners();
   }
 

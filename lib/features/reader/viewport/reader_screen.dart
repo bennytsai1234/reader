@@ -5,6 +5,7 @@ import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
 
+import 'reader_viewport_controller.dart';
 import 'scroll_reader_viewport.dart';
 import 'slide_reader_viewport.dart';
 
@@ -16,6 +17,7 @@ class EngineReaderScreen extends StatefulWidget {
     required this.textColor,
     required this.style,
     this.onContentTapUp,
+    this.viewportController,
   });
 
   final ReaderRuntime runtime;
@@ -23,6 +25,7 @@ class EngineReaderScreen extends StatefulWidget {
   final Color textColor;
   final ReadStyle style;
   final GestureTapUpCallback? onContentTapUp;
+  final ReaderViewportController? viewportController;
 
   @override
   State<EngineReaderScreen> createState() => _EngineReaderScreenState();
@@ -76,6 +79,7 @@ class _EngineReaderScreenState extends State<EngineReaderScreen>
         textColor: widget.textColor,
         style: widget.style,
         onTapUp: widget.onContentTapUp,
+        controller: widget.viewportController,
       );
     }
     return SlideReaderViewport(

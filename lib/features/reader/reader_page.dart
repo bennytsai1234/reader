@@ -28,6 +28,7 @@ import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_session_facade.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
 import 'package:inkpage_reader/features/reader/viewport/reader_screen.dart';
+import 'package:inkpage_reader/features/reader/viewport/reader_viewport_controller.dart';
 import 'package:inkpage_reader/features/reader/widgets/reader/reader_bottom_menu.dart';
 import 'package:inkpage_reader/features/reader/widgets/reader_chapters_drawer.dart';
 import 'package:inkpage_reader/features/reader/widgets/reader_controller_sheets.dart';
@@ -63,6 +64,8 @@ class _ReaderPageState extends State<ReaderPage>
   late final ReaderDependencies _dependencies;
   late final ChapterRepository _repository;
   late final BookStorageService _bookStorageService;
+  final ReaderViewportController _viewportController =
+      ReaderViewportController();
 
   ReaderRuntime? _runtime;
   ReaderTtsController? _tts;
@@ -277,6 +280,7 @@ class _ReaderPageState extends State<ReaderPage>
           backgroundColor: theme.backgroundColor,
           textColor: theme.textColor,
           style: style,
+          viewportController: _viewportController,
           onContentTapUp:
               _menu.controlsVisible ? null : (details) => _handleTap(details),
         );
@@ -290,16 +294,14 @@ class _ReaderPageState extends State<ReaderPage>
     ReadStyle style,
   ) {
     final spec = LayoutSpec.fromViewport(viewportSize: size, style: style);
-    if (_lastLayoutSignature != spec.layoutSignature) {
+    final targetMode = _modeFor(_settings.pageTurnMode);
+    final needsLayout = _lastLayoutSignature != spec.layoutSignature;
+    final needsMode = runtime.state.mode != targetMode;
+    if (needsLayout || needsMode) {
       _lastLayoutSignature = spec.layoutSignature;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(runtime.updateLayoutSpec(spec));
-      });
-    }
-    final targetMode = _modeFor(_settings.pageTurnMode);
-    if (runtime.state.mode != targetMode) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(runtime.switchMode(targetMode));
+        if (!mounted) return;
+        unawaited(runtime.applyPresentation(spec: spec, mode: targetMode));
       });
     }
     if (_lastContentSettingsGeneration != _settings.contentSettingsGeneration) {
@@ -331,10 +333,20 @@ class _ReaderPageState extends State<ReaderPage>
         _menu.toggleControls();
         return;
       case ReaderTapAction.nextPage:
-        runtime.moveToNextPage();
+        if (runtime.state.mode == ReaderMode.scroll &&
+            _viewportController.scrollBy != null) {
+          _viewportController.scrollBy?.call(-size.height * 0.9);
+        } else {
+          runtime.moveToNextPage();
+        }
         return;
       case ReaderTapAction.prevPage:
-        runtime.moveToPrevPage();
+        if (runtime.state.mode == ReaderMode.scroll &&
+            _viewportController.scrollBy != null) {
+          _viewportController.scrollBy?.call(size.height * 0.9);
+        } else {
+          runtime.moveToPrevPage();
+        }
         return;
       case ReaderTapAction.nextChapter:
         unawaited(_jumpRelativeChapter(1));

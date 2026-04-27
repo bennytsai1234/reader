@@ -129,14 +129,6 @@ class _ReadingSettingsPageState extends State<ReadingSettingsPage> {
                       },
                     ),
                   ),
-                  SwitchListTile(
-                    title: const Text('文字兩端對齊'),
-                    value: prefs.textFullJustify,
-                    onChanged: (value) {
-                      _updatePrefs(prefs.copyWith(textFullJustify: value));
-                      _prefsRepository.saveTextFullJustify(value);
-                    },
-                  ),
                   ListTile(
                     title: const Text('翻頁模式'),
                     subtitle: Wrap(
