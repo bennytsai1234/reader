@@ -12,6 +12,7 @@ import 'app_providers.dart';
 import 'shared/theme/app_theme.dart';
 import 'features/settings/settings_provider.dart';
 import 'features/welcome/splash_page.dart';
+import 'features/welcome/startup_failure_panel.dart';
 import 'core/services/app_log_service.dart';
 import 'features/browser/source_verification_coordinator.dart';
 
@@ -43,100 +44,125 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 const String kAppDisplayName = '墨頁';
 
 void main() {
-  runZonedGuarded(
-    () async {
-      WidgetsFlutterBinding.ensureInitialized();
-      AppLog.i('WidgetsFlutterBinding Initialized');
+  runZonedGuarded(_startApp, (error, stack) {
+    AppLog.e('Uncaught Error: $error', error: error, stackTrace: stack);
+  });
+}
 
-      // 自定義錯誤畫面，避免黑屏
-      ErrorWidget.builder = (FlutterErrorDetails details) {
-        AppLog.e(
-          'Rendering Error: ${details.exception}',
-          error: details.exception,
-          stackTrace: details.stack,
-        );
-        return Scaffold(
-          backgroundColor: Colors.black,
-          body: Container(
-            padding: const EdgeInsets.all(16),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Detected an Error:',
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    details.exceptionAsString(),
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    details.stack.toString(),
-                    style: const TextStyle(color: Colors.grey, fontSize: 10),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      };
+Future<void> _startApp() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  AppLog.i('WidgetsFlutterBinding Initialized');
 
-      try {
-        AppLog.i('Configuring Dependencies...');
-        await configureDependencies();
-        AppLog.i('Dependencies Configured Successfully');
-
-        FlutterError.onError = (details) {
-          FlutterError.presentError(details);
-          AppLog.e(
-            'Flutter Error: ${details.exception}',
-            error: details.exception,
-            stackTrace: details.stack,
-          );
-        };
-
-        AppLog.i('$kAppDisplayName Ready to Run');
-
-        runApp(
-          MultiProvider(
-            providers: AppProviders.providers,
-            child: const LegadoReaderApp(),
-          ),
-        );
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          unawaited(_runPostFirstFrameStartupTasks());
-        });
-      } catch (e, stack) {
-        AppLog.e('Startup Critical Error: $e', error: e, stackTrace: stack);
-        runApp(
-          MaterialApp(
-            home: Scaffold(
-              backgroundColor: Colors.black,
-              body: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: SelectableText(
-                    'Startup Failed:\n$e\n\n$stack',
-                    style: const TextStyle(color: Colors.red),
-                  ),
+  // 自定義錯誤畫面，避免黑屏
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    AppLog.e(
+      'Rendering Error: ${details.exception}',
+      error: details.exception,
+      stackTrace: details.stack,
+    );
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Container(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Detected an Error:',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(height: 10),
+              Text(
+                details.exceptionAsString(),
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                details.stack.toString(),
+                style: const TextStyle(color: Colors.grey, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
+  try {
+    AppLog.i('Configuring Dependencies...');
+    await configureDependencies();
+    AppLog.i('Dependencies Configured Successfully');
+
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      AppLog.e(
+        'Flutter Error: ${details.exception}',
+        error: details.exception,
+        stackTrace: details.stack,
+      );
+    };
+
+    AppLog.i('$kAppDisplayName Ready to Run');
+
+    runApp(
+      MultiProvider(
+        providers: AppProviders.providers,
+        child: const LegadoReaderApp(),
+      ),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_runPostFirstFrameStartupTasks());
+    });
+  } catch (e, stack) {
+    AppLog.e('Startup Critical Error: $e', error: e, stackTrace: stack);
+    runApp(_StartupFailureApp(error: e, stackTrace: stack));
+  }
+}
+
+Future<void> _retryCriticalStartup() async {
+  try {
+    await getIt.reset();
+  } catch (e, stack) {
+    AppLog.e('Dependency reset failed: $e', error: e, stackTrace: stack);
+  }
+  await _startApp();
+}
+
+class _StartupFailureApp extends StatelessWidget {
+  const _StartupFailureApp({required this.error, required this.stackTrace});
+
+  final Object error;
+  final StackTrace stackTrace;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = '$error\n\n$stackTrace';
+    return MaterialApp(
+      title: kAppDisplayName,
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: StartupFailurePanel(
+                title: '核心初始化失敗',
+                message: '核心服務沒有完成初始化，請重試或查看錯誤詳情。',
+                details: details,
+                onRetry: () => unawaited(_retryCriticalStartup()),
+              ),
             ),
           ),
-        );
-      }
-    },
-    (error, stack) {
-      AppLog.e('Uncaught Error: $error', error: error, stackTrace: stack);
-    },
-  );
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _runPostFirstFrameStartupTasks() async {

@@ -91,7 +91,6 @@ class SettingsProvider extends SettingsProviderBase {
   // --- 缺失屬性補全 ---
   bool autoRefresh = true;
   bool defaultToRead = false;
-  bool showDiscovery = true;
   int threadCount = 4;
   String userAgent = '';
   bool antiAlias = true;
@@ -113,12 +112,6 @@ class SettingsProvider extends SettingsProviderBase {
   void setDefaultToRead(bool v) {
     defaultToRead = v;
     save(PreferKey.defaultToRead, v);
-    update();
-  }
-
-  void setShowDiscovery(bool v) {
-    showDiscovery = v;
-    save(PreferKey.showDiscovery, v);
     update();
   }
 
@@ -444,7 +437,6 @@ class SettingsProvider extends SettingsProviderBase {
     welcomeShowIcon = prefs.getBool(PreferKey.welcomeShowIcon) ?? true;
     welcomeShowIconDark = prefs.getBool(PreferKey.welcomeShowIconDark) ?? true;
     launcherIcon = prefs.getString(PreferKey.launcherIcon) ?? '';
-    showDiscovery = prefs.getBool(PreferKey.showDiscovery) ?? true;
 
     lastBackup = prefs.getInt(PreferKey.lastBackup) ?? 0;
 

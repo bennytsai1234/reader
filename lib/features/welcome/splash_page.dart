@@ -6,6 +6,7 @@ import 'package:inkpage_reader/features/settings/settings_provider.dart';
 import 'package:inkpage_reader/core/services/default_data.dart';
 import 'package:inkpage_reader/core/services/app_log_service.dart';
 import 'main_page.dart';
+import 'startup_failure_panel.dart';
 import '../../main.dart';
 
 class SplashPage extends StatefulWidget {
@@ -20,6 +21,7 @@ class _SplashPageState extends State<SplashPage> {
   String? _error;
   String? _resolvedWelcomeImagePath;
   File? _welcomeImageFile;
+  bool _isInitializing = false;
 
   @override
   void initState() {
@@ -41,8 +43,14 @@ class _SplashPageState extends State<SplashPage> {
   }
 
   Future<void> _initApp() async {
+    if (_isInitializing) return;
+
     try {
-      setState(() => _status = '正在載入閱讀配置...');
+      setState(() {
+        _error = null;
+        _isInitializing = true;
+        _status = '正在載入閱讀配置...';
+      });
       await DefaultData.initEssential();
       if (mounted) {
         Navigator.of(
@@ -57,6 +65,7 @@ class _SplashPageState extends State<SplashPage> {
       if (mounted) {
         setState(() {
           _error = '$e\n$stack';
+          _isInitializing = false;
         });
       }
     }
@@ -214,12 +223,9 @@ class _SplashPageState extends State<SplashPage> {
                     ],
                     const SizedBox(height: 28),
                     if (_error != null)
-                      Text(
-                        '啟動失敗：$_error',
-                        style: const TextStyle(
-                          color: Colors.redAccent,
-                          height: 1.4,
-                        ),
+                      StartupFailurePanel(
+                        details: _error!,
+                        onRetry: () => unawaited(_initApp()),
                       )
                     else
                       Container(

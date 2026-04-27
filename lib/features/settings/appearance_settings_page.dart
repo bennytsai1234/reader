@@ -16,11 +16,6 @@ class AppearanceSettingsPage extends StatelessWidget {
           return ListView(
             children: [
               _buildSectionTitle('主介面'),
-              SwitchListTile(
-                title: const Text('顯示發現'),
-                value: settings.showDiscovery,
-                onChanged: (v) => settings.setShowDiscovery(v),
-              ),
               ListTile(
                 title: const Text('歡迎介面'),
                 subtitle: const Text('設定 App 啟動時的歡迎圖片'),
