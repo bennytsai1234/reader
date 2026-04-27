@@ -1,7 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:inkpage_reader/core/constant/prefer_key.dart';
-import 'package:inkpage_reader/core/models/book.dart';
-import 'package:inkpage_reader/core/models/book_group.dart';
 import 'package:inkpage_reader/core/services/book_storage_service.dart';
 import 'bookshelf_provider_base.dart';
 
@@ -95,15 +93,6 @@ mixin BookshelfLogicMixin on BookshelfProviderBase {
     notifyListeners();
   }
 
-  Future<void> loadGroups() async {
-    groups = await groupDao.getAll();
-    if (groups.isEmpty) {
-      await groupDao.initDefaultGroups();
-      groups = await groupDao.getAll();
-    }
-    notifyListeners();
-  }
-
   Future<void> deleteSelected() async {
     for (var url in selectedBookUrls) {
       final book = await bookDao.getByUrl(url);
@@ -117,103 +106,5 @@ mixin BookshelfLogicMixin on BookshelfProviderBase {
     isBatchMode = false;
     selectedBookUrls.clear();
     loadBooks();
-  }
-
-  Future<void> moveSelectedToGroup(int groupId) async {
-    for (var url in selectedBookUrls) {
-      final book = books.cast<Book?>().firstWhere(
-        (b) => b?.bookUrl == url,
-        orElse: () => null,
-      );
-      if (book != null) {
-        book.group = groupId;
-        await bookDao.upsert(book);
-      }
-    }
-    isBatchMode = false;
-    selectedBookUrls.clear();
-    loadBooks();
-  }
-
-  Future<void> batchUpdateGroup(Set<String> urls, int groupId) async {
-    for (var url in urls) {
-      final book = await bookDao.getByUrl(url);
-      if (book != null) {
-        book.group = groupId;
-        await bookDao.upsert(book);
-      }
-    }
-    isBatchMode = false;
-    selectedBookUrls.clear();
-    loadBooks();
-  }
-
-  Future<void> reorderGroups(int oldIndex, int newIndex) async {
-    if (newIndex > oldIndex) newIndex -= 1;
-    final item = groups.removeAt(oldIndex);
-    groups.insert(newIndex, item);
-    await groupDao.updateOrder(groups);
-    notifyListeners();
-  }
-
-  Future<void> updateGroupVisibility(int groupId, bool visible) async {
-    final group = groups.cast<BookGroup?>().firstWhere(
-      (g) => g?.id == groupId,
-      orElse: () => null,
-    );
-    if (group != null) {
-      group.show = visible;
-      await groupDao.upsert(group);
-      notifyListeners();
-    }
-  }
-
-  Future<void> createGroup(String name, {String? coverPath}) async {
-    final nextMask = _nextGroupMask();
-    await groupDao.upsert(
-      BookGroup(
-        groupId: nextMask,
-        groupName: name,
-        coverPath: coverPath,
-        order: groups.length,
-      ),
-    );
-    await loadGroups();
-  }
-
-  Future<void> renameGroup(int id, String name, {String? coverPath}) async {
-    final group = groups.cast<BookGroup?>().firstWhere(
-      (g) => g?.id == id,
-      orElse: () => null,
-    );
-    if (group != null) {
-      group.name = name;
-      group.coverPath = coverPath;
-      await groupDao.upsert(group);
-      notifyListeners();
-    }
-  }
-
-  Future<void> deleteGroup(int id) async {
-    final allBooks = await bookDao.getInBookshelf();
-    for (final book in allBooks) {
-      if (book.hasGroup(id)) {
-        book.removeGroup(id);
-        await bookDao.upsert(book);
-      }
-    }
-    await groupDao.deleteById(id);
-    await loadGroups();
-    await loadBooks();
-  }
-
-  int _nextGroupMask() {
-    final usedMasks =
-        groups.map((g) => g.groupId).where((id) => id > 0).toSet();
-    var candidate = 1;
-    while (usedMasks.contains(candidate)) {
-      candidate <<= 1;
-    }
-    return candidate;
   }
 }

@@ -215,12 +215,6 @@ class _ReaderInterfaceSheetState extends State<_ReaderInterfaceSheet> {
                 );
               },
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('內容兩端對齊'),
-              value: settings.textFullJustify,
-              onChanged: settings.setTextFullJustify,
-            ),
             Row(
               children: [
                 const Text(

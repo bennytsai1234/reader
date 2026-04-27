@@ -40,6 +40,9 @@ class ReaderTilePainter extends CustomPainter {
             .clamp(1.0, double.infinity)
             .toDouble();
 
+    final contentRect = Rect.fromLTWH(left, top, contentWidth, tile.height);
+    canvas.save();
+    canvas.clipRect(contentRect);
     for (final line in tile.lines) {
       final offset = Offset(left, top + line.top);
       if (_canJustify(line, contentWidth)) {
@@ -49,6 +52,7 @@ class ReaderTilePainter extends CustomPainter {
         painter.paint(canvas, offset);
       }
     }
+    canvas.restore();
 
     if (debugOverlay) {
       final debugPainter = TextPainter(

@@ -51,7 +51,6 @@ class LayoutEngine {
         startOffset: paragraphOffset,
         paragraphNum: paragraphNum,
         textIndent: spec.style.textIndent,
-        textFullJustify: spec.style.textFullJustify,
       );
       lines.addAll(paragraphLines);
       if (paragraphLines.isNotEmpty) {
@@ -118,7 +117,6 @@ class LayoutEngine {
     bool isTitle = false,
     int paragraphNum = 0,
     int textIndent = 0,
-    bool textFullJustify = false,
   }) {
     if (text.isEmpty) return const <TextLine>[];
     final indentText =
@@ -143,10 +141,17 @@ class LayoutEngine {
       final metrics = painter.computeLineMetrics();
       if (metrics.isEmpty) break;
       final metric = metrics.first;
-      final charsConsumed = _lineCharsConsumed(
+      var charsConsumed = _lineCharsConsumed(
         painter: painter,
         remaining: remaining,
       );
+      if (metric.width > maxWidth + 0.5) {
+        charsConsumed = _maxFittingPrefix(
+          text: remaining,
+          style: style,
+          maxWidth: maxWidth,
+        );
+      }
       if (charsConsumed <= 0) break;
       final localEnd =
           (localStart + charsConsumed)
@@ -163,15 +168,16 @@ class LayoutEngine {
               : (style.fontSize ?? 0) * (style.height ?? 1.0);
       final lineBottom = lineTop + lineHeight;
       final isParagraphEnd = localEnd >= laidOutText.length;
+      final lineWidth = _measureLineWidth(lineText, style);
       lines.add(
         TextLine(
           text: lineText,
-          width: metric.width,
+          width: lineWidth,
           height: lineHeight,
           isTitle: isTitle,
           isParagraphStart: lineIndex == 0,
           isParagraphEnd: isParagraphEnd,
-          shouldJustify: !isTitle && textFullJustify && !isParagraphEnd,
+          shouldJustify: false,
           chapterPosition: startOffset + contentStart,
           lineTop: lineTop,
           lineBottom: lineBottom,
@@ -217,6 +223,50 @@ class LayoutEngine {
       end = remaining.isEmpty ? 0 : 1;
     }
     return end.clamp(0, remaining.length).toInt();
+  }
+
+  int _maxFittingPrefix({
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+  }) {
+    final clusters = text.characters.toList(growable: false);
+    if (clusters.isEmpty) return 0;
+
+    var low = 1;
+    var high = clusters.length;
+    var best = 1;
+    final painter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.noScaling,
+      maxLines: 1,
+    );
+
+    while (low <= high) {
+      final mid = (low + high) >> 1;
+      final candidate = clusters.take(mid).join();
+      painter.text = TextSpan(text: candidate, style: style);
+      painter.layout(maxWidth: double.infinity);
+      if (painter.width <= maxWidth) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return clusters.take(best).join().length;
+  }
+
+  double _measureLineWidth(String text, TextStyle style) {
+    if (text.isEmpty) return 0;
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.noScaling,
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    return painter.width;
   }
 
   List<TextPage> _paginate({

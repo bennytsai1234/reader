@@ -61,7 +61,6 @@ class LayoutSpec {
       f(style.paddingLeft),
       f(style.paddingRight),
       style.textIndent.toString(),
-      style.textFullJustify ? 'j' : 'l',
       style.fontFamily ?? '',
       style.bold ? 'b' : 'r',
       style.pageMode.name,

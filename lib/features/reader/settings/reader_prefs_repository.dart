@@ -49,7 +49,7 @@ class ReaderPrefsSnapshot {
       paragraphSpacing: 1.0,
       letterSpacing: 0.0,
       textIndent: 2,
-      textFullJustify: true,
+      textFullJustify: false,
       themeIndex: 0,
       lastDayThemeIndex: 0,
       lastNightThemeIndex: 1,
@@ -125,10 +125,7 @@ class ReaderPrefsRepository {
           defaults.letterSpacing,
       textIndent:
           prefs.getInt(PreferKey.readerTextIndent) ?? defaults.textIndent,
-      textFullJustify:
-          prefs.getBool(PreferKey.readerTextFullJustify) ??
-          prefs.getBool(PreferKey.textFullJustify) ??
-          defaults.textFullJustify,
+      textFullJustify: false,
       themeIndex:
           prefs.getInt(PreferKey.readerThemeIndex) ?? defaults.themeIndex,
       lastDayThemeIndex:

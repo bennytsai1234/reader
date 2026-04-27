@@ -121,66 +121,71 @@ void main() {
       );
     });
 
-    test('LayoutEngine applies body indent and justification flags', () {
-      final engine = LayoutEngine();
-      final content = BookContent.fromRaw(
-        chapterIndex: 0,
-        title: 'Title',
-        rawText: '這是一段足夠長的正文，用來測試首行縮排、非末行兩端對齊，以及標題不應套用正文縮排。',
-      );
-      final justified = engine.layout(
-        content,
-        LayoutSpec.fromViewport(
-          viewportSize: const Size(180, 360),
-          style: const ReadStyle(
-            fontSize: 18,
-            lineHeight: 1.5,
-            letterSpacing: 0,
-            paragraphSpacing: 0.6,
-            paddingTop: 12,
-            paddingBottom: 12,
-            paddingLeft: 16,
-            paddingRight: 16,
-            textIndent: 2,
-            textFullJustify: true,
-            pageMode: ReaderPageMode.scroll,
+    test(
+      'LayoutEngine applies body indent and disables justification flags',
+      () {
+        final engine = LayoutEngine();
+        final content = BookContent.fromRaw(
+          chapterIndex: 0,
+          title: 'Title',
+          rawText: '這是一段足夠長的正文，用來測試首行縮排、非末行兩端對齊，以及標題不應套用正文縮排。',
+        );
+        final justified = engine.layout(
+          content,
+          LayoutSpec.fromViewport(
+            viewportSize: const Size(180, 360),
+            style: const ReadStyle(
+              fontSize: 18,
+              lineHeight: 1.5,
+              letterSpacing: 0,
+              paragraphSpacing: 0.6,
+              paddingTop: 12,
+              paddingBottom: 12,
+              paddingLeft: 16,
+              paddingRight: 16,
+              textIndent: 2,
+              textFullJustify: true,
+              pageMode: ReaderPageMode.scroll,
+            ),
           ),
-        ),
-      );
+        );
 
-      expect(justified.lines.first.isTitle, isTrue);
-      expect(justified.lines.first.text.startsWith('　'), isFalse);
-      final firstBodyLine = justified.lines.firstWhere((line) => !line.isTitle);
-      expect(firstBodyLine.text.startsWith('　　'), isTrue);
-      expect(firstBodyLine.startCharOffset, 0);
-      expect(
-        justified.lines
-            .where((line) => !line.isTitle && !line.isParagraphEnd)
-            .any((line) => line.shouldJustify),
-        isTrue,
-      );
+        expect(justified.lines.first.isTitle, isTrue);
+        expect(justified.lines.first.text.startsWith('　'), isFalse);
+        final firstBodyLine = justified.lines.firstWhere(
+          (line) => !line.isTitle,
+        );
+        expect(firstBodyLine.text.startsWith('　　'), isTrue);
+        expect(firstBodyLine.startCharOffset, 0);
+        expect(
+          justified.lines
+              .where((line) => !line.isTitle && !line.isParagraphEnd)
+              .any((line) => line.shouldJustify),
+          isFalse,
+        );
 
-      final ragged = engine.layout(
-        content,
-        LayoutSpec.fromViewport(
-          viewportSize: const Size(180, 360),
-          style: const ReadStyle(
-            fontSize: 18,
-            lineHeight: 1.5,
-            letterSpacing: 0,
-            paragraphSpacing: 0.6,
-            paddingTop: 12,
-            paddingBottom: 12,
-            paddingLeft: 16,
-            paddingRight: 16,
-            textIndent: 2,
-            textFullJustify: false,
-            pageMode: ReaderPageMode.scroll,
+        final ragged = engine.layout(
+          content,
+          LayoutSpec.fromViewport(
+            viewportSize: const Size(180, 360),
+            style: const ReadStyle(
+              fontSize: 18,
+              lineHeight: 1.5,
+              letterSpacing: 0,
+              paragraphSpacing: 0.6,
+              paddingTop: 12,
+              paddingBottom: 12,
+              paddingLeft: 16,
+              paddingRight: 16,
+              textIndent: 2,
+              textFullJustify: false,
+              pageMode: ReaderPageMode.scroll,
+            ),
           ),
-        ),
-      );
-      expect(ragged.lines.any((line) => line.shouldJustify), isFalse);
-    });
+        );
+        expect(ragged.lines.any((line) => line.shouldJustify), isFalse);
+      },
+    );
 
     test(
       'ChapterLayout.pageForCharOffset skips title-only pages for durable offset restore',
@@ -442,6 +447,23 @@ void main() {
       final after = runtime.state.pageWindow!;
       expect(after.next, oldCurrent);
       expect(after.current, oldPrev);
+    });
+
+    test('scroll visible location can resolve into previous page', () async {
+      final env = _RuntimeEnv();
+      final runtime = env.runtime;
+      await runtime.openBook();
+      final firstPage = runtime.state.pageWindow!.current;
+      expect(runtime.moveToNextPage(), isTrue);
+
+      final location = runtime.resolveVisibleLocation(
+        pageOffset: 50,
+        viewportHeight: 360,
+        anchorFraction: 0.05,
+      );
+
+      expect(location.chapterIndex, firstPage.chapterIndex);
+      expect(firstPage.containsCharOffset(location.charOffset), isTrue);
     });
 
     test('rolling window crosses chapter tail into next chapter', () async {

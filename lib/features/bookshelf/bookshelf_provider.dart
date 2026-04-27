@@ -20,7 +20,6 @@ class BookshelfProvider extends BookshelfProviderBase
   BookshelfProvider() {
     loadUiPreferences();
     loadBooks();
-    loadGroups();
     _bookshelfSub = AppEventBus()
         .onName(AppEventBus.upBookshelf)
         .listen((_) => unawaited(loadBooks()));
@@ -31,15 +30,7 @@ class BookshelfProvider extends BookshelfProviderBase
     isLoading = true;
     notifyListeners();
     try {
-      if (currentGroupId == -1) {
-        books = await bookDao.getInBookshelf();
-      } else if (currentGroupId == 0) {
-        books = await bookDao.getInGroup(0);
-      } else {
-        // Bitwise logic usually, but here we'll follow simple match for now
-        final all = await bookDao.getInBookshelf();
-        books = all.where((b) => (b.group & currentGroupId) != 0).toList();
-      }
+      books = await bookDao.getInBookshelf();
       _sortBooks();
     } finally {
       isLoading = false;
@@ -84,21 +75,9 @@ class BookshelfProvider extends BookshelfProviderBase
     return book.lastCheckTime;
   }
 
-  Map<int, int> get groupCounts {
-    final counts = <int, int>{};
-    // 這裡需要計算各分組書籍數量，先做一個基礎實作
-    counts[-1] = books.length;
-    return counts;
-  }
-
   Future<void> removeFromBookshelf(String url) async {
     await bookDao.deleteByUrl(url);
     await loadBooks();
-  }
-
-  void setGroup(int groupId) {
-    currentGroupId = groupId;
-    loadBooks();
   }
 
   @override

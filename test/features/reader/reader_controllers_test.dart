@@ -125,7 +125,7 @@ void main() {
       expect(style.letterSpacing, 0.5);
       expect(style.paragraphSpacing, 1.2);
       expect(style.textIndent, 2);
-      expect(style.textFullJustify, isTrue);
+      expect(style.textFullJustify, isFalse);
       expect(style.selectText, isTrue);
       expect(style.paddingLeft, 20);
       expect(style.paddingRight, 20);
@@ -133,7 +133,7 @@ void main() {
     });
 
     test(
-      'layout signature includes indent and justify but ignores selection',
+      'layout signature includes indent but ignores justify and selection',
       () {
         const baseStyle = ReadStyle(
           fontSize: 18,
@@ -145,7 +145,7 @@ void main() {
           paddingLeft: 0,
           paddingRight: 0,
           textIndent: 2,
-          textFullJustify: true,
+          textFullJustify: false,
           selectText: true,
           pageMode: ReaderPageMode.scroll,
         );
@@ -164,9 +164,9 @@ void main() {
         expect(
           LayoutSpec.fromViewport(
             viewportSize: const Size(320, 480),
-            style: baseStyle.copyWith(textFullJustify: false),
+            style: baseStyle.copyWith(textFullJustify: true),
           ).layoutSignature,
-          isNot(base.layoutSignature),
+          base.layoutSignature,
         );
         expect(
           LayoutSpec.fromViewport(

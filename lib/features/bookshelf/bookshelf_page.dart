@@ -8,12 +8,10 @@ import 'package:inkpage_reader/core/services/bookshelf_exchange_service.dart';
 import 'package:inkpage_reader/core/services/restore_service.dart';
 import 'package:inkpage_reader/core/widgets/book_cover_widget.dart';
 import 'package:inkpage_reader/features/bookshelf/bookshelf_provider.dart';
-import 'package:inkpage_reader/features/bookshelf/group_manage_page.dart';
 import 'package:inkpage_reader/features/reader/reader_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_open_target.dart';
 import 'package:inkpage_reader/features/search/search_page.dart';
 import 'package:file_picker/file_picker.dart';
-import 'widgets/group_select_dialog.dart';
 
 class BookshelfPage extends StatefulWidget {
   const BookshelfPage({super.key});
@@ -66,24 +64,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
           actions:
               _isMultiSelect
                   ? [
-                    IconButton(
-                      icon: const Icon(Icons.drive_file_move_outlined),
-                      tooltip: '移入分組',
-                      onPressed: () async {
-                        final success = await showDialog<bool>(
-                          context: context,
-                          builder:
-                              (ctx) =>
-                                  GroupSelectDialog(bookUrls: _selectedUrls),
-                        );
-                        if (success == true) {
-                          setState(() {
-                            _isMultiSelect = false;
-                            _selectedUrls.clear();
-                          });
-                        }
-                      },
-                    ),
                     IconButton(
                       icon: const Icon(Icons.download_outlined),
                       tooltip: '批次下載',
@@ -189,16 +169,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
                                 ],
                               ),
                             ),
-                            const PopupMenuItem(
-                              value: 'group_manage',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.groups_outlined, size: 20),
-                                  SizedBox(width: 12),
-                                  Text('分組管理'),
-                                ],
-                              ),
-                            ),
                             const PopupMenuDivider(),
                             const PopupMenuItem(
                               value: 'import_url',
@@ -264,14 +234,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
                               _isMultiSelect = true;
                             });
                             break;
-                          case 'group_manage':
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const GroupManagePage(),
-                              ),
-                            );
-                            break;
                           case 'import':
                             await _handleBookshelfImport(context);
                             break;
@@ -291,7 +253,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
         ),
         body: Column(
           children: [
-            if (!_isMultiSelect) _buildGroupBar(provider),
             Expanded(
               child:
                   provider.isLoading && provider.books.isEmpty
@@ -472,44 +433,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
         context,
       ).showSnackBar(SnackBar(content: Text('匯出失敗: $e')));
     }
-  }
-
-  Widget _buildGroupBar(BookshelfProvider provider) {
-    final visibleGroups = provider.groups.where((group) => group.show).toList();
-    return SizedBox(
-      height: 48,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: const Text('全部'),
-              selected: provider.currentGroupId == -1,
-              onSelected: (_) => provider.setGroup(-1),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: const Text('未分組'),
-              selected: provider.currentGroupId == 0,
-              onSelected: (_) => provider.setGroup(0),
-            ),
-          ),
-          for (final group in visibleGroups)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(group.groupName),
-                selected: provider.currentGroupId == group.groupId,
-                onSelected: (_) => provider.setGroup(group.groupId),
-              ),
-            ),
-        ],
-      ),
-    );
   }
 
   Future<void> _showSortSheet(

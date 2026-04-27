@@ -109,6 +109,36 @@ void main() {
       expect(empty.pages.single.startCharOffset, 0);
       expect(empty.pages.single.endCharOffset, 0);
     });
+
+    test('breaks long unspaced tokens within content width', () {
+      final cases = <String>[
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'https://example.com/very/long/path/without/breakpoints/aaaaaaaaaaaaaaaaaaaa',
+        '123456789012345678901234567890123456789012345678901234567890',
+      ];
+
+      for (final rawText in cases) {
+        final spec = _spec(width: 180, height: 280);
+        final layout = LayoutEngine().layout(
+          BookContent.fromRaw(chapterIndex: 0, title: '標題', rawText: rawText),
+          spec,
+        );
+        final bodyLines = layout.lines.where((line) => !line.isTitle).toList();
+
+        expect(bodyLines, isNotEmpty);
+        for (final line in bodyLines) {
+          expect(line.width, lessThanOrEqualTo(spec.contentWidth + 0.5));
+        }
+
+        final rebuilt =
+            bodyLines.map((line) {
+              return line.isParagraphStart
+                  ? line.text.replaceFirst(RegExp(r'^[\s　]+'), '')
+                  : line.text;
+            }).join();
+        expect(rebuilt, rawText);
+      }
+    });
   });
 }
 
@@ -125,7 +155,7 @@ LayoutSpec _spec({required double width, required double height}) {
       paddingLeft: 16,
       paddingRight: 16,
       textIndent: 2,
-      textFullJustify: true,
+      textFullJustify: false,
       pageMode: ReaderPageMode.scroll,
     ),
   );
