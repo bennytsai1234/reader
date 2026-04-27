@@ -13,14 +13,18 @@ mixin DownloadScheduler on DownloadBase {
   void listenEvents() {
     _refreshStartSub?.cancel();
     _refreshEndSub?.cancel();
-    _refreshStartSub = AppEventBus().onName(AppEventBus.bookshelfRefreshStart).listen((_) {
-      isBookshelfRefreshing = true;
-      update();
-    });
-    _refreshEndSub = AppEventBus().onName(AppEventBus.bookshelfRefreshEnd).listen((_) {
-      isBookshelfRefreshing = false;
-      update();
-    });
+    _refreshStartSub = AppEventBus()
+        .onName(AppEventBus.bookshelfRefreshStart)
+        .listen((_) {
+          isBookshelfRefreshing = true;
+          update();
+        });
+    _refreshEndSub = AppEventBus()
+        .onName(AppEventBus.bookshelfRefreshEnd)
+        .listen((_) {
+          isBookshelfRefreshing = false;
+          update();
+        });
   }
 
   void disposeScheduler() {
@@ -65,7 +69,7 @@ mixin DownloadScheduler on DownloadBase {
       startChapterIndex: chapters.first.index,
       endChapterIndex: chapters.last.index,
       totalCount: chapters.length,
-      status: 0,
+      status: DownloadTask.statusWaiting,
       lastUpdateTime: DateTime.now().millisecondsSinceEpoch,
     );
     await downloadDao.upsert(task);
@@ -89,10 +93,18 @@ mixin DownloadScheduler on DownloadBase {
     try {
       isDownloading = true;
       update();
-      while (tasks.any((t) => t.status == 0 || t.status == 1)) {
-        final activeTasks = tasks.where((t) => t.status == 1).toList();
+      while (tasks.any((t) => t.isWaiting || t.isDownloading)) {
+        final activeTasks =
+            tasks
+                .where(
+                  (t) => t.isDownloading || activeTaskUrls.contains(t.bookUrl),
+                )
+                .toList();
         if (activeTasks.length < maxConcurrent) {
-          final nextTask = tasks.cast<DownloadTask?>().firstWhere((t) => t?.status == 0, orElse: () => null);
+          final nextTask = tasks.cast<DownloadTask?>().firstWhere((t) {
+            if (t == null || !t.isWaiting) return false;
+            return !activeTaskUrls.contains(t.bookUrl);
+          }, orElse: () => null);
           if (nextTask != null) {
             processTask(nextTask);
           } else if (activeTasks.isEmpty) {
@@ -108,4 +120,3 @@ mixin DownloadScheduler on DownloadBase {
     }
   }
 }
-

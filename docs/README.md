@@ -21,6 +21,8 @@
   - A 系列啟動與主入口功能驗證手冊；包含功能表、手動驗證步驟、故障定位與已移除項目。
 - [c_search_discovery_validation.md](c_search_discovery_validation.md)
   - C 系列搜尋與發現功能驗證手冊；包含功能表、驗證步驟、相關檔案與常見故障定位。
+- [h_background_download_validation.md](h_background_download_validation.md)
+  - H 系列背景與下載功能驗證手冊；包含功能表、驗證步驟、相關檔案與常見故障定位。
 - [reader_runtime.md](reader_runtime.md)
   - 閱讀器目前真正接線的 runtime、內容載入、分頁、viewport、進度與 TTS。
 - [reader_spec.md](reader_spec.md)
@@ -38,7 +40,8 @@
 4. [app_user_flows.md](app_user_flows.md)
 5. [a_startup_validation.md](a_startup_validation.md)
 6. [c_search_discovery_validation.md](c_search_discovery_validation.md)
-7. [DATABASE.md](DATABASE.md)
-8. [reader_runtime.md](reader_runtime.md)
-9. [reader_spec.md](reader_spec.md)
-10. [release.md](release.md)
+7. [h_background_download_validation.md](h_background_download_validation.md)
+8. [DATABASE.md](DATABASE.md)
+9. [reader_runtime.md](reader_runtime.md)
+10. [reader_spec.md](reader_spec.md)
+11. [release.md](release.md)

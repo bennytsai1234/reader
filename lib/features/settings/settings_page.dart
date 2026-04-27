@@ -7,6 +7,7 @@ import 'package:inkpage_reader/features/replace_rule/replace_rule_page.dart';
 import 'package:inkpage_reader/features/dict/dict_rule_page.dart';
 import 'package:inkpage_reader/features/read_record/read_record_page.dart';
 import 'package:inkpage_reader/features/bookmark/bookmark_page.dart';
+import 'package:inkpage_reader/features/cache_manager/download_manager_page.dart';
 import 'package:inkpage_reader/features/txt_toc_rule/txt_toc_rule_page.dart';
 import 'appearance_settings_page.dart';
 import 'reading_settings_page.dart';
@@ -150,6 +151,19 @@ class SettingsPage extends StatelessWidget {
                     () => Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const ReadRecordPage()),
+                    ),
+              ),
+              _buildListTile(
+                context,
+                icon: Icons.download_for_offline_outlined,
+                title: '背景下載佇列',
+                summary: '查看、暫停、重試與刪除下載任務',
+                onTap:
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const DownloadManagerPage(),
+                      ),
                     ),
               ),
               _buildListTile(

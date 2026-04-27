@@ -107,4 +107,46 @@ void main() {
       );
     });
   });
+
+  group('download failure details', () {
+    test('classifies common failure reasons', () {
+      expect(classifyDownloadFailureReason('SocketException: timeout'), '網路錯誤');
+      expect(classifyDownloadFailureReason('加載章節失敗: 找不到書源'), '書源失效');
+      expect(classifyDownloadFailureReason('章節內容為空 (可能解析規則有誤)'), '正文解析失敗');
+      expect(classifyDownloadFailureReason('HTTP 404 not found'), '章節不存在');
+      expect(classifyDownloadFailureReason('permission denied'), '權限問題');
+      expect(
+        classifyDownloadFailureReason('No space left on device'),
+        '儲存空間不足',
+      );
+    });
+
+    test(
+      'DownloadTask stores readable failure summary without persistence schema changes',
+      () {
+        final task = DownloadTask(
+          bookUrl: 'book',
+          bookName: 'Book',
+          startChapterIndex: 0,
+          endChapterIndex: 2,
+          totalCount: 3,
+        );
+
+        task
+          ..errorCount = 1
+          ..setFailure(
+            reason: '正文解析失敗',
+            message: '章節內容為空 (可能解析規則有誤)',
+            chapterIndex: 1,
+          );
+
+        expect(task.hasFailures, isTrue);
+        expect(task.failureSummary, '正文解析失敗，第 2 章：章節內容為空 (可能解析規則有誤)');
+
+        task.clearFailure();
+        task.errorCount = 0;
+        expect(task.failureSummary, isNull);
+      },
+    );
+  });
 }

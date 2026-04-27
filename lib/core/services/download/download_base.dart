@@ -25,6 +25,7 @@ abstract class DownloadBase extends ChangeNotifier {
   Completer<void>? pauseCompleter;
   bool isScheduling = false;
   bool isBookshelfRefreshing = false;
+  final Set<String> activeTaskUrls = <String>{};
 
   final int maxConcurrent = 3;
   final int maxChapterConcurrent = 5;

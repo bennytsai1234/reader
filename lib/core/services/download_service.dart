@@ -22,11 +22,18 @@ class DownloadService extends DownloadBase
 
   /// 從資料庫恢復任務
   Future<void> _loadTasks() async {
-    final unfinished = await downloadDao.getUnfinishedTasks();
+    final storedTasks = await downloadDao.getAll();
+    for (final task in storedTasks.where((task) => task.isDownloading)) {
+      task.status = DownloadTask.statusWaiting;
+      await downloadDao.updateProgress(
+        task.bookUrl,
+        status: DownloadTask.statusWaiting,
+      );
+    }
     tasks.clear();
-    tasks.addAll(unfinished);
+    tasks.addAll(storedTasks);
     update();
-    if (tasks.isNotEmpty && !isDownloading) {
+    if (tasks.any((t) => t.isWaiting || t.isDownloading) && !isDownloading) {
       startDownloads();
     }
   }
@@ -37,24 +44,86 @@ class DownloadService extends DownloadBase
       orElse: () => null,
     );
     if (task != null) {
-      task.status = 2;
-      downloadDao.updateProgress(bookUrl, status: 2);
+      task.status = DownloadTask.statusPaused;
+      downloadDao.updateProgress(bookUrl, status: DownloadTask.statusPaused);
       update();
     }
   }
 
+  void resumeTask(String bookUrl) {
+    final task = tasks.cast<DownloadTask?>().firstWhere(
+      (t) => t?.bookUrl == bookUrl,
+      orElse: () => null,
+    );
+    if (task == null) return;
+
+    if (isPaused) {
+      isPaused = false;
+      pauseCompleter?.complete();
+      pauseCompleter = null;
+    }
+    task.status = DownloadTask.statusWaiting;
+    downloadDao.updateProgress(bookUrl, status: DownloadTask.statusWaiting);
+    update();
+    if (!isDownloading) {
+      startDownloads();
+    }
+  }
+
+  void retryTask(String bookUrl) {
+    final task = tasks.cast<DownloadTask?>().firstWhere(
+      (t) => t?.bookUrl == bookUrl,
+      orElse: () => null,
+    );
+    if (task == null) return;
+
+    task
+      ..status = DownloadTask.statusWaiting
+      ..currentChapterIndex = task.startChapterIndex
+      ..successCount = 0
+      ..errorCount = 0
+      ..clearFailure();
+    downloadDao.updateProgress(
+      bookUrl,
+      status: DownloadTask.statusWaiting,
+      currentChapterIndex: task.startChapterIndex,
+      successCount: 0,
+      errorCount: 0,
+    );
+    update();
+    if (!isDownloading) {
+      startDownloads();
+    }
+  }
+
   void removeTask(String bookUrl) {
+    for (final task in tasks.where((t) => t.bookUrl == bookUrl)) {
+      task.status = DownloadTask.statusPaused;
+    }
     tasks.removeWhere((t) => t.bookUrl == bookUrl);
     downloadDao.deleteByUrl(bookUrl);
+    update();
+  }
+
+  void moveTask(String bookUrl, int delta) {
+    final current = tasks.indexWhere((t) => t.bookUrl == bookUrl);
+    if (current < 0) return;
+    final next = current + delta;
+    if (next < 0 || next >= tasks.length) return;
+    final task = tasks.removeAt(current);
+    tasks.insert(next, task);
     update();
   }
 
   void cancelDownloads() {
     isDownloading = false;
     for (var task in tasks) {
-      if (task.status == 0 || task.status == 1) {
-        task.status = 2;
-        downloadDao.updateProgress(task.bookUrl, status: 2);
+      if (task.isWaiting || task.isDownloading) {
+        task.status = DownloadTask.statusPaused;
+        downloadDao.updateProgress(
+          task.bookUrl,
+          status: DownloadTask.statusPaused,
+        );
       }
     }
     update();

@@ -148,6 +148,7 @@ class BookDetailPage extends StatelessWidget {
               (ctx) => [
                 const PopupMenuItem(value: 'change_cover', child: Text('換封面')),
                 const PopupMenuItem(value: 'export', child: Text('匯出全書')),
+                const PopupMenuItem(value: 'download', child: Text('預下載章節')),
                 const PopupMenuItem(
                   value: 'clear_content',
                   child: Text('移除本書正文'),
@@ -166,6 +167,8 @@ class BookDetailPage extends StatelessWidget {
   ) {
     if (val == 'export') {
       ExportBookService().exportToTxt(provider.book);
+    } else if (val == 'download') {
+      _showDownloadSheet(context, provider);
     } else if (val == 'clear_content') {
       provider.clearStoredContent();
       ScaffoldMessenger.of(
@@ -176,6 +179,147 @@ class BookDetailPage extends StatelessWidget {
     } else if (val == 'change_cover') {
       _showChangeCoverSheet(context, provider);
     }
+  }
+
+  void _showDownloadSheet(BuildContext context, BookDetailProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (sheetContext) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.playlist_add_outlined),
+                  title: const Text('從目前章節起下載到結尾'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _queueDownload(
+                      context,
+                      provider.queueDownloadFromCurrent(),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.looks_one_outlined),
+                  title: const Text('從目前章節起下載後 10 章'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _queueDownload(context, provider.queueDownloadNext(10));
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.filter_5_outlined),
+                  title: const Text('從目前章節起下載後 50 章'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _queueDownload(context, provider.queueDownloadNext(50));
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.library_books_outlined),
+                  title: const Text('下載全書'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _queueDownload(context, provider.queueDownloadAll());
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.download_done_outlined),
+                  title: const Text('下載全部未下載章節'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _queueDownload(context, provider.queueDownloadMissing());
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.tune_outlined),
+                  title: const Text('指定章節範圍'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showDownloadRangeDialog(context, provider);
+                  },
+                ),
+              ],
+            ),
+          ),
+    );
+  }
+
+  Future<void> _queueDownload(
+    BuildContext context,
+    Future<StorageDownloadQueueResult> task,
+  ) async {
+    final result = await task;
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  void _showDownloadRangeDialog(
+    BuildContext context,
+    BookDetailProvider provider,
+  ) {
+    final start = TextEditingController(
+      text: '${provider.book.chapterIndex + 1}',
+    );
+    final end = TextEditingController(text: '${provider.totalChapterCount}');
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('指定下載範圍'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: start,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: '起始章節序號'),
+                ),
+                TextField(
+                  controller: end,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: '結束章節序號'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final startValue = int.tryParse(start.text.trim());
+                  final endValue = int.tryParse(end.text.trim());
+                  if (startValue == null ||
+                      endValue == null ||
+                      startValue <= 0 ||
+                      endValue < startValue) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(
+                      const SnackBar(content: Text('請輸入有效章節範圍')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                  _queueDownload(
+                    context,
+                    provider.queueDownloadRange(startValue - 1, endValue - 1),
+                  );
+                },
+                child: const Text('加入佇列'),
+              ),
+            ],
+          ),
+    ).whenComplete(() {
+      start.dispose();
+      end.dispose();
+    });
   }
 
   void _showPhotoView(BuildContext context, String url) {

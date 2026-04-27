@@ -1,6 +1,7 @@
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import 'core/di/injection.dart';
+import 'core/services/download_service.dart';
 import 'core/services/tts_service.dart';
 import 'features/bookshelf/bookshelf_provider.dart';
 import 'features/explore/explore_provider.dart';
@@ -22,8 +23,8 @@ class AppProviders {
     ChangeNotifierProvider(create: (_) => FontProvider()),
     ChangeNotifierProvider(create: (_) => ChangeCoverProvider()),
     ChangeNotifierProvider(create: (_) => DictProvider()),
+    ChangeNotifierProvider.value(value: DownloadService()),
     // TTSService 從 getIt 獲取單例，保持全域一致性
     ChangeNotifierProvider.value(value: getIt<TTSService>()),
   ];
 }
-

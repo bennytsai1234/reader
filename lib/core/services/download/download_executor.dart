@@ -16,14 +16,81 @@ bool downloadTaskCountsPreStoredChapters({
   return task.totalCount >= chapterCountInRange;
 }
 
+class DownloadChapterResult {
+  const DownloadChapterResult._({required this.success, this.failureMessage});
+
+  final bool success;
+  final String? failureMessage;
+
+  factory DownloadChapterResult.ready() {
+    return const DownloadChapterResult._(success: true);
+  }
+
+  factory DownloadChapterResult.failed(String message) {
+    return DownloadChapterResult._(
+      success: false,
+      failureMessage: message.isEmpty ? '下載失敗' : message,
+    );
+  }
+}
+
+String classifyDownloadFailureReason(String message) {
+  final text = message.toLowerCase();
+  if (text.contains('permission') ||
+      text.contains('denied') ||
+      message.contains('權限')) {
+    return '權限問題';
+  }
+  if (text.contains('no space') ||
+      text.contains('disk full') ||
+      message.contains('儲存空間不足') ||
+      message.contains('空間不足')) {
+    return '儲存空間不足';
+  }
+  if (message.contains('找不到書源') ||
+      message.contains('書源不存在') ||
+      message.contains('書源失效')) {
+    return '書源失效';
+  }
+  if (message.contains('內容為空') ||
+      message.contains('解析規則') ||
+      message.contains('正文解析')) {
+    return '正文解析失敗';
+  }
+  if (text.contains('404') ||
+      text.contains('not found') ||
+      message.contains('章節不存在')) {
+    return '章節不存在';
+  }
+  if (text.contains('socketexception') ||
+      text.contains('timeoutexception') ||
+      text.contains('timeout') ||
+      text.contains('connection') ||
+      text.contains('dioexception') ||
+      message.contains('網路')) {
+    return '網路錯誤';
+  }
+  return '下載失敗';
+}
+
 /// DownloadService 的任務執行邏輯擴展
 mixin DownloadExecutor on DownloadBase, DownloadScheduler {
   @override
   Future<void> processTask(DownloadTask task) async {
-    task.status = 1;
-    await downloadDao.updateProgress(task.bookUrl, status: 1);
+    activeTaskUrls.add(task.bookUrl);
+    task.status = DownloadTask.statusDownloading;
+    task.successCount = 0;
+    task.errorCount = 0;
+    task.clearFailure();
+    await downloadDao.updateProgress(
+      task.bookUrl,
+      status: DownloadTask.statusDownloading,
+      successCount: 0,
+      errorCount: 0,
+    );
     update();
 
+    var stoppedEarly = false;
     try {
       final book = await bookDao.getByUrl(task.bookUrl);
       if (book == null) {
@@ -79,7 +146,8 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
       );
       var poolCount = 0;
       for (var chapter in toDownload) {
-        if (!isDownloading || task.status == 2) {
+        if (!isDownloading || task.status == DownloadTask.statusPaused) {
+          stoppedEarly = true;
           break;
         }
         await checkPause();
@@ -105,34 +173,63 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
 
         poolCount++;
         _downloadChapter(
-          contentStorage: contentStorage,
-          source: source,
-          chapter: chapter,
-        ).then((success) {
-          if (success) {
-            task.successCount++;
-          } else {
-            task.errorCount++;
-          }
-          poolCount--;
-          task.currentChapterIndex = chapter.index;
-          downloadDao.updateProgress(
-            task.bookUrl,
-            currentChapterIndex: chapter.index,
-            successCount: task.successCount,
-            errorCount: task.errorCount,
-          );
-          update();
-        });
+              contentStorage: contentStorage,
+              source: source,
+              chapter: chapter,
+            )
+            .then((result) {
+              if (result.success) {
+                task.successCount++;
+              } else {
+                task.errorCount++;
+                final message = result.failureMessage ?? '下載失敗';
+                task.setFailure(
+                  reason: classifyDownloadFailureReason(message),
+                  message: message,
+                  chapterIndex: chapter.index,
+                );
+              }
+              poolCount--;
+              task.currentChapterIndex = chapter.index;
+              downloadDao.updateProgress(
+                task.bookUrl,
+                currentChapterIndex: chapter.index,
+                successCount: task.successCount,
+                errorCount: task.errorCount,
+              );
+              update();
+            })
+            .catchError((Object error, StackTrace stack) {
+              AppLog.w('Download chapter failed ${chapter.title}: $error');
+              task.errorCount++;
+              final message = error.toString();
+              task.setFailure(
+                reason: classifyDownloadFailureReason(message),
+                message: message,
+                chapterIndex: chapter.index,
+              );
+              poolCount--;
+              task.currentChapterIndex = chapter.index;
+              downloadDao.updateProgress(
+                task.bookUrl,
+                currentChapterIndex: chapter.index,
+                successCount: task.successCount,
+                errorCount: task.errorCount,
+              );
+              update();
+            });
       }
 
       while (poolCount > 0) {
         await Future.delayed(const Duration(seconds: 1));
       }
 
-      if (task.status != 2) {
-        task.status = 3;
-        await downloadDao.updateProgress(task.bookUrl, status: 3);
+      if (!stoppedEarly && task.status != DownloadTask.statusPaused) {
+        task.status =
+            task.errorCount > 0
+                ? DownloadTask.statusFailed
+                : DownloadTask.statusCompleted;
+        await downloadDao.updateProgress(task.bookUrl, status: task.status);
         AppEventBus().fire(AppEventBus.upBookshelf, data: task.bookUrl);
       }
     } catch (e, stack) {
@@ -141,17 +238,27 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
         error: e,
         stackTrace: stack,
       );
-      if (task.status != 2) {
-        task.status = 4;
-        await downloadDao.updateProgress(task.bookUrl, status: 4);
+      if (task.status != DownloadTask.statusPaused) {
+        final message = e.toString();
+        task.setFailure(
+          reason: classifyDownloadFailureReason(message),
+          message: message,
+        );
+        task.status = DownloadTask.statusFailed;
+        await downloadDao.updateProgress(
+          task.bookUrl,
+          status: DownloadTask.statusFailed,
+        );
       }
+    } finally {
+      activeTaskUrls.remove(task.bookUrl);
     }
     update();
   }
 
   static const int _maxRetries = 3;
 
-  Future<bool> _downloadChapter({
+  Future<DownloadChapterResult> _downloadChapter({
     required ReaderChapterContentStorage contentStorage,
     required BookSource? source,
     required BookChapter chapter,
@@ -163,6 +270,11 @@ mixin DownloadExecutor on DownloadBase, DownloadScheduler {
       forceRefresh: true,
       maxAttempts: _maxRetries,
     );
-    return result.isReady;
+    if (result.isReady) {
+      return DownloadChapterResult.ready();
+    }
+    return DownloadChapterResult.failed(
+      result.failureMessage ?? result.content,
+    );
   }
 }

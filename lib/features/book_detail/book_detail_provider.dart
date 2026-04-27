@@ -209,6 +209,40 @@ class BookDetailProvider extends ChangeNotifier {
     );
   }
 
+  Future<StorageDownloadQueueResult> queueDownloadNext(int count) async {
+    if (count <= 0) {
+      return StorageDownloadQueueResult.blocked('下載章節數必須大於 0');
+    }
+    return _queueStorageDownload(
+      resolveChapters: (_) {
+        final startIndex = book.chapterIndex.clamp(0, _allChapters.length);
+        return _allChapters
+            .where((chapter) => chapter.index >= startIndex)
+            .take(count)
+            .toList();
+      },
+      emptyMessage: '目前進度之後沒有可下載的章節',
+    );
+  }
+
+  Future<StorageDownloadQueueResult> queueDownloadRange(
+    int startIndex,
+    int endIndex,
+  ) async {
+    return _queueStorageDownload(
+      resolveChapters: (_) {
+        if (_allChapters.isEmpty) return <BookChapter>[];
+        final start = startIndex.clamp(0, _allChapters.length - 1);
+        final end = endIndex.clamp(0, _allChapters.length - 1);
+        if (end < start) return <BookChapter>[];
+        return _allChapters
+            .where((chapter) => chapter.index >= start && chapter.index <= end)
+            .toList();
+      },
+      emptyMessage: '指定範圍沒有可下載的章節',
+    );
+  }
+
   Future<StorageDownloadQueueResult> queueDownloadMissing() async {
     return _queueStorageDownload(
       resolveChapters:

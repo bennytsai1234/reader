@@ -30,7 +30,7 @@ class DownloadManagerPage extends StatelessWidget {
             tooltip: '清除已完成',
             onPressed: () {
               // 深度還原：清除已完成的任務
-              for (var task in tasks.where((t) => t.status == 3).toList()) {
+              for (var task in tasks.where((t) => t.isCompleted).toList()) {
                 service.removeTask(task.bookUrl);
               }
             },
@@ -40,14 +40,27 @@ class DownloadManagerPage extends StatelessWidget {
       body:
           tasks.isEmpty
               ? _buildEmptyState(context)
-              : ListView.separated(
-                padding: const EdgeInsets.only(bottom: 24),
-                itemCount: tasks.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final task = tasks[index];
-                  return _buildTaskTile(context, service, task);
-                },
+              : Column(
+                children: [
+                  _buildQueueSummary(context, service, tasks),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      itemCount: tasks.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final task = tasks[index];
+                        return _buildTaskTile(
+                          context,
+                          service,
+                          task,
+                          index,
+                          tasks.length,
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
     );
   }
@@ -78,17 +91,78 @@ class DownloadManagerPage extends StatelessWidget {
     );
   }
 
+  Widget _buildQueueSummary(
+    BuildContext context,
+    DownloadService service,
+    List<DownloadTask> tasks,
+  ) {
+    final waiting = tasks.where((task) => task.isWaiting).length;
+    final running = tasks.where((task) => task.isDownloading).length;
+    final paused = tasks.where((task) => task.isPaused).length;
+    final failed = tasks.where((task) => task.hasFailures).length;
+    final latestUpdate = tasks.fold<int>(
+      0,
+      (latest, task) =>
+          task.lastUpdateTime > latest ? task.lastUpdateTime : latest,
+    );
+
+    return Material(
+      color: Theme.of(
+        context,
+      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _summaryChip(context, '等待', '$waiting'),
+                _summaryChip(context, '下載中', '$running'),
+                _summaryChip(context, '暫停', '$paused'),
+                _summaryChip(context, '失敗', '$failed'),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              service.isBookshelfRefreshing
+                  ? '書架正在檢查更新，下載會等檢查完成後繼續'
+                  : '最近任務更新：${_formatTimestamp(latestUpdate)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryChip(BuildContext context, String label, String value) {
+    return Chip(
+      visualDensity: VisualDensity.compact,
+      label: Text('$label $value'),
+      side: BorderSide(color: Theme.of(context).dividerColor),
+    );
+  }
+
   Widget _buildTaskTile(
     BuildContext context,
     DownloadService service,
     DownloadTask task,
+    int index,
+    int taskCount,
   ) {
+    final rawProgress =
+        task.totalCount <= 0 ? 0.0 : task.successCount / task.totalCount;
     final progress =
-        task.totalCount == 0 ? 0.0 : task.successCount / task.totalCount;
-    final isRunning = task.status == 1;
-    final isPaused = task.status == 2;
-    final isDone = task.status == 3;
-    final isError = task.status == 4;
+        rawProgress < 0
+            ? 0.0
+            : rawProgress > 1
+            ? 1.0
+            : rawProgress;
+    final canRetry = task.isFailed || task.errorCount > 0;
+    final failureSummary = task.failureSummary;
 
     return ListTile(
       title: Text(
@@ -110,43 +184,189 @@ class DownloadManagerPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                isDone
-                    ? '下載完成'
-                    : (isError
-                        ? '下載失敗'
-                        : '${task.successCount} / ${task.totalCount} 章'),
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isError ? Colors.red : Colors.grey,
-                ),
+                _statusText(task),
+                style: TextStyle(fontSize: 11, color: _statusColor(task)),
               ),
-              if (isRunning)
+              if (task.isDownloading)
                 const Text(
                   '正在下載...',
                   style: TextStyle(fontSize: 11, color: Colors.blue),
                 ),
             ],
           ),
+          if (failureSummary != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              failureSummary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ],
         ],
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (!isDone)
+          if (canRetry)
             IconButton(
-              icon: Icon(isPaused ? Icons.play_arrow : Icons.pause, size: 20),
+              icon: const Icon(Icons.refresh, size: 20),
+              tooltip: '重試',
+              onPressed: () => service.retryTask(task.bookUrl),
+            )
+          else if (!task.isCompleted)
+            IconButton(
+              icon: Icon(
+                task.isPaused ? Icons.play_arrow : Icons.pause,
+                size: 20,
+              ),
+              tooltip: task.isPaused ? '繼續' : '暫停',
               onPressed:
                   () =>
-                      isPaused
-                          ? service.startDownloads()
+                      task.isPaused
+                          ? service.resumeTask(task.bookUrl)
                           : service.pauseTask(task.bookUrl),
             ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: () => service.removeTask(task.bookUrl),
+          PopupMenuButton<String>(
+            tooltip: '更多操作',
+            onSelected:
+                (value) =>
+                    _handleTaskMenu(context, service, task, index, value),
+            itemBuilder:
+                (context) => [
+                  PopupMenuItem(
+                    value: 'up',
+                    enabled: index > 0,
+                    child: const ListTile(
+                      leading: Icon(Icons.arrow_upward),
+                      title: Text('上移'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'down',
+                    enabled: index < taskCount - 1,
+                    child: const ListTile(
+                      leading: Icon(Icons.arrow_downward),
+                      title: Text('下移'),
+                    ),
+                  ),
+                  if (failureSummary != null)
+                    const PopupMenuItem(
+                      value: 'details',
+                      child: ListTile(
+                        leading: Icon(Icons.info_outline),
+                        title: Text('查看失敗原因'),
+                      ),
+                    ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                      leading: Icon(Icons.close),
+                      title: Text('刪除任務'),
+                    ),
+                  ),
+                ],
           ),
         ],
       ),
     );
+  }
+
+  void _handleTaskMenu(
+    BuildContext context,
+    DownloadService service,
+    DownloadTask task,
+    int index,
+    String value,
+  ) {
+    switch (value) {
+      case 'up':
+        service.moveTask(task.bookUrl, -1);
+        break;
+      case 'down':
+        service.moveTask(task.bookUrl, 1);
+        break;
+      case 'details':
+        _showFailureDetails(context, task);
+        break;
+      case 'delete':
+        service.removeTask(task.bookUrl);
+        break;
+    }
+  }
+
+  void _showFailureDetails(BuildContext context, DownloadTask task) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('下載失敗原因'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _detailRow('書籍', task.bookName),
+                _detailRow('分類', task.lastErrorReason ?? '下載失敗'),
+                if (task.lastErrorChapterIndex != null)
+                  _detailRow('章節', '第 ${task.lastErrorChapterIndex! + 1} 章'),
+                _detailRow('失敗章節數', '${task.errorCount}'),
+                _detailRow('原因', task.lastErrorMessage ?? '未記錄詳細原因'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('關閉'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 76, child: Text(label)),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  String _statusText(DownloadTask task) {
+    if (task.isCompleted && task.errorCount == 0) {
+      return '下載完成';
+    }
+    if (task.isFailed || task.errorCount > 0) {
+      return '下載失敗 ${task.successCount}/${task.totalCount} 章，失敗 ${task.errorCount} 章';
+    }
+    if (task.isPaused) {
+      return '已暫停 ${task.successCount}/${task.totalCount} 章';
+    }
+    if (task.isWaiting) {
+      return '等待中 ${task.successCount}/${task.totalCount} 章';
+    }
+    return '${task.successCount} / ${task.totalCount} 章';
+  }
+
+  Color _statusColor(DownloadTask task) {
+    if (task.isFailed || task.errorCount > 0) return Colors.red;
+    if (task.isPaused) return Colors.orange;
+    if (task.isCompleted) return Colors.green;
+    return Colors.grey;
+  }
+
+  String _formatTimestamp(int timestamp) {
+    if (timestamp <= 0) return '尚未更新';
+    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
+        '${two(dt.hour)}:${two(dt.minute)}';
   }
 }

@@ -312,6 +312,41 @@ void main() {
       );
     });
 
+    test('queueDownloadFromCurrent 會從目前章節下載到結尾', () async {
+      final downloadService = _FakeDownloadService();
+      final provider = await makeProvider(
+        chapters: _makeChapters(5),
+        source: BookSource(bookSourceUrl: 'origin', bookSourceName: '測試書源'),
+        downloadService: downloadService,
+      );
+      provider.book.chapterIndex = 2;
+
+      final result = await provider.queueDownloadFromCurrent();
+
+      expect(result.queuedChapterCount, 3);
+      expect(
+        downloadService.queuedChapters.map((chapter) => chapter.index).toList(),
+        <int>[2, 3, 4],
+      );
+    });
+
+    test('queueDownloadRange 會加入指定章節範圍', () async {
+      final downloadService = _FakeDownloadService();
+      final provider = await makeProvider(
+        chapters: _makeChapters(5),
+        source: BookSource(bookSourceUrl: 'origin', bookSourceName: '測試書源'),
+        downloadService: downloadService,
+      );
+
+      final result = await provider.queueDownloadRange(1, 3);
+
+      expect(result.queuedChapterCount, 3);
+      expect(
+        downloadService.queuedChapters.map((chapter) => chapter.index).toList(),
+        <int>[1, 2, 3],
+      );
+    });
+
     test('queueDownloadAll 會在缺少書源時阻擋背景下載', () async {
       final downloadService = _FakeDownloadService();
       final provider = await makeProvider(
