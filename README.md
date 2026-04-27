@@ -138,6 +138,7 @@ Release：
 - [docs/architecture.md](docs/architecture.md) - 專案架構與資料流
 - [docs/app_flow_architecture.md](docs/app_flow_architecture.md) - 整個 app 的流程圖與架構圖
 - [docs/app_user_flows.md](docs/app_user_flows.md) - 使用者操作流程圖
+- [docs/a_startup_validation.md](docs/a_startup_validation.md) - A 系列啟動與主入口功能驗證手冊
 - [docs/DATABASE.md](docs/DATABASE.md) - Drift schema version 1 與資料表
 - [docs/reader_runtime.md](docs/reader_runtime.md) - 閱讀器 runtime 主線
 - [docs/reader_spec.md](docs/reader_spec.md) - 閱讀器可驗證規格
