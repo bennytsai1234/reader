@@ -14,6 +14,7 @@ class BookInfoHeader extends StatelessWidget {
   final void Function(BuildContext, Book, ReaderOpenTarget, List<BookChapter>)
   navigateToReader;
   final Function(BuildContext, BookDetailProvider) showChangeSource;
+  final Future<void> Function(BuildContext, BookDetailProvider) toggleBookshelf;
 
   const BookInfoHeader({
     super.key,
@@ -24,6 +25,7 @@ class BookInfoHeader extends StatelessWidget {
     required this.showSourceOptions,
     required this.navigateToReader,
     required this.showChangeSource,
+    required this.toggleBookshelf,
   });
 
   @override
@@ -97,6 +99,11 @@ class BookInfoHeader extends StatelessWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _SourceStatusChip(provider: provider),
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -121,7 +128,7 @@ class BookInfoHeader extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: provider.toggleInBookshelf,
+                          onPressed: () => toggleBookshelf(context, provider),
                           style: actionButtonStyle,
                           icon: Icon(
                             provider.isInBookshelf
@@ -154,6 +161,38 @@ class BookInfoHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SourceStatusChip extends StatelessWidget {
+  const _SourceStatusChip({required this.provider});
+
+  final BookDetailProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final healthy = provider.sourceStatusIsHealthy;
+    final color = healthy ? Colors.green : Colors.orange;
+    final foreground = healthy ? Colors.green.shade700 : Colors.orange.shade700;
+    return Tooltip(
+      message: provider.sourceStatusDescription,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Text(
+          provider.sourceStatusLabel,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }

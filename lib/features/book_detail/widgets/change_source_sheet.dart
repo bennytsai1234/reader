@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/features/book_detail/book_detail_provider.dart';
 import 'package:inkpage_reader/features/reader/source/change_source_provider.dart';
+import 'package:inkpage_reader/features/reader/widgets/change_source_filter_bar.dart';
 import 'package:inkpage_reader/features/reader/widgets/change_source_item.dart';
 
 class ChangeSourceSheet extends StatelessWidget {
@@ -27,7 +28,7 @@ class ChangeSourceSheet extends StatelessWidget {
   }
 }
 
-class _ChangeSourceContent extends StatelessWidget {
+class _ChangeSourceContent extends StatefulWidget {
   final Book originalBook;
   final BookDetailProvider detailProvider;
 
@@ -37,11 +38,24 @@ class _ChangeSourceContent extends StatelessWidget {
   });
 
   @override
+  State<_ChangeSourceContent> createState() => _ChangeSourceContentState();
+}
+
+class _ChangeSourceContentState extends State<_ChangeSourceContent> {
+  final TextEditingController _filterController = TextEditingController();
+
+  @override
+  void dispose() {
+    _filterController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final provider = context.watch<ChangeSourceProvider>();
     final sources =
         provider.filteredResults
-            .where((result) => result.name == originalBook.name)
+            .where((result) => result.name == widget.originalBook.name)
             .toList();
 
     return Container(
@@ -54,6 +68,10 @@ class _ChangeSourceContent extends StatelessWidget {
         children: [
           _buildHeader(provider),
           const Divider(height: 1),
+          ChangeSourceFilterBar(
+            provider: provider,
+            filterController: _filterController,
+          ),
           if (provider.isSearching) const LinearProgressIndicator(minHeight: 2),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -88,13 +106,19 @@ class _ChangeSourceContent extends StatelessWidget {
                         final result = sources[i];
                         return ChangeSourceItem(
                           searchBook: result,
-                          isCurrent: result.origin == originalBook.origin,
+                          isCurrent:
+                              result.origin == widget.originalBook.origin,
                           onTap:
-                              result.origin == originalBook.origin
+                              result.origin == widget.originalBook.origin
                                   ? null
                                   : () async {
-                                    await detailProvider.changeSource(result);
-                                    if (context.mounted) Navigator.pop(context);
+                                    final outcome = await widget.detailProvider
+                                        .changeSource(result);
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(outcome.message)),
+                                    );
+                                    if (outcome.success) Navigator.pop(context);
                                   },
                         );
                       },

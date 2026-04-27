@@ -71,6 +71,7 @@ void main() {
               showSourceOptions: (_, __) {},
               navigateToReader: (_, __, ___, ____) {},
               showChangeSource: (_, __) {},
+              toggleBookshelf: (_, __) async {},
             ),
           ),
         ),
@@ -112,6 +113,7 @@ void main() {
               showSourceOptions: (_, __) {},
               navigateToReader: (_, __, ___, ____) {},
               showChangeSource: (_, __) {},
+              toggleBookshelf: (_, __) async {},
             ),
           ),
         ),
@@ -152,6 +154,7 @@ void main() {
               receivedTarget = target;
             },
             showChangeSource: (_, __) {},
+            toggleBookshelf: (_, __) async {},
           ),
         ),
       ),

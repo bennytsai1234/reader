@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,7 @@ import 'package:inkpage_reader/core/models/search_book.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/services/export_book_service.dart';
+import 'package:inkpage_reader/core/storage/storage_metrics.dart';
 import 'package:inkpage_reader/features/source_manager/source_editor_page.dart';
 import 'package:inkpage_reader/features/source_manager/source_debug_page.dart';
 import 'package:inkpage_reader/features/reader/reader_page.dart';
@@ -19,7 +21,7 @@ import 'widgets/book_info_intro.dart';
 import 'widgets/book_info_toc_bar.dart';
 import 'widgets/change_source_sheet.dart';
 
-class BookDetailPage extends StatelessWidget {
+class BookDetailPage extends StatefulWidget {
   final Book? book;
   final AggregatedSearchBook? searchBook;
 
@@ -27,11 +29,25 @@ class BookDetailPage extends StatelessWidget {
     : assert(book != null || searchBook != null);
 
   @override
+  State<BookDetailPage> createState() => _BookDetailPageState();
+}
+
+class _BookDetailPageState extends State<BookDetailPage> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create:
           (_) => BookDetailProvider(
-            searchBook ?? AggregatedSearchBook(book: book!, sources: []),
+            widget.searchBook ??
+                AggregatedSearchBook(book: widget.book!, sources: []),
           ),
       child: Consumer<BookDetailProvider>(
         builder: (context, provider, child) {
@@ -42,6 +58,7 @@ class BookDetailPage extends StatelessWidget {
                 provider.isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : CustomScrollView(
+                      controller: _scrollController,
                       slivers: [
                         if ((provider.sourceIssueMessage ?? '').isNotEmpty)
                           SliverToBoxAdapter(
@@ -88,25 +105,45 @@ class BookDetailPage extends StatelessWidget {
                             showSourceOptions: _showSourceOptions,
                             navigateToReader: _navigateToReader,
                             showChangeSource: _showChangeSourceDialog,
+                            toggleBookshelf: _handleBookshelfToggle,
                           ),
                         ),
                         SliverToBoxAdapter(
                           child: BookInfoIntro(book: currentBook),
                         ),
+                        SliverToBoxAdapter(
+                          child: _buildCacheStatusPanel(context, provider),
+                        ),
                         BookInfoTocBar(
                           provider: provider,
                           onSearch:
                               () => _showSearchTocDialog(context, provider),
+                          onLocateCurrent:
+                              () => _locateCurrentChapter(context, provider),
                         ),
                         SliverList(
                           delegate: SliverChildBuilderDelegate((ctx, i) {
                             final chapter = provider.filteredChapters[i];
+                            final isCurrent =
+                                chapter.index == currentBook.chapterIndex;
                             return ListTile(
+                              selected: isCurrent,
+                              leading:
+                                  isCurrent
+                                      ? const Icon(Icons.my_location, size: 18)
+                                      : null,
                               title: Text(
                                 chapter.title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
+                              trailing:
+                                  isCurrent
+                                      ? const Text(
+                                        '目前',
+                                        style: TextStyle(fontSize: 12),
+                                      )
+                                      : null,
                               onTap:
                                   () => _navigateToReader(
                                     context,
@@ -140,15 +177,18 @@ class BookDetailPage extends StatelessWidget {
                 ? Icons.library_add_check
                 : Icons.library_add,
           ),
-          onPressed: provider.toggleInBookshelf,
+          onPressed: () => _handleBookshelfToggle(context, provider),
+          tooltip: provider.isInBookshelf ? '移出書架' : '加入書架',
         ),
         PopupMenuButton<String>(
           onSelected: (v) => _handleMenuSelection(context, provider, v),
           itemBuilder:
               (ctx) => [
+                const PopupMenuItem(value: 'check_update', child: Text('檢查更新')),
+                const PopupMenuItem(value: 'download', child: Text('預下載章節')),
+                const PopupMenuItem(value: 'cache', child: Text('快取狀態 / 清理')),
                 const PopupMenuItem(value: 'change_cover', child: Text('換封面')),
                 const PopupMenuItem(value: 'export', child: Text('匯出全書')),
-                const PopupMenuItem(value: 'download', child: Text('預下載章節')),
                 const PopupMenuItem(
                   value: 'clear_content',
                   child: Text('移除本書正文'),
@@ -160,25 +200,421 @@ class BookDetailPage extends StatelessWidget {
     );
   }
 
-  void _handleMenuSelection(
+  Future<void> _handleMenuSelection(
     BuildContext context,
     BookDetailProvider provider,
     String val,
-  ) {
-    if (val == 'export') {
-      ExportBookService().exportToTxt(provider.book);
+  ) async {
+    if (val == 'check_update') {
+      await _handleCheckUpdate(context, provider);
     } else if (val == 'download') {
       _showDownloadSheet(context, provider);
+    } else if (val == 'cache') {
+      _showCacheDialog(context, provider);
+    } else if (val == 'export') {
+      await _handleExport(context, provider);
     } else if (val == 'clear_content') {
-      provider.clearStoredContent();
-      ScaffoldMessenger.of(
+      await _clearBookCache(
         context,
-      ).showSnackBar(const SnackBar(content: Text('已移除本書正文儲存')));
+        provider,
+        BookDetailCacheClearTarget.content,
+      );
     } else if (val == 'edit') {
       _showEditBookInfoDialog(context, provider);
     } else if (val == 'change_cover') {
       _showChangeCoverSheet(context, provider);
     }
+  }
+
+  Widget _buildCacheStatusPanel(
+    BuildContext context,
+    BookDetailProvider provider,
+  ) {
+    final status = provider.cacheStatus;
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.35,
+          ),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.4)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.storage_rounded, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    '本書快取',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon:
+                        provider.isCacheStatusLoading
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : const Icon(Icons.refresh, size: 18),
+                    tooltip: '重新整理快取狀態',
+                    onPressed:
+                        provider.isCacheStatusLoading
+                            ? null
+                            : provider.refreshCacheStatus,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.cleaning_services_rounded, size: 18),
+                    tooltip: '清理快取',
+                    onPressed: () => _showCacheDialog(context, provider),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _statusPill(
+                    context,
+                    '正文',
+                    '${status.storedChapterCount}/${status.totalChapterCount} 章',
+                  ),
+                  _statusPill(
+                    context,
+                    '正文大小',
+                    StorageMetrics.formatBytes(status.contentBytes),
+                  ),
+                  _statusPill(
+                    context,
+                    '封面',
+                    StorageMetrics.formatBytes(status.coverBytes),
+                  ),
+                  _statusPill(
+                    context,
+                    '最近快取',
+                    _formatTimestamp(status.latestContentUpdatedAt),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statusPill(BuildContext context, String label, String value) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.35)),
+      ),
+      child: Text('$label：$value', style: theme.textTheme.labelMedium),
+    );
+  }
+
+  Future<void> _handleBookshelfToggle(
+    BuildContext context,
+    BookDetailProvider provider,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (provider.isInBookshelf) {
+      final confirmed = await _confirmAction(
+        context,
+        title: '移出書架',
+        message: '這本書會從書架移出，已快取正文不會被刪除。',
+        confirmText: '移出',
+      );
+      if (!confirmed || !context.mounted) return;
+      final result = await provider.setInBookshelf(false);
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(result.message),
+          action:
+              result.success
+                  ? SnackBarAction(
+                    label: '撤銷',
+                    onPressed: () => provider.setInBookshelf(true),
+                  )
+                  : null,
+        ),
+      );
+      return;
+    }
+
+    final result = await provider.setInBookshelf(true);
+    if (!context.mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<void> _handleCheckUpdate(
+    BuildContext context,
+    BookDetailProvider provider,
+  ) async {
+    final result = await provider.checkForUpdates();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<void> _handleExport(
+    BuildContext context,
+    BookDetailProvider provider,
+  ) async {
+    if (provider.totalChapterCount == 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('沒有可匯出的章節')));
+      return;
+    }
+    await provider.refreshCacheStatus();
+    if (!context.mounted) return;
+    final status = provider.cacheStatus;
+    var fetchMissingRemote = false;
+    if (!provider.book.isLocal && status.missingChapterCount > 0) {
+      final decision = await showDialog<String>(
+        context: context,
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('匯出可能不完整'),
+              content: Text(
+                '目前只快取 ${status.storedChapterCount}/${status.totalChapterCount} 章，'
+                '仍缺 ${status.missingChapterCount} 章正文。',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'cancel'),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'download'),
+                  child: const Text('先下載缺失章節'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'cached'),
+                  child: const Text('只匯出已快取'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, 'export'),
+                  child: const Text('補抓並匯出'),
+                ),
+              ],
+            ),
+      );
+      if (!context.mounted || decision == null || decision == 'cancel') return;
+      if (decision == 'download') {
+        final result = await provider.queueDownloadMissing();
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message)));
+        return;
+      }
+      fetchMissingRemote = decision == 'export';
+    }
+
+    try {
+      await ExportBookService().exportToTxt(
+        provider.book,
+        fetchMissingRemote: fetchMissingRemote,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已建立匯出檔案')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('匯出失敗: $e')));
+    }
+  }
+
+  Future<void> _clearBookCache(
+    BuildContext context,
+    BookDetailProvider provider,
+    BookDetailCacheClearTarget target,
+  ) async {
+    final label = switch (target) {
+      BookDetailCacheClearTarget.content => '正文快取',
+      BookDetailCacheClearTarget.cover => '封面快取',
+      BookDetailCacheClearTarget.all => '全部快取',
+    };
+    final confirmed = await _confirmAction(
+      context,
+      title: '清除$label',
+      message: '此操作會刪除本書的$label，需要時可重新下載。',
+      confirmText: '清除',
+    );
+    if (!confirmed || !context.mounted) return;
+    final result = await provider.clearBookCache(target);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<bool> _confirmAction(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required String confirmText,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(confirmText),
+              ),
+            ],
+          ),
+    );
+    return confirmed ?? false;
+  }
+
+  void _showCacheDialog(BuildContext context, BookDetailProvider provider) {
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('本書快取'),
+            content: Consumer<BookDetailProvider>(
+              builder: (context, p, _) {
+                final status = p.cacheStatus;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _dialogInfoRow(
+                      context,
+                      '已快取章節',
+                      '${status.storedChapterCount}/${status.totalChapterCount}',
+                    ),
+                    _dialogInfoRow(
+                      context,
+                      '正文大小',
+                      StorageMetrics.formatBytes(status.contentBytes),
+                    ),
+                    _dialogInfoRow(
+                      context,
+                      '封面快取',
+                      StorageMetrics.formatBytes(status.coverBytes),
+                    ),
+                    _dialogInfoRow(
+                      context,
+                      '總大小',
+                      StorageMetrics.formatBytes(status.totalBytes),
+                    ),
+                    _dialogInfoRow(
+                      context,
+                      '最近快取',
+                      _formatTimestamp(status.latestContentUpdatedAt),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.article_outlined),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _clearBookCache(
+                            context,
+                            provider,
+                            BookDetailCacheClearTarget.content,
+                          );
+                        },
+                        label: const Text('清除正文快取'),
+                      ),
+                    ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.image_outlined),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _clearBookCache(
+                            context,
+                            provider,
+                            BookDetailCacheClearTarget.cover,
+                          );
+                        },
+                        label: const Text('清除封面快取'),
+                      ),
+                    ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _clearBookCache(
+                            context,
+                            provider,
+                            BookDetailCacheClearTarget.all,
+                          );
+                        },
+                        label: const Text('清除全部快取'),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: provider.refreshCacheStatus,
+                child: const Text('重新整理'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('關閉'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _dialogInfoRow(BuildContext context, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          SizedBox(width: 88, child: Text(label)),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showDownloadSheet(BuildContext context, BookDetailProvider provider) {
@@ -301,9 +737,7 @@ class BookDetailPage extends StatelessWidget {
                       endValue < startValue) {
                     ScaffoldMessenger.of(
                       context,
-                    ).showSnackBar(
-                      const SnackBar(content: Text('請輸入有效章節範圍')),
-                    );
+                    ).showSnackBar(const SnackBar(content: Text('請輸入有效章節範圍')));
                     return;
                   }
                   Navigator.pop(ctx);
@@ -320,6 +754,38 @@ class BookDetailPage extends StatelessWidget {
       start.dispose();
       end.dispose();
     });
+  }
+
+  void _locateCurrentChapter(
+    BuildContext context,
+    BookDetailProvider provider,
+  ) {
+    provider.resetTocViewForCurrentChapter();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients || !context.mounted) return;
+      final index = provider.displayIndexForChapter(provider.book.chapterIndex);
+      if (index < 0) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('目前閱讀章節不在目錄中')));
+        return;
+      }
+      final offset = 360.0 + index * 56.0;
+      final maxOffset = _scrollController.position.maxScrollExtent;
+      _scrollController.animateTo(
+        math.min(offset, maxOffset),
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  String _formatTimestamp(int timestamp) {
+    if (timestamp <= 0) return '尚未快取';
+    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
+        '${two(dt.hour)}:${two(dt.minute)}';
   }
 
   void _showPhotoView(BuildContext context, String url) {
@@ -356,6 +822,17 @@ class BookDetailPage extends StatelessWidget {
       builder:
           (ctx) => AlertDialog(
             title: Text(b.originName),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('狀態：${provider.sourceStatusLabel}'),
+                const SizedBox(height: 8),
+                Text(provider.sourceStatusDescription),
+                const SizedBox(height: 8),
+                Text(b.origin, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
             actions: [
               TextButton(
                 onPressed: () {
@@ -443,7 +920,11 @@ class BookDetailPage extends StatelessWidget {
     final n = TextEditingController(text: p.book.name),
         a = TextEditingController(text: p.book.author),
         i = TextEditingController(text: p.book.intro),
-        c = TextEditingController(text: p.book.coverUrl);
+        c = TextEditingController(text: p.book.coverUrl),
+        k = TextEditingController(text: p.book.kind ?? ''),
+        tag = TextEditingController(text: p.book.customTag ?? ''),
+        sourceName = TextEditingController(text: p.book.originName),
+        toc = TextEditingController(text: p.book.tocUrl);
     showDialog(
       context: context,
       builder:
@@ -466,6 +947,22 @@ class BookDetailPage extends StatelessWidget {
                     decoration: const InputDecoration(labelText: '封面'),
                   ),
                   TextField(
+                    controller: k,
+                    decoration: const InputDecoration(labelText: '分類'),
+                  ),
+                  TextField(
+                    controller: tag,
+                    decoration: const InputDecoration(labelText: '自訂標籤'),
+                  ),
+                  TextField(
+                    controller: sourceName,
+                    decoration: const InputDecoration(labelText: '來源名稱'),
+                  ),
+                  TextField(
+                    controller: toc,
+                    decoration: const InputDecoration(labelText: '目錄 URL'),
+                  ),
+                  TextField(
                     controller: i,
                     decoration: const InputDecoration(labelText: '簡介'),
                     maxLines: 3,
@@ -480,14 +977,32 @@ class BookDetailPage extends StatelessWidget {
               ),
               ElevatedButton(
                 onPressed: () {
-                  p.updateBookInfo(n.text, a.text, i.text, c.text);
+                  p.updateBookInfo(
+                    n.text,
+                    a.text,
+                    i.text,
+                    c.text,
+                    kind: k.text,
+                    customTag: tag.text,
+                    originName: sourceName.text,
+                    tocUrl: toc.text,
+                  );
                   Navigator.pop(ctx);
                 },
                 child: const Text('儲存'),
               ),
             ],
           ),
-    );
+    ).whenComplete(() {
+      n.dispose();
+      a.dispose();
+      i.dispose();
+      c.dispose();
+      k.dispose();
+      tag.dispose();
+      sourceName.dispose();
+      toc.dispose();
+    });
   }
 
   void _showChangeCoverSheet(BuildContext context, BookDetailProvider p) =>

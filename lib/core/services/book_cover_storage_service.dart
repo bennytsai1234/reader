@@ -65,6 +65,11 @@ class BookCoverStorageService {
     book.customCoverLocalPath = null;
   }
 
+  Future<int> getBookAssetSize(Book book) async {
+    final dir = await AppStoragePaths.bookAssetDir(bookStorageKey(book));
+    return StorageMetrics.directorySize(dir);
+  }
+
   Future<int> getTotalCoverAssetSize() async {
     final dir = await AppStoragePaths.bookAssetsDir();
     return StorageMetrics.directorySize(dir);

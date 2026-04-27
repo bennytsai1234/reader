@@ -42,6 +42,11 @@ class _FakeChapterDao extends Fake implements ChapterDao {
     if (chapters.isEmpty) return;
     _store[chapters.first.bookUrl] = chapters;
   }
+
+  @override
+  Future<void> deleteByBook(String bookUrl) async {
+    _store.remove(bookUrl);
+  }
 }
 
 class _FakeChapterContentDao extends Fake implements ReaderChapterContentDao {
@@ -60,6 +65,27 @@ class _FakeChapterContentDao extends Fake implements ReaderChapterContentDao {
     required String contentKey,
   }) async {
     return null;
+  }
+
+  @override
+  Future<List<ReaderChapterContentEntry>> getEntriesByBookUrls(
+    Iterable<String> bookUrls,
+  ) async {
+    final urls = bookUrls.toSet();
+    return _storedIndices
+        .map(
+          (index) => ReaderChapterContentEntry(
+            contentKey: 'content_$index',
+            origin: 'origin',
+            bookUrl: urls.isEmpty ? 'http://book.com' : urls.first,
+            chapterUrl: 'chapter_$index',
+            chapterIndex: index,
+            status: ReaderChapterContentStatus.ready,
+            content: 'content $index',
+            updatedAt: 1000 + index,
+          ),
+        )
+        .toList();
   }
 
   @override
@@ -166,6 +192,8 @@ List<BookChapter> _makeChapters(int n) => List.generate(
 // ---------------------------------------------------------------------------
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUp(() {
     GetIt.instance.registerLazySingleton<BookDao>(() => _FakeBookDao());
     GetIt.instance.registerLazySingleton<ChapterDao>(() => _FakeChapterDao());
@@ -194,7 +222,9 @@ void main() {
       service: service ?? _FakeBookSourceService(chapterList: chapters),
       downloadService: downloadService,
     );
-    await Future.delayed(Duration.zero); // 等 _init() async 完成
+    for (var i = 0; i < 20 && p.isLoading; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
     return p;
   }
 
@@ -375,6 +405,58 @@ void main() {
       expect(result.queuedChapterCount, 0);
       expect(result.message, '這本書已經在裝置內，不需要背景下載。');
       expect(downloadService.addDownloadTaskCallCount, 0);
+    });
+
+    test('queueDownloadNext 會從目前章節起加入指定數量章節', () async {
+      final downloadService = _FakeDownloadService();
+      final provider = await makeProvider(
+        chapters: _makeChapters(8),
+        source: BookSource(bookSourceUrl: 'origin', bookSourceName: '測試書源'),
+        downloadService: downloadService,
+      );
+      provider.book.chapterIndex = 3;
+
+      final result = await provider.queueDownloadNext(2);
+
+      expect(result.queuedChapterCount, 2);
+      expect(
+        downloadService.queuedChapters.map((chapter) => chapter.index),
+        <int>[3, 4],
+      );
+    });
+  });
+
+  group('BookDetailProvider - 快取與更新', () {
+    test('cacheStatus 會統計已快取章節，清正文後歸零', () async {
+      final provider = await makeProvider(
+        chapters: _makeChapters(5),
+        storedIndices: <int>{1, 3},
+      );
+
+      expect(provider.cacheStatus.storedChapterCount, 2);
+      expect(provider.cacheStatus.totalChapterCount, 5);
+
+      final result = await provider.clearBookCache(
+        BookDetailCacheClearTarget.content,
+      );
+
+      expect(result.success, isTrue);
+      expect(provider.cacheStatus.storedChapterCount, 0);
+    });
+
+    test('checkForUpdates 會更新章節列表並回報新增章節數', () async {
+      final provider = await makeProvider(
+        chapters: _makeChapters(2),
+        source: BookSource(bookSourceUrl: 'origin', bookSourceName: '測試書源'),
+        service: _FakeBookSourceService(chapterList: _makeChapters(4)),
+      );
+
+      final result = await provider.checkForUpdates();
+
+      expect(result.success, isTrue);
+      expect(result.newChapterCount, 2);
+      expect(provider.totalChapterCount, 4);
+      expect(provider.book.latestChapterTitle, '第 3 章');
     });
   });
 }
