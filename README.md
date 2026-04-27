@@ -1,88 +1,88 @@
 # Inkpage Reader
 
-Inkpage 是一個以 Flutter 實作的中文小說閱讀器。這個 repo 的真實範圍是：
+墨頁 Inkpage 是一個以 Flutter 實作的中文小說閱讀器。這個 repo 目前聚焦在：
 
-- 書架、書籍詳情、搜尋、發現、書源管理、閱讀器、設定
-- 本地書匯入、備份還原、下載任務、TTS 與閱讀輔助
-- Legado 風格的書源能力，但以 Flutter / Dart 結構維護，而不是搬運 Android Runtime
+- 書架、搜尋、發現、書籍詳情、書源管理、閱讀器、設定
+- TXT / EPUB / UMD 本地書匯入
+- 備份還原、下載任務、TTS、替換規則、字典規則
+- Legado 風格書源解析，但以 Flutter / Dart 架構維護
 
-這份 README 只描述目前 `main` 分支的真實狀態，不保留舊規劃稿或歷史 handoff。
+本專案只提供閱讀器程式本體，不提供書籍內容或站點資料。
 
 ## 當前狀態
 
-- 應用版本：`0.2.16+31`
-- 發版 tag：`v0.2.16`
+- package：`inkpage_reader`
+- app 顯示名：`墨頁`
+- 版本來源：`pubspec.yaml`；正式 release 由 tag `vX.Y.Z` 回寫成 `X.Y.Z+<github.run_number>`
 - Dart SDK：`^3.7.0`
-- Flutter：`stable` channel
-- 資料庫 schema：`8`
-- 主要 CI：
-  - `.github/workflows/dart.yml`
-  - `.github/workflows/build-release.yml`
+- Flutter channel：stable
+- 資料庫：Drift / SQLite
+- Drift schema version：`1`
+- 狀態管理：`provider` + `ChangeNotifier`
+- DI：`get_it`
+- 路由：`Navigator` + `MaterialPageRoute`
+- 書源 JS：`flutter_js`
 
-## 現有功能範圍
+目前不是 Riverpod / GoRouter 架構。
 
-### 產品功能
+## 現有功能
 
-- 書架與書籍分組
+- 書架、書籍分組、閱讀紀錄
 - 全域搜尋、單一書源搜尋、發現頁
 - 書籍詳情、章節列表、換源
 - 閱讀器：`slide` / `scroll`
-- 閱讀進度保存與還原
-- TTS、自動翻頁、亮度與主題設定
-- TXT / EPUB / UMD 匯入
+- `chapterIndex + charOffset` 閱讀進度保存與還原
+- TTS、自動翻頁、書籤、閱讀設定
+- 替換規則、字典規則、TXT 目錄規則
+- TXT / EPUB / UMD 本地書
+- 書源匯入、編輯、檢查、除錯、登入 WebView
 - 備份還原與下載任務
-
-### 不在這個 repo 的產品目標內
-
-- RSS 閱讀器
-- Android-only 工具頁複製
-- 額外閱讀模式實驗場
-- 只為了像 Legado 而新增的非必要功能
 
 ## 程式結構
 
 ```text
 lib/
+  main.dart          app composition root
+  app_providers.dart global Provider registration
   core/
-    database/   Drift, DAO, migration
-    engine/     書源解析、JS bridge、HTML/JSON/XPath 規則引擎
-    models/     書籍、章節、書源、書籤等核心模型
-    services/   TTS、儲存、下載、書源服務
+    database/        Drift tables, DAOs, AppDatabase
+    di/              get_it registration
+    engine/          書源規則、JS bridge、WebBook parser
+    local_book/      TXT / EPUB / UMD parser
+    models/          domain models
+    services/        書源、備份、還原、TTS、下載等服務
+    storage/         app-owned filesystem paths
   features/
-    bookshelf/  書架
-    book_detail/書籍詳情與換源入口
-    explore/    發現頁
-    search/     搜尋
-    reader/     閱讀器 UI、runtime、engine、provider facade
-    source_manager/ 書源管理
-    settings/   設定
+    bookshelf/
+    book_detail/
+    explore/
+    reader/
+    search/
+    settings/
+    source_manager/
+    ...
   shared/
-    theme/      主題
-    widgets/    共用元件
+    theme/
+    widgets/
 docs/
-  只保留和目前 main 對得上的文檔
 test/
-  feature tests、runtime tests、engine tests
 release-notes/
-  每次 tag/release 的附加說明
 ```
 
-## 閱讀器真實入口
+## 閱讀器主線
 
-- Provider 入口：`lib/features/reader/reader_provider.dart`
-- 頁面殼：`lib/features/reader/reader_page.dart`
-- 主控制器：`lib/features/reader/runtime/read_book_controller.dart`
-- View 執行層：`lib/features/reader/view/read_view_runtime.dart`
+目前閱讀器主線不是舊的 `ReadBookController` 架構。實際接線是：
 
-閱讀器已經不是單一大 controller。它目前拆成：
+- 頁面組裝：`lib/features/reader/reader_page.dart`
+- 核心 runtime：`lib/features/reader/runtime/reader_runtime.dart`
+- 依賴組裝：`lib/features/reader/controllers/reader_dependencies.dart`
+- 章節 repository：`lib/features/reader/engine/chapter_repository.dart`
+- 分頁 resolver：`lib/features/reader/engine/page_resolver.dart`
+- viewport：`lib/features/reader/viewport/reader_screen.dart`
 
-- session / progress / restore
-- content lifecycle / preload / pagination
-- viewport runtime / lifecycle / execution bridge
-- source switch runtime
-- TTS / auto-page / display coordinator
+長期閱讀位置以 `ReaderLocation(chapterIndex, charOffset)` 表示。頁碼、PageView index、scroll offset 都只是執行期投影。
 
-細節請看 [docs/reader_runtime.md](docs/reader_runtime.md)。
+細節見 [docs/reader_runtime.md](docs/reader_runtime.md)。
 
 ## 開發環境
 
@@ -90,57 +90,59 @@ release-notes/
 flutter pub get
 flutter pub run build_runner build --delete-conflicting-outputs
 flutter analyze
+flutter test
+```
+
+如果 Linux 測試需要 QuickJS shared library，可用：
+
+```bash
 tool/flutter_test_with_quickjs.sh
 ```
 
-如果修改了 Drift 相關檔案，必須重新生成程式碼：
-
-- `lib/core/database/tables/`
-- `lib/core/database/app_database.dart`
-- `lib/core/database/dao/`
-
-## Reader 相關驗證基線
+只改閱讀器時，通常先跑：
 
 ```bash
 flutter analyze
-tool/flutter_test_with_quickjs.sh
 flutter test test/features/reader
 ```
 
-若只改閱讀器核心，也至少要跑：
+修改 Drift table、DAO 或 `AppDatabase` 後必須重新生成：
 
 ```bash
-flutter test test/features/reader
+flutter pub run build_runner build --delete-conflicting-outputs
 ```
 
-## 發版方式
+## CI 與釋出
 
-Release 由 tag 觸發。
+CI：
 
-1. 確認 `main` 乾淨
-2. 準備 `release-notes/vX.Y.Z.md`，沒有也可以，workflow 會退回 auto notes
-3. 推送 tag：`git tag vX.Y.Z && git push origin vX.Y.Z`
-4. `Build Release Artifacts` workflow 會：
-   - 以 tag 版本同步 `pubspec.yaml` 回寫到 `main`
-   - 建 Android split APK
-   - 建 iOS unsigned IPA
-   - 發佈 GitHub Release
+- `.github/workflows/dart.yml`
+  - `flutter pub get`
+  - `flutter analyze`
+  - `flutter test --reporter compact`
+
+Release：
+
+- `.github/workflows/build-release.yml`
+  - tag `vX.Y.Z` 觸發
+  - 回寫 `pubspec.yaml` 為 `X.Y.Z+<github.run_number>`
+  - 建 Android split APK
+  - 建 iOS unsigned IPA
+  - 發佈 GitHub Release
 
 完整流程見 [docs/release.md](docs/release.md)。
 
 ## 文檔
 
-- [docs/README.md](docs/README.md) — 文檔索引
-- [docs/architecture.md](docs/architecture.md) — repo 現況與模組邊界
-- [docs/reader_runtime.md](docs/reader_runtime.md) — 閱讀器 runtime 真實結構
-- [docs/reader_spec.md](docs/reader_spec.md) — 閱讀器目前可驗證的功能規格
-- [docs/DATABASE.md](docs/DATABASE.md) — Drift schema 與資料表分工
-- [docs/release.md](docs/release.md) — CI / tag / release 流程
+- [docs/README.md](docs/README.md) - 文檔索引
+- [docs/architecture.md](docs/architecture.md) - 專案架構與資料流
+- [docs/DATABASE.md](docs/DATABASE.md) - Drift schema version 1 與資料表
+- [docs/reader_runtime.md](docs/reader_runtime.md) - 閱讀器 runtime 主線
+- [docs/reader_spec.md](docs/reader_spec.md) - 閱讀器可驗證規格
+- [docs/release.md](docs/release.md) - CI / tag / release 流程
 
-## 內容與授權聲明
+## 授權
 
-本專案只提供閱讀器程式本體，不提供書籍內容或任何站點資料。
-
-- 授權：Apache License 2.0
-- Release：<https://github.com/bennytsai1234/reader/releases>
-- 問題回報：<https://github.com/bennytsai1234/reader/issues>
+- License：Apache License 2.0
+- Releases：<https://github.com/bennytsai1234/reader/releases>
+- Issues：<https://github.com/bennytsai1234/reader/issues>

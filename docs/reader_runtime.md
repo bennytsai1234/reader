@@ -1,180 +1,202 @@
 # 閱讀器 Runtime
 
-這份文件描述 `features/reader` 目前在 `main` 上的真實結構。
+這份文件描述目前接進 `ReaderPage` 的閱讀器主線。`features/reader/runtime/` 內仍有一些已測試但未完全接進頁面入口的旁支，不能把它們視為目前使用中的主流程。
 
-## 入口
+## 主線入口
 
-- Provider 別名：`lib/features/reader/reader_provider.dart`
-- 頁面殼：`lib/features/reader/reader_page.dart`
-- 主控制器：`lib/features/reader/runtime/read_book_controller.dart`
-- View runtime：`lib/features/reader/view/read_view_runtime.dart`
+- 頁面組裝：`lib/features/reader/reader_page.dart`
+- 依賴組裝：`lib/features/reader/controllers/reader_dependencies.dart`
+- 核心 runtime：`lib/features/reader/runtime/reader_runtime.dart`
+- 章節 repository：`lib/features/reader/engine/chapter_repository.dart`
+- 分頁 resolver：`lib/features/reader/engine/page_resolver.dart`
+- viewport 分派：`lib/features/reader/viewport/reader_screen.dart`
+- slide viewport：`lib/features/reader/viewport/slide_reader_viewport.dart`
+- scroll viewport：`lib/features/reader/viewport/scroll_reader_viewport.dart`
 
-`ReaderProvider` 目前只是 `ReadBookController` 的薄封裝，真正的閱讀期狀態都在 controller 與 runtime 子域。
+`ReaderPage` 在第一次取得 viewport size 後建立 `ReaderRuntime`、`ReaderProgressController`、`ReaderTtsController`、`ReaderAutoPageController`、`ReaderBookmarkController`，並在 post-frame 呼叫 `runtime.openBook()`。
 
-## 核心位置語義
+## Durable Location
 
-閱讀器目前已統一 durable location：
+目前閱讀位置的長期真源是：
 
-- `ReaderLocation(chapterIndex, charOffset)`
+```text
+ReaderLocation(chapterIndex, charOffset)
+```
 
-也就是：
+來源順序：
 
-- 章節索引
-- 章內字元偏移
+1. `ReaderOpenTarget.location`
+2. `Book.chapterIndex` + `Book.charOffset`
 
-這套語義會貫穿：
+頁碼、PageView index、scroll offset 都是執行期投影，不是 durable progress。
 
-- restore
-- repaginate
-- scroll / slide 切換
-- exit progress
-- source switch 後重定位
+## Runtime State
 
-頁碼與 scroll offset 都只是執行期投影，不是 durable 真源。
+`ReaderRuntime` 持有 `ReaderState`，主要欄位：
 
-## 分層
+- `mode`：`slide` 或 `scroll`
+- `phase`：`cold`、`loading`、`layingOut`、`ready`、`switchingMode`、`error`
+- `committedLocation`
+- `visibleLocation`
+- `layoutSpec`
+- `layoutGeneration`
+- `pageWindow`
+- `currentSlidePage`
 
-### 1. Controller / Facade 層
+`openBook()` 會先 `ChapterRepository.ensureChapters()`，再把初始 location normalize，最後 `jumpToLocation(..., immediateSave: false)`。
 
-`ReadBookController` 負責閱讀頁的高層協調：
+## 章節與正文
 
-- 設定與 UI state 接線
-- session / content / viewport runtime 組裝
-- bookmark、加書架、章節切換、退出流程
-- 對頁面殼暴露可用狀態
+`ChapterRepository.ensureChapters()` 的順序：
 
-Provider mixin 目前保留：
+1. 使用 `ReaderPage.initialChapters`
+2. 從 `ChapterDao.getByBook()` 讀取
+3. 透過 `BookSourceService.getChapterList()` 從書源抓取並寫入 `ChapterDao`
 
-- `ReaderSettingsMixin`
-- `ReaderContentFacadeMixin`
-- `ReaderAutoPageMixin`
-- `ReaderTtsMixin`
-- `ReaderBatteryMixin`
+`ChapterRepository.loadContent()` 有 memory cache 與 in-flight 去重。正文載入優先走 `ReaderChapterContentLoader`：
 
-其中 `ReaderContentFacadeMixin` 已不再是 content lifecycle owner，只是 facade 入口。
+1. `ReaderChapterContentStorage.read()` 取得 raw content。
+2. 套用替換規則。
+3. 重新分段與標題處理。
+4. 依閱讀設定做繁簡轉換。
+5. 回傳 `FetchResult`。
 
-### 2. Session / Restore / Progress
+若 content DAO 或 replace DAO 不可用，才 fallback 到章節物件上的 `chapter.content`。
 
-主要檔案：
+## 分頁與 PageWindow
 
-- `reader_session_coordinator.dart`
-- `reader_session_runtime.dart`
-- `reader_session_facade.dart`
-- `reader_progress_store.dart`
-- `reader_progress_coordinator.dart`
-- `reader_restore_coordinator.dart`
+`PageResolver.ensureLayout()` 會：
 
-這層負責：
+1. 載入 `BookContent`
+2. 呼叫 `LayoutEngine.layout(content, spec)`
+3. 依 `layoutSignature` 快取 `ChapterLayout`
 
-- session location
-- visible location
-- durable progress
-- restore token / pending restore
-- exit progress persistence
+`pageForLocation()` 把 `charOffset` 投影成 `TextPage`。`buildWindowAround()` 建立：
 
-### 3. Content Lifecycle
+```text
+PageWindow(prev, current, next)
+```
 
-主要檔案：
+當鄰頁尚未 ready 時，resolver 會產生 loading 或 error placeholder page，viewport 不直接自行補資料。
 
-- `reader_content_runtime_owner.dart`
-- `reader_content_lifecycle_runtime.dart`
-- `reader_content_pipeline.dart`
-- `engine/chapter_content_manager.dart`
-- `engine/reader_chapter_content_loader.dart`
+## 翻頁與 Viewport
 
-這層負責：
+### Slide
 
-- 章節正文載入
-- 分頁快取
-- preload / warmup
-- slide window
-- pinned target / deferred recenter
+`SlideReaderViewport` 使用三頁 `PageView`，中心頁固定為 index `1`。使用者翻到 `0` 或 `2` 時：
 
-### 4. Viewport Runtime
+1. 呼叫 `runtime.moveToPrevPage()` 或 `runtime.moveToNextPage()`
+2. runtime 更新 `PageWindow`、`currentSlidePage`、`visibleLocation`
+3. viewport 跳回中心頁
 
-主要檔案：
+### Scroll
 
-- `reader_runtime_controller.dart`
-- `reader_viewport_runtime.dart`
-- `reader_viewport_lifecycle_runtime.dart`
-- `reader_viewport_execution_bridge.dart`
-- `reader_page_viewport_bridge.dart`
-- `reader_viewport_mailbox.dart`
-- `read_view_runtime.dart`
-- `view/delegate/page_mode_delegate.dart`
-- `view/delegate/scroll_mode_delegate.dart`
+`ScrollReaderViewport` 自行維護 `_pageOffset` 與 fling。offset 跨過目前頁高度時，呼叫 runtime 推進或回退 `PageWindow`。拖曳或慣性結束後：
 
-這層負責：
+1. `runtime.resolveVisibleLocation(pageOffset, viewportHeight)`
+2. `runtime.updateVisibleLocation(location)`
+3. `ReaderProgressController.schedule(location)`
 
-- scroll / slide 的執行期行為
-- mode switch
-- viewport command
-- controller reset / pending jump
-- view size 變更與 repaginate gating
+## 進度儲存
 
-## 其他子域
+`ReaderProgressController` 是目前主線進度寫入器：
 
-### 朗讀與自動翻頁
+- `schedule()`：400ms debounce
+- `saveImmediately()`：立即 flush
+- `flush()`：寫入 pending location
+
+寫入時會更新：
+
+- `book.chapterIndex`
+- `book.charOffset`
+- `book.durChapterTitle`
+- `book.readerAnchorJson = null`
+
+然後呼叫 `BookDao.updateProgress()`。
+
+會觸發 flush 的時機：
+
+- chapter jump / location jump 的 immediate save
+- 翻頁或 scroll settle 的 debounce save
+- `ReaderPage.dispose()`
+- exit intent
+- app lifecycle 進入 inactive / paused / detached
+
+## 設定同步
+
+`ReaderSettingsController` 從 `ReaderPrefsRepository` 載入閱讀器設定。`ReaderPage._syncRuntimeConfiguration()` 監控：
+
+- `LayoutSpec.layoutSignature`
+- page turn mode
+- content settings generation
+
+字級、行距、段距、縮排、letter spacing、padding 等排版設定改變時，呼叫 `runtime.updateLayoutSpec()`，並以目前 `visibleLocation` 重新投影頁面。
+
+繁簡轉換等會改變正文內容的設定改變時，呼叫 `runtime.reloadContentPreservingLocation()`。
+
+## TTS、自動翻頁、書籤
+
+目前接進頁面的控制器在 `lib/features/reader/controllers/`：
+
+- `ReaderTtsController`
+- `ReaderAutoPageController`
+- `ReaderBookmarkController`
+- `ReaderMenuController`
+- `ReaderSettingsController`
+
+TTS 主線包裝全域 `TTSService`。開始朗讀時從 `runtime.state.visibleLocation` 讀取章節內容，從 `charOffset` 切出剩餘正文後呼叫 speak。highlight location 由 `speechStartLocation + currentWordStart` 推回，但目前主線不承諾自動 viewport follow。
+
+自動翻頁目前是簡單 timer，預設每 8 秒呼叫一次 `runtime.moveToNextPage()`；若無法前進就停止。
+
+書籤由 `ReaderBookmarkController.addVisibleLocationBookmark()` 讀取目前 visible location 後寫入 `BookmarkDao`。
+
+## 換源
+
+目前可見 UI 流程分兩種：
+
+- 單章換源：`change_chapter_source_sheet.dart`
+  - 找候選 source
+  - 抓書籍資訊與目錄
+  - 以章節標題或原 index 找目標章節
+  - 抓正文並寫入 `ReaderChapterContentStore.saveRawContent()`
+  - caller reload content
+
+- 整書 fallback 換源：`reader_source_fallback_sheet.dart`
+  - 找候選 source
+  - 抓書籍與目錄
+  - `book.migrateTo(...)`
+  - `Navigator.pushReplacement(ReaderPage(... openTarget: resume))`
+
+`ReaderSourceSwitchFacade`、`ReaderSourceSwitchRuntime`、`ReaderSessionFacade.applySourceSwitchResolution()` 仍在 runtime 目錄中，但不是目前 `ReaderPage` 主線入口。
+
+## 未接進主線的 runtime 旁支
+
+以下檔案或子域有測試或候選架構價值，但不能在文件中描述成現行頁面主流程：
 
 - `read_aloud_controller.dart`
-- `reader_auto_page_coordinator.dart`
-- `reader_tts_follow_coordinator.dart`
-
-### 顯示與頁碼投影
-
-- `reader_display_coordinator.dart`
-- `reader_page_factory.dart`
-- `runtime/models/reader_chapter.dart`
-- `engine/chapter_position_resolver.dart`
-
-### 換源
-
+- `reader_tts_engine_factory.dart`
+- `http_tts_engine.dart`
+- `system_tts_engine.dart`
+- `switchable_tts_engine.dart`
+- `reader_session_facade.dart`
 - `reader_source_switch_facade.dart`
 - `reader_source_switch_runtime.dart`
+- 舊 coordinator / facade 類型的部分 runtime 檔案
 
-## 目前頁面殼的責任
-
-`ReaderPage` 現在只保留頁面殼職責：
-
-- `PageController` / `SlidePageController` 實體生命週期
-- Menu、drawer、settings sheet 接線
-- `ReaderPageViewportBridge` 與 page shell 互動
-
-核心內容與位置語義不再直接堆在 widget state。
-
-## 真實行為契約
-
-### restore
-
-- 以 `chapterIndex + charOffset` 還原
-- restore 期間不應把臨時 visible state 誤寫成正式進度
-
-### repaginate
-
-- 字級 / 行距 / 段距 / 縮排等設定改動後，仍以 durable location 對回新頁面
-
-### mode switch
-
-- `scroll` / `slide` 切換時，語義上應保持同一個 `charOffset`
-
-### source switch
-
-- 切換來源後，仍以同一個 durable location 重新落回目標章節
+後續若要把它們接回主線，應先更新 `ReaderPage` 接線與測試，再更新本文件。
 
 ## 對應測試
 
-閱讀器目前有完整的 feature test 集合，至少包含：
+閱讀器相關測試集中在 `test/features/reader/`，目前覆蓋：
 
-- `test/features/reader/reader_runtime_flow_test.dart`
-- `test/features/reader/read_book_controller_test.dart`
-- `test/features/reader/reader_runtime_controller_test.dart`
-- `test/features/reader/reader_content_lifecycle_runtime_test.dart`
-- `test/features/reader/reader_content_pipeline_test.dart`
-- `test/features/reader/reader_viewport_runtime_test.dart`
-- `test/features/reader/reader_session_runtime_test.dart`
-- `test/features/reader/reader_source_switch_runtime_test.dart`
+- 章節 repository / content loader / content store
+- layout、line、text page serialization
+- reader runtime controller / navigation / progress / restore / session
+- viewport mailbox / lifecycle / page viewport bridge
+- TTS source / engine factory / HTTP TTS / switchable engine
+- auto page、bookmark、source switch facade/runtime
 
-最低驗證基線：
+最低本地驗證：
 
 ```bash
 flutter analyze

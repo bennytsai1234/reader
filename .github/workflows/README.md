@@ -1,28 +1,50 @@
 # GitHub Actions Build Notes
 
-這個專案目前提供一條自動建置工作流：
+目前有兩條主要 workflow：
 
-- Android：輸出 `app-release.apk`
-- iOS：輸出 `unsigned .ipa`
+- `dart.yml`：CI 驗證
+- `build-release.yml`：release artifacts 與 GitHub Release
+
+## CI
+
+`dart.yml` 在 push / pull request 到 `main` 時執行：
+
+```bash
+flutter pub get
+flutter analyze
+flutter test --reporter compact
+```
+
+## Release Workflow
+
+`build-release.yml` 可手動執行，也會在 push `v*` tag 時執行。
+
+tag release 流程：
+
+1. 從 tag `vX.Y.Z` 推導版本 `X.Y.Z`。
+2. checkout `main`。
+3. 回寫 `pubspec.yaml` 為 `X.Y.Z+<github.run_number>`。
+4. commit 並 push 回 `main`。
+5. 建 Android split APK。
+6. 建 iOS unsigned IPA。
+7. 發佈 GitHub Release。
 
 ## Android 簽章
 
-如果你希望新版本 APK 可以直接覆蓋安裝舊版本，**每次 release 都必須使用同一把簽章 key**。
-
-目前 workflow 已改成要求固定的 Android release keystore，不再使用 runner 臨時生成的 debug keystore。請先在 GitHub repository secrets 設定：
+Android release 必須使用固定 release keystore。請在 repository secrets 設定：
 
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 
-`ANDROID_KEYSTORE_BASE64` 的產生方式可以用：
+`ANDROID_KEYSTORE_BASE64` 可用下列方式產生：
 
 ```bash
 base64 -w 0 your-release-key.jks
 ```
 
-如果你還沒有 release keystore，可以先建立一把：
+建立 release key 範例：
 
 ```bash
 keytool -genkeypair \
@@ -34,7 +56,7 @@ keytool -genkeypair \
   -validity 10000
 ```
 
-本地若要用同一把 key 打 release，也可以在 `android/key.properties` 填：
+本地 release build 可在 `android/key.properties` 填：
 
 ```properties
 storeFile=/abs/path/to/your-release-key.jks
@@ -43,31 +65,26 @@ keyAlias=...
 keyPassword=...
 ```
 
-注意：一旦你決定了正式 release keystore，就應該長期固定使用它。若你之前已經安裝過不同簽章的 APK，**第一次切到這把正式 key 時仍然需要先卸載一次**；之後只要保持同一把 key，後續版本就能正常覆蓋安裝。
+一旦正式使用某把 release key，後續版本應固定使用同一把 key，否則 Android 會視為不同簽章而無法覆蓋安裝。
 
-## 觸發方式
+## Artifacts
 
-- 手動：`Actions` -> `Build Release Artifacts` -> `Run workflow`
-- 自動發版：push `v*` tag，例如：
+Android：
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+- `app-arm64-v8a-release.apk`
+- `app-armeabi-v7a-release.apk`
+- `app-x86_64-release.apk`
+
+iOS：
+
+- `inkpage-ios-unsigned.ipa`
 
 ## iOS 限制
 
-目前 workflow 沒有接 Apple 開發者憑證與 provisioning profile，所以 iOS 產物是：
+iOS workflow 目前沒有 Apple signing certificate 或 provisioning profile，產物是：
 
-- `flutter build ios --release --no-codesign`
-- 再將 `Runner.app` 包成 unsigned `.ipa`
+```bash
+flutter build ios --release --no-codesign
+```
 
-也就是未簽章版本。  
-這種 `.ipa` 適合拿去給 AltStore / 類似側載工具處理，但不能直接上架 App Store。
-
-如果之後要讓 GitHub Actions 直接產出可安裝的簽章版 iOS 包，需要另外配置：
-
-- Apple Developer 帳號
-- signing certificate
-- provisioning profile
-- GitHub Secrets
+再將 `Runner.app` 包成 unsigned IPA。這種 IPA 適合交給側載工具後續處理，不能直接上架 App Store。
