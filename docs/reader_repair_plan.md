@@ -20,6 +20,8 @@ scroll canvas window、signed virtualScrollY 與滑動保存時機見 `docs/read
 
 Layout 與座標換算見 `docs/reader_layout_coordinate_design.md`。
 
+實作順序與 agent 接手建議見 `docs/reader_implementation_order.md`。
+
 ## 核心決策
 
 閱讀位置改成三個值：
