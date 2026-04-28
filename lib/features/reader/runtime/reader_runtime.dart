@@ -17,6 +17,8 @@ import 'reader_preload_scheduler.dart';
 import 'reader_progress_controller.dart';
 import 'reader_state.dart';
 
+typedef ReaderVisibleLocationCapture = ReaderLocation? Function();
+
 class ReaderRuntime extends ChangeNotifier {
   ReaderRuntime({
     required Book book,
@@ -76,6 +78,8 @@ class ReaderRuntime extends ChangeNotifier {
   ReaderState state;
 
   bool _disposed = false;
+  Object? _visibleLocationCaptureOwner;
+  ReaderVisibleLocationCapture? _visibleLocationCapture;
   PageAddress? _pendingNeighborAdvanceOrigin;
   int _pendingNeighborAdvanceDirection = 0;
   String? _pendingUserNotice;
@@ -91,6 +95,20 @@ class ReaderRuntime extends ChangeNotifier {
   String titleFor(int index) => _repository.titleFor(index);
 
   String chapterUrlAt(int index) => chapterAt(index)?.url ?? '';
+
+  void registerVisibleLocationCapture(
+    Object owner,
+    ReaderVisibleLocationCapture capture,
+  ) {
+    _visibleLocationCaptureOwner = owner;
+    _visibleLocationCapture = capture;
+  }
+
+  void unregisterVisibleLocationCapture(Object owner) {
+    if (!identical(_visibleLocationCaptureOwner, owner)) return;
+    _visibleLocationCaptureOwner = null;
+    _visibleLocationCapture = null;
+  }
 
   String? takeUserNotice() {
     final notice = _pendingUserNotice;
@@ -239,16 +257,12 @@ class ReaderRuntime extends ChangeNotifier {
       _setState(
         state.copyWith(
           phase: ReaderPhase.ready,
-          committedLocation: resolvedLocation,
           visibleLocation: resolvedLocation,
           pageWindow: window,
           currentSlidePage: page,
           clearError: true,
         ),
       );
-      if (immediateSave) {
-        await _progressController.saveImmediately(resolvedLocation);
-      }
       unawaited(_preloadScheduler.scheduleJump(resolvedLocation.chapterIndex));
     } catch (e) {
       _setState(
@@ -306,11 +320,9 @@ class ReaderRuntime extends ChangeNotifier {
         pageWindow: newWindow,
         currentSlidePage: next,
         visibleLocation: location,
-        committedLocation: location,
         phase: ReaderPhase.ready,
       ),
     );
-    _progressController.schedule(location);
     unawaited(_preloadScheduler.scheduleScrollSettled(next));
     return true;
   }
@@ -355,11 +367,9 @@ class ReaderRuntime extends ChangeNotifier {
         pageWindow: newWindow,
         currentSlidePage: prev,
         visibleLocation: location,
-        committedLocation: location,
         phase: ReaderPhase.ready,
       ),
     );
-    _progressController.schedule(location);
     unawaited(_preloadScheduler.scheduleScrollSettled(prev));
     return true;
   }
@@ -446,15 +456,7 @@ class ReaderRuntime extends ChangeNotifier {
     final normalized = location.normalized(
       chapterCount: _repository.chapterCount,
     );
-    _setState(
-      state.copyWith(
-        visibleLocation: normalized,
-        committedLocation: normalized,
-      ),
-    );
-    if (debounceSave) {
-      _progressController.schedule(normalized);
-    }
+    _setState(state.copyWith(visibleLocation: normalized));
   }
 
   void handleSlidePageSettled(TextPage page) {
@@ -463,13 +465,9 @@ class ReaderRuntime extends ChangeNotifier {
       charOffset: page.startCharOffset,
     );
     _setState(
-      state.copyWith(
-        currentSlidePage: page,
-        visibleLocation: location,
-        committedLocation: location,
-      ),
+      state.copyWith(currentSlidePage: page, visibleLocation: location),
     );
-    _progressController.schedule(location);
+    unawaited(saveProgress());
     unawaited(_preloadScheduler.scheduleSlidePageSettled(page));
   }
 
@@ -495,7 +493,38 @@ class ReaderRuntime extends ChangeNotifier {
     _maybeAutoAdvancePendingNeighbor();
   }
 
-  Future<void> flushProgress() => _progressController.flush();
+  ReaderLocation? captureVisibleLocation() {
+    if (_disposed || state.phase != ReaderPhase.ready) return null;
+    final capture = _visibleLocationCapture;
+    if (capture == null) return null;
+    final captured = _normalizeCapturedLocation(capture());
+    if (captured == null) return null;
+    if (captured == state.visibleLocation) return captured;
+    _setState(state.copyWith(visibleLocation: captured));
+    return captured;
+  }
+
+  Future<ReaderLocation?> saveProgress() async {
+    final location = captureVisibleLocation();
+    if (location == null) return null;
+    if (location == state.committedLocation) return location;
+    _setState(state.copyWith(committedLocation: location));
+    await _progressController.saveImmediately(location);
+    return location;
+  }
+
+  Future<ReaderLocation?> flushProgress() => saveProgress();
+
+  ReaderLocation? _normalizeCapturedLocation(ReaderLocation? location) {
+    if (location == null) return null;
+    final visualOffset = location.visualOffsetPx;
+    if (!visualOffset.isFinite || visualOffset.isNaN) return null;
+    if (visualOffset < ReaderLocation.minVisualOffsetPx ||
+        visualOffset > ReaderLocation.maxVisualOffsetPx) {
+      return null;
+    }
+    return location.normalized(chapterCount: _repository.chapterCount);
+  }
 
   ReaderLocation _locationInPage(TextPage page, double pageY) {
     final contentY =
@@ -506,6 +535,7 @@ class ReaderRuntime extends ChangeNotifier {
       return ReaderLocation(
         chapterIndex: page.chapterIndex,
         charOffset: page.startCharOffset,
+        visualOffsetPx: 0,
       );
     }
     TextLine nearest = page.lines.first;
@@ -515,6 +545,7 @@ class ReaderRuntime extends ChangeNotifier {
         return ReaderLocation(
           chapterIndex: page.chapterIndex,
           charOffset: line.startCharOffset,
+          visualOffsetPx: contentY - line.top,
         );
       }
       final distance =
@@ -527,6 +558,7 @@ class ReaderRuntime extends ChangeNotifier {
     return ReaderLocation(
       chapterIndex: page.chapterIndex,
       charOffset: nearest.startCharOffset,
+      visualOffsetPx: contentY - nearest.top,
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_layout.dart';
+import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
@@ -83,6 +84,10 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
     _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
     _lastReportedLocation = widget.runtime.state.visibleLocation;
     widget.runtime.addListener(_onRuntimeChanged);
+    widget.runtime.registerVisibleLocationCapture(
+      this,
+      _captureVisibleLocation,
+    );
     _attachController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -94,8 +99,13 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
   void didUpdateWidget(covariant ScrollReaderViewport oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.runtime != widget.runtime) {
+      oldWidget.runtime.unregisterVisibleLocationCapture(this);
       oldWidget.runtime.removeListener(_onRuntimeChanged);
       widget.runtime.addListener(_onRuntimeChanged);
+      widget.runtime.registerVisibleLocationCapture(
+        this,
+        _captureVisibleLocation,
+      );
       _resetLoadedState();
       _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
       _lastReportedLocation = widget.runtime.state.visibleLocation;
@@ -119,6 +129,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
   @override
   void dispose() {
     widget.runtime.removeListener(_onRuntimeChanged);
+    widget.runtime.unregisterVisibleLocationCapture(this);
     _detachController(widget.controller);
     _controller
       ..removeListener(_handleScroll)
@@ -196,7 +207,10 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
   double _globalOffsetForLocation(ReaderLocation location) {
     final baseOffset = _chapterBaseOffset(location.chapterIndex);
     final localOffset = _coordinateMapper.localOffsetForLocation(location);
-    return baseOffset + widget.style.paddingTop + localOffset;
+    return baseOffset +
+        widget.style.paddingTop +
+        localOffset +
+        location.visualOffsetPx;
   }
 
   double _scrollOffsetForLocation(ReaderLocation location) {
@@ -367,23 +381,68 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
       final chapterBottom = chapterTop + extent;
       if (anchor < chapterBottom || i == widget.runtime.chapterCount - 1) {
         unawaited(_primeAroundChapter(i));
-        final loaded = _loadedChapters[i];
-        if (loaded != null) {
-          final localOffset =
-              (anchor - chapterTop - widget.style.paddingTop)
-                  .clamp(0.0, loaded.chapter.metrics.contentHeight)
-                  .toDouble();
-          final location = _coordinateMapper.locationFromScrollOffset(
-            chapterIndex: i,
-            localOffset: localOffset,
-          );
-          _lastReportedLocation = location;
-          widget.runtime.updateVisibleLocation(location);
-        }
+        final location = widget.runtime.captureVisibleLocation();
+        if (location != null) _lastReportedLocation = location;
         break;
       }
       chapterTop = chapterBottom;
     }
+  }
+
+  ReaderLocation? _captureVisibleLocation() {
+    if (!_controller.hasClients || widget.runtime.chapterCount <= 0) {
+      return null;
+    }
+    final anchor = _controller.offset + _anchorOffsetInViewport();
+    var chapterTop = 0.0;
+    for (var i = 0; i < widget.runtime.chapterCount; i++) {
+      final extent = _chapterExtent(i);
+      final chapterBottom = chapterTop + extent;
+      if (anchor < chapterBottom || i == widget.runtime.chapterCount - 1) {
+        final loaded = _loadedChapters[i];
+        if (loaded == null) return null;
+        final localOffset =
+            (anchor - chapterTop - widget.style.paddingTop)
+                .clamp(0.0, loaded.chapter.metrics.contentHeight)
+                .toDouble();
+        return _locationFromLineLayout(
+          chapterIndex: i,
+          layout: loaded.chapter.lineLayout,
+          localOffset: localOffset,
+        );
+      }
+      chapterTop = chapterBottom;
+    }
+    return null;
+  }
+
+  ReaderLocation? _locationFromLineLayout({
+    required int chapterIndex,
+    required LineLayout layout,
+    required double localOffset,
+  }) {
+    LineItem? nearest;
+    var nearestDistance = double.infinity;
+    for (final item in layout.textItems) {
+      if (localOffset >= item.localTop && localOffset <= item.localBottom) {
+        nearest = item;
+        break;
+      }
+      final distance =
+          localOffset < item.localTop
+              ? item.localTop - localOffset
+              : localOffset - item.localBottom;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = item;
+      }
+    }
+    if (nearest == null) return null;
+    return ReaderLocation(
+      chapterIndex: chapterIndex,
+      charOffset: nearest.chapterPosition,
+      visualOffsetPx: localOffset - nearest.localTop,
+    );
   }
 
   void _animateScrollBy(double delta) {

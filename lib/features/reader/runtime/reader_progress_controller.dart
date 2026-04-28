@@ -40,13 +40,20 @@ class ReaderProgressController {
     final active = _activeFlush;
     if (active != null) return active;
     _timer?.cancel();
-    final location = _pendingLocation;
-    if (location == null) return Future<void>.value();
-    _pendingLocation = null;
-    _activeFlush = _write(location).whenComplete(() {
+    if (_pendingLocation == null) return Future<void>.value();
+    _activeFlush = _flushPendingLocations().whenComplete(() {
       _activeFlush = null;
     });
     return _activeFlush!;
+  }
+
+  Future<void> _flushPendingLocations() async {
+    while (true) {
+      final location = _pendingLocation;
+      if (location == null) return;
+      _pendingLocation = null;
+      await _write(location);
+    }
   }
 
   Future<void> _write(ReaderLocation location) async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
+import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/page_window.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
@@ -44,14 +45,23 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       ..addListener(_onAnimationTick);
     _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
     widget.runtime.addListener(_onRuntimeChanged);
+    widget.runtime.registerVisibleLocationCapture(
+      this,
+      _captureVisibleLocation,
+    );
   }
 
   @override
   void didUpdateWidget(covariant SlideReaderViewport oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.runtime != widget.runtime) {
+      oldWidget.runtime.unregisterVisibleLocationCapture(this);
       oldWidget.runtime.removeListener(_onRuntimeChanged);
       widget.runtime.addListener(_onRuntimeChanged);
+      widget.runtime.registerVisibleLocationCapture(
+        this,
+        _captureVisibleLocation,
+      );
       _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
       _resetViewport();
     } else if (oldWidget.style.pageMode != widget.style.pageMode) {
@@ -62,6 +72,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
   @override
   void dispose() {
     widget.runtime.removeListener(_onRuntimeChanged);
+    widget.runtime.unregisterVisibleLocationCapture(this);
     _slideController.dispose();
     super.dispose();
   }
@@ -196,6 +207,47 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
         expand: true,
       ),
     );
+  }
+
+  ReaderLocation? _captureVisibleLocation() {
+    if (_dragDx.abs() > 0.5 ||
+        _slideController.isAnimating ||
+        widget.runtime.state.phase != ReaderPhase.ready) {
+      return null;
+    }
+    final page = widget.runtime.state.pageWindow?.current;
+    if (page == null || page.isPlaceholder || page.lines.isEmpty) return null;
+    final anchorY = _anchorOffsetInViewport();
+    final contentY =
+        (anchorY - widget.style.paddingTop)
+            .clamp(0.0, page.contentHeight)
+            .toDouble();
+    TextLine? nearest;
+    var nearestDistance = double.infinity;
+    for (final line in page.lines) {
+      if (line.text.isEmpty) continue;
+      if (contentY >= line.top && contentY <= line.bottom) {
+        nearest = line;
+        break;
+      }
+      final distance =
+          contentY < line.top ? line.top - contentY : contentY - line.bottom;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = line;
+      }
+    }
+    if (nearest == null) return null;
+    return ReaderLocation(
+      chapterIndex: page.chapterIndex,
+      charOffset: nearest.startCharOffset,
+      visualOffsetPx: contentY - nearest.top,
+    );
+  }
+
+  double _anchorOffsetInViewport() {
+    final viewportHeight = widget.runtime.state.layoutSpec.viewportSize.height;
+    return (viewportHeight * 0.2).clamp(24.0, 120.0).toDouble();
   }
 
   Widget _buildEdgePlaceholder({required String message}) {

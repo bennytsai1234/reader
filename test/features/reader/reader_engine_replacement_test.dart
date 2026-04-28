@@ -631,6 +631,99 @@ void main() {
     );
 
     test(
+      'captureVisibleLocation updates visible location without DB write',
+      () async {
+        final env = _RuntimeEnv();
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final owner = Object();
+        final committedBefore = runtime.state.committedLocation;
+        const captured = ReaderLocation(
+          chapterIndex: 0,
+          charOffset: 24,
+          visualOffsetPx: 12,
+        );
+        runtime.registerVisibleLocationCapture(owner, () => captured);
+
+        final location = runtime.captureVisibleLocation();
+
+        expect(location, captured);
+        expect(runtime.state.visibleLocation, captured);
+        expect(runtime.state.committedLocation, committedBefore);
+        expect(env.bookDao.writes, 0);
+        runtime.unregisterVisibleLocationCapture(owner);
+      },
+    );
+
+    test(
+      'captureVisibleLocation rejects missing or invalid captures',
+      () async {
+        final env = _RuntimeEnv();
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final before = runtime.state.visibleLocation;
+
+        expect(runtime.captureVisibleLocation(), isNull);
+        expect(runtime.state.visibleLocation, before);
+
+        final owner = Object();
+        runtime.registerVisibleLocationCapture(
+          owner,
+          () => const ReaderLocation(
+            chapterIndex: 0,
+            charOffset: 24,
+            visualOffsetPx: 999,
+          ),
+        );
+
+        expect(runtime.captureVisibleLocation(), isNull);
+        expect(runtime.state.visibleLocation, before);
+        expect(env.bookDao.writes, 0);
+        runtime.unregisterVisibleLocationCapture(owner);
+      },
+    );
+
+    test('saveProgress captures then commits and persists location', () async {
+      final env = _RuntimeEnv();
+      final runtime = env.runtime;
+      await runtime.openBook();
+      final owner = Object();
+      const captured = ReaderLocation(
+        chapterIndex: 0,
+        charOffset: 32,
+        visualOffsetPx: 8,
+      );
+      runtime.registerVisibleLocationCapture(owner, () => captured);
+
+      final saved = await runtime.saveProgress();
+
+      expect(saved, captured);
+      expect(runtime.state.visibleLocation, captured);
+      expect(runtime.state.committedLocation, captured);
+      expect(env.bookDao.writes, 1);
+      expect(env.bookDao.lastLocation, captured);
+      runtime.unregisterVisibleLocationCapture(owner);
+    });
+
+    test(
+      'saveProgress skips DB write when capture matches committed location',
+      () async {
+        final env = _RuntimeEnv();
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final owner = Object();
+        final committed = runtime.state.committedLocation;
+        runtime.registerVisibleLocationCapture(owner, () => committed);
+
+        final saved = await runtime.saveProgress();
+
+        expect(saved, committed);
+        expect(env.bookDao.writes, 0);
+        runtime.unregisterVisibleLocationCapture(owner);
+      },
+    );
+
+    test(
       'missing cross-chapter neighbor auto-advances after loading completes',
       () async {
         final book = Book(bookUrl: 'delayed-book', origin: 'local', name: 'd');
@@ -803,6 +896,11 @@ void main() {
         final env = _RuntimeEnv(mode: ReaderMode.slide);
         final runtime = env.runtime;
         await runtime.openBook();
+        final owner = Object();
+        runtime.registerVisibleLocationCapture(
+          owner,
+          () => runtime.state.visibleLocation,
+        );
         final next = runtime.state.pageWindow!.next!;
         runtime.moveToNextPage();
         runtime.handleSlidePageSettled(next);
@@ -814,8 +912,10 @@ void main() {
             charOffset: next.startCharOffset,
           ),
         );
+        await Future<void>.delayed(Duration.zero);
         await runtime.flushProgress();
         expect(env.bookDao.lastLocation, runtime.state.visibleLocation);
+        runtime.unregisterVisibleLocationCapture(owner);
       },
     );
 
@@ -901,19 +1001,28 @@ void main() {
       },
     );
 
-    test('scroll movement debounces DB writes until flushed', () async {
-      final env = _RuntimeEnv();
-      final runtime = env.runtime;
-      await runtime.openBook();
+    test(
+      'saveProgress is the only DB write after visible location changes',
+      () async {
+        final env = _RuntimeEnv();
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final owner = Object();
+        runtime.registerVisibleLocationCapture(
+          owner,
+          () => runtime.state.visibleLocation,
+        );
 
-      runtime.moveToNextPage();
-      runtime.moveToNextPage();
+        runtime.moveToNextPage();
+        runtime.moveToNextPage();
 
-      expect(env.bookDao.writes, 0);
-      await runtime.flushProgress();
-      expect(env.bookDao.writes, 1);
-      expect(env.bookDao.lastLocation, runtime.state.visibleLocation);
-    });
+        expect(env.bookDao.writes, 0);
+        await runtime.flushProgress();
+        expect(env.bookDao.writes, 1);
+        expect(env.bookDao.lastLocation, runtime.state.visibleLocation);
+        runtime.unregisterVisibleLocationCapture(owner);
+      },
+    );
   });
 }
 
