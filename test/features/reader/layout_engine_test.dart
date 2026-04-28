@@ -87,6 +87,53 @@ void main() {
       }
     });
 
+    test('uses display text offsets and exposes shared layout queries', () {
+      final content = BookContent.fromRaw(
+        chapterIndex: 4,
+        title: '標題',
+        rawText: '第一段文字\n\n第二段文字',
+      );
+      final spec = _spec(width: 168, height: 220);
+      final layout = LayoutEngine().layout(content, spec);
+
+      expect(content.displayText, '標題\n\n第一段文字\n\n第二段文字');
+      expect(content.bodyStartOffset, 4);
+      expect(layout.displayText, content.displayText);
+      expect(layout.contentHeight, greaterThan(0));
+
+      final titleLine = layout.lines.firstWhere((line) => line.isTitle);
+      final firstBodyLine = layout.lines.firstWhere((line) => !line.isTitle);
+      expect(titleLine.startCharOffset, 0);
+      expect(firstBodyLine.startCharOffset, content.bodyStartOffset);
+      expect(layout.lineForCharOffset(0), titleLine);
+      expect(layout.lineForCharOffset(content.bodyStartOffset), firstBodyLine);
+
+      for (var index = 0; index < layout.lines.length; index++) {
+        expect(layout.lines[index].chapterIndex, content.chapterIndex);
+        expect(layout.lines[index].lineIndex, index);
+      }
+
+      expect(layout.pages.every((page) => page.hasExplicitLocalRange), isTrue);
+      expect(
+        layout.pages.every((page) => page.width == spec.contentWidth),
+        isTrue,
+      );
+      expect(layout.pageForLocalY(firstBodyLine.top), isNotNull);
+      expect(layout.pageForCharOffset(0).containsCharOffset(0), isTrue);
+      expect(
+        layout.linesForRange(0, content.bodyStartOffset + 1),
+        containsAll(<Object>[titleLine, firstBodyLine]),
+      );
+
+      final rects = layout.fullLineRectsForRange(
+        startCharOffset: 0,
+        endCharOffset: content.bodyStartOffset + 1,
+        pageTopOnScreen: 12,
+      );
+      expect(rects, isNotEmpty);
+      expect(rects.first.top, greaterThanOrEqualTo(12));
+    });
+
     test('supports title-only and empty chapters without bogus body lines', () {
       final titleOnly = LayoutEngine().layout(
         BookContent.fromRaw(

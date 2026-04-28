@@ -188,8 +188,8 @@ class ReaderRuntime extends ChangeNotifier {
     );
     final content = await loadContentForTts(location);
     final safeOffset =
-        location.charOffset.clamp(0, content.plainText.length).toInt();
-    return content.plainText.substring(safeOffset).trim();
+        location.charOffset.clamp(0, content.displayText.length).toInt();
+    return content.displayText.substring(safeOffset).trim();
   }
 
   Future<BookContent> loadContentForTts(ReaderLocation location) {

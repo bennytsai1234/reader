@@ -4,6 +4,8 @@ import 'line_box.dart';
 class TextLine extends LineBox {
   TextLine({
     required super.text,
+    this.chapterIndex = 0,
+    this.lineIndex = 0,
     this.width = 0,
     double? height,
     super.isTitle = false,
@@ -32,6 +34,8 @@ class TextLine extends LineBox {
                  ((lineBottom ?? lineTop + (height ?? 0)) - lineTop) * 0.82,
        );
 
+  final int chapterIndex;
+  final int lineIndex;
   final double width;
   @override
   double get height => lineBottom - lineTop;
@@ -43,6 +47,8 @@ class TextLine extends LineBox {
 
   TextLine copyWith({
     String? text,
+    int? chapterIndex,
+    int? lineIndex,
     double? width,
     double? height,
     bool? isTitle,
@@ -59,6 +65,8 @@ class TextLine extends LineBox {
   }) {
     return TextLine(
       text: text ?? this.text,
+      chapterIndex: chapterIndex ?? this.chapterIndex,
+      lineIndex: lineIndex ?? this.lineIndex,
       width: width ?? this.width,
       height: height ?? this.height,
       isTitle: isTitle ?? this.isTitle,
@@ -94,6 +102,8 @@ class TextLine extends LineBox {
   Map<String, dynamic> toJson() {
     return {
       'text': text,
+      'chapterIndex': chapterIndex,
+      'lineIndex': lineIndex,
       'width': width,
       'height': height,
       'isTitle': isTitle,
@@ -113,6 +123,8 @@ class TextLine extends LineBox {
   factory TextLine.fromJson(Map<String, dynamic> json) {
     return TextLine(
       text: json['text'] ?? '',
+      chapterIndex: json['chapterIndex'] ?? 0,
+      lineIndex: json['lineIndex'] ?? 0,
       width: (json['width'] ?? 0).toDouble(),
       height: (json['height'] ?? 0).toDouble(),
       isTitle: json['isTitle'] ?? false,
@@ -141,9 +153,13 @@ class TextPage {
     this.pageSize = 0,
     int? startCharOffset,
     int? endCharOffset,
+    double? width,
+    double? localStartY,
+    double? localEndY,
     double? height,
     double? contentHeight,
     double? viewportHeight,
+    bool? hasExplicitLocalRange,
     bool? isChapterStart,
     bool? isChapterEnd,
     this.isLoading = false,
@@ -152,9 +168,17 @@ class TextPage {
        lines = List<TextLine>.unmodifiable(lines),
        startCharOffset = startCharOffset ?? _firstOffset(lines),
        endCharOffset = endCharOffset ?? _lastOffset(lines),
+       width = width ?? _pageWidth(lines),
        contentHeight = contentHeight ?? height ?? _pageHeight(lines),
        viewportHeight =
            viewportHeight ?? contentHeight ?? height ?? _pageHeight(lines),
+       localStartY = localStartY ?? 0.0,
+       localEndY =
+           localEndY ??
+           (localStartY ?? 0.0) +
+               (contentHeight ?? height ?? _pageHeight(lines)),
+       _hasExplicitLocalRange =
+           hasExplicitLocalRange ?? (localStartY != null || localEndY != null),
        isChapterStart = isChapterStart ?? ((pageIndex ?? index ?? 0) == 0),
        isChapterEnd =
            isChapterEnd ??
@@ -170,13 +194,18 @@ class TextPage {
   final int pageSize;
   final int startCharOffset;
   final int endCharOffset;
+  final double width;
+  final double localStartY;
+  final double localEndY;
   final double contentHeight;
   final double viewportHeight;
+  final bool _hasExplicitLocalRange;
   final bool isChapterStart;
   final bool isChapterEnd;
   final bool isLoading;
   final String? errorMessage;
   double get height => contentHeight;
+  bool get hasExplicitLocalRange => _hasExplicitLocalRange;
   bool get isPlaceholder => isLoading || errorMessage != null;
   bool get hasBodyContent =>
       lines.any((line) => !line.isTitle && line.text.isNotEmpty);
@@ -218,9 +247,13 @@ class TextPage {
     int? pageSize,
     int? startCharOffset,
     int? endCharOffset,
+    double? width,
+    double? localStartY,
+    double? localEndY,
     double? height,
     double? contentHeight,
     double? viewportHeight,
+    bool? hasExplicitLocalRange,
     bool? isChapterStart,
     bool? isChapterEnd,
     bool? isLoading,
@@ -229,6 +262,9 @@ class TextPage {
   }) {
     final nextPageIndex = pageIndex ?? index ?? this.pageIndex;
     final nextLines = lines ?? this.lines;
+    final nextHasExplicitRange =
+        hasExplicitLocalRange ??
+        _hasExplicitLocalRange || localStartY != null || localEndY != null;
     return TextPage(
       pageIndex: nextPageIndex,
       lines: nextLines,
@@ -238,8 +274,13 @@ class TextPage {
       pageSize: pageSize ?? this.pageSize,
       startCharOffset: startCharOffset ?? this.startCharOffset,
       endCharOffset: endCharOffset ?? this.endCharOffset,
+      width: width ?? this.width,
+      localStartY:
+          nextHasExplicitRange ? (localStartY ?? this.localStartY) : null,
+      localEndY: nextHasExplicitRange ? (localEndY ?? this.localEndY) : null,
       contentHeight: contentHeight ?? height ?? this.contentHeight,
       viewportHeight: viewportHeight ?? this.viewportHeight,
+      hasExplicitLocalRange: nextHasExplicitRange,
       isChapterStart: isChapterStart ?? this.isChapterStart,
       isChapterEnd: isChapterEnd ?? this.isChapterEnd,
       isLoading: isLoading ?? this.isLoading,
@@ -258,6 +299,10 @@ class TextPage {
       'pageSize': pageSize,
       'startCharOffset': startCharOffset,
       'endCharOffset': endCharOffset,
+      'width': width,
+      'localStartY': localStartY,
+      'localEndY': localEndY,
+      'hasExplicitLocalRange': hasExplicitLocalRange,
       'height': height,
       'contentHeight': contentHeight,
       'viewportHeight': viewportHeight,
@@ -279,9 +324,15 @@ class TextPage {
       pageSize: json['pageSize'] ?? 0,
       startCharOffset: json['startCharOffset'],
       endCharOffset: json['endCharOffset'],
+      width: (json['width'] as num?)?.toDouble(),
+      localStartY: (json['localStartY'] as num?)?.toDouble(),
+      localEndY: (json['localEndY'] as num?)?.toDouble(),
       height: (json['height'] as num?)?.toDouble(),
       contentHeight: (json['contentHeight'] as num?)?.toDouble(),
       viewportHeight: (json['viewportHeight'] as num?)?.toDouble(),
+      hasExplicitLocalRange:
+          (json['hasExplicitLocalRange'] as bool?) ??
+          (json.containsKey('localStartY') || json.containsKey('localEndY')),
       isChapterStart: json['isChapterStart'],
       isChapterEnd: json['isChapterEnd'],
       isLoading: json['isLoading'] ?? false,
@@ -308,6 +359,13 @@ class TextPage {
       if (line.text.isNotEmpty) return line.endCharOffset;
     }
     return _firstOffset(lines);
+  }
+
+  static double _pageWidth(List<TextLine> lines) {
+    if (lines.isEmpty) return 0;
+    return lines
+        .map((line) => line.width)
+        .fold<double>(0, (max, width) => width > max ? width : max);
   }
 
   static double _pageHeight(List<TextLine> lines) {

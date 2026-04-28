@@ -21,7 +21,7 @@ class LineItem {
     int? endChapterPosition,
   }) : _endChapterPosition = endChapterPosition;
 
-  bool get isText => line.text.isNotEmpty && !line.isTitle;
+  bool get isText => line.text.isNotEmpty;
   int get endChapterPosition =>
       _endChapterPosition ?? chapterPosition + _sourceTextLength(line);
 
@@ -104,12 +104,19 @@ class LineLayout {
     final items = <LineItem>[];
     final pageTopOffsets = <double>[];
     final pageHeights = <double>[];
-    var pageTop = 0.0;
+    var stackedPageTop = 0.0;
 
     for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
       final page = pages[pageIndex];
+      final pageTop =
+          page.hasExplicitLocalRange ? page.localStartY : stackedPageTop;
       pageTopOffsets.add(pageTop);
-      final pageHeight = _pageHeight(page);
+      final pageHeight =
+          page.hasExplicitLocalRange
+              ? (page.localEndY - page.localStartY)
+                  .clamp(0.0, double.infinity)
+                  .toDouble()
+              : _pageHeight(page);
       pageHeights.add(pageHeight);
       for (var lineIndex = 0; lineIndex < page.lines.length; lineIndex++) {
         final line = page.lines[lineIndex];
@@ -125,7 +132,7 @@ class LineLayout {
           ),
         );
       }
-      pageTop += pageHeight;
+      stackedPageTop = pageTop + pageHeight;
     }
 
     final lineItems = _withEndPositions(items);
@@ -144,7 +151,7 @@ class LineLayout {
       pageGroups: List<PageGroup>.unmodifiable(pageGroups),
       pageTopOffsets: List<double>.unmodifiable(pageTopOffsets),
       pageHeights: List<double>.unmodifiable(pageHeights),
-      contentHeight: pageTop,
+      contentHeight: stackedPageTop,
     );
   }
 
@@ -196,6 +203,13 @@ class LineLayout {
     return pageHeights.length - 1;
   }
 
+  PageGroup? pageForLocalY(double localY) {
+    if (pageGroups.isEmpty) return null;
+    final index = pageIndexAtLocalOffset(localY);
+    if (index < 0 || index >= pageGroups.length) return null;
+    return pageGroups[index];
+  }
+
   int findPageIndexByCharOffset(int charOffset) {
     if (pageGroups.isEmpty || textItems.isEmpty) return 0;
     var best = 0;
@@ -240,6 +254,7 @@ class LineLayout {
   ({TextLine line, int pageIndex, int lineIndex})? locateLineAtCharOffset(
     int charOffset,
   ) {
+    LineItem? previous;
     for (final item in textItems) {
       if (charOffset >= item.chapterPosition &&
           charOffset < item.endChapterPosition) {
@@ -249,8 +264,47 @@ class LineLayout {
           lineIndex: item.lineIndex,
         );
       }
+      if (charOffset < item.chapterPosition) {
+        return (
+          line: item.line,
+          pageIndex: item.pageIndex,
+          lineIndex: item.lineIndex,
+        );
+      }
+      previous = item;
     }
-    return null;
+    if (previous == null) return null;
+    return (
+      line: previous.line,
+      pageIndex: previous.pageIndex,
+      lineIndex: previous.lineIndex,
+    );
+  }
+
+  TextLine? lineForCharOffset(int charOffset) {
+    return locateLineAtCharOffset(charOffset)?.line;
+  }
+
+  TextLine? lineAtOrNearLocalY(double localY) {
+    if (textItems.isEmpty) return null;
+    final safeLocalOffset = localY.clamp(0.0, contentHeight).toDouble();
+    LineItem? nearest;
+    var nearestDistance = double.infinity;
+    for (final item in textItems) {
+      if (safeLocalOffset >= item.localTop &&
+          safeLocalOffset <= item.localBottom) {
+        return item.line;
+      }
+      final distance =
+          safeLocalOffset < item.localTop
+              ? item.localTop - safeLocalOffset
+              : safeLocalOffset - item.localBottom;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = item;
+      }
+    }
+    return nearest?.line;
   }
 
   double localOffsetForCharOffset(int charOffset) {
@@ -282,6 +336,24 @@ class LineLayout {
         .toList(growable: false);
   }
 
+  List<TextLine> linesForRange(int startCharOffset, int endCharOffset) {
+    final start =
+        startCharOffset <= endCharOffset ? startCharOffset : endCharOffset;
+    final end =
+        startCharOffset <= endCharOffset ? endCharOffset : startCharOffset;
+    if (start == end) {
+      final line = lineForCharOffset(start);
+      return line == null ? const <TextLine>[] : <TextLine>[line];
+    }
+    return textItems
+        .where(
+          (item) =>
+              item.endChapterPosition > start && item.chapterPosition < end,
+        )
+        .map((item) => item.line)
+        .toList(growable: false);
+  }
+
   static double _pageHeight(TextPage page) {
     return page.lines.isEmpty ? 0.0 : page.lines.last.lineBottom;
   }
@@ -305,7 +377,7 @@ class LineLayout {
       final fallbackEnd = item.endChapterPosition;
       final nextStart = nextTextItem?.chapterPosition;
       final end =
-          nextStart != null && nextStart >= item.chapterPosition
+          nextStart != null && nextStart > fallbackEnd
               ? nextStart
               : fallbackEnd;
       resolved.add(item.copyWithEndChapterPosition(end));

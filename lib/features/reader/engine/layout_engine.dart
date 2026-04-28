@@ -22,12 +22,14 @@ class LayoutEngine {
 
     final lines = <TextLine>[];
     var y = 0.0;
-    var paragraphOffset = 0;
+    var paragraphOffset = content.bodyStartOffset;
     var paragraphNum = 0;
 
     if (content.title.isNotEmpty) {
       final titleStyle = _titleTextStyle(spec);
       final titleLines = _layoutBlock(
+        chapterIndex: content.chapterIndex,
+        firstLineIndex: lines.length,
         text: content.title,
         style: titleStyle,
         maxWidth: spec.contentWidth,
@@ -44,6 +46,8 @@ class LayoutEngine {
 
     for (final paragraph in content.paragraphs) {
       final paragraphLines = _layoutBlock(
+        chapterIndex: content.chapterIndex,
+        firstLineIndex: lines.length,
         text: paragraph,
         style: _contentTextStyle(spec),
         maxWidth: spec.contentWidth,
@@ -66,12 +70,20 @@ class LayoutEngine {
       content: content,
       chapterSize: chapterSize,
     );
+    final chapterLines = _chapterLocalLinesFromPages(pages);
     final layout = ChapterLayout(
       chapterIndex: content.chapterIndex,
+      displayText: content.displayText,
       contentHash: content.contentHash,
       layoutSignature: spec.layoutSignature,
-      lines: List<TextLine>.unmodifiable(lines),
+      lines: List<TextLine>.unmodifiable(chapterLines),
       pages: List<TextPage>.unmodifiable(pages),
+      contentHeight:
+          pages.isEmpty
+              ? 0.0
+              : pages
+                  .map((page) => page.localEndY)
+                  .fold<double>(0, (max, end) => end > max ? end : max),
     );
     _cache[cacheKey] = layout;
     return layout;
@@ -109,6 +121,8 @@ class LayoutEngine {
   }
 
   List<TextLine> _layoutBlock({
+    required int chapterIndex,
+    required int firstLineIndex,
     required String text,
     required TextStyle style,
     required double maxWidth,
@@ -172,6 +186,8 @@ class LayoutEngine {
       lines.add(
         TextLine(
           text: lineText,
+          chapterIndex: chapterIndex,
+          lineIndex: firstLineIndex + lines.length,
           width: lineWidth,
           height: lineHeight,
           isTitle: isTitle,
@@ -290,9 +306,13 @@ class LayoutEngine {
           title: content.title,
           lines: const <TextLine>[],
           startCharOffset: 0,
-          endCharOffset: content.plainText.length,
+          endCharOffset: content.displayText.length,
+          width: spec.contentWidth,
+          localStartY: 0.0,
+          localEndY: contentHeight,
           contentHeight: contentHeight,
           viewportHeight: viewportHeight,
+          hasExplicitLocalRange: true,
           isChapterStart: true,
           isChapterEnd: true,
         ),
@@ -307,6 +327,7 @@ class LayoutEngine {
     void flushPage() {
       final pageIndex = rawPages.length;
       final pageLines = List<TextLine>.unmodifiable(currentLines);
+      final localStartY = pageIndex * contentHeight;
       rawPages.add(
         TextPage(
           pageIndex: pageIndex,
@@ -323,8 +344,12 @@ class LayoutEngine {
               pageLines.isEmpty
                   ? (rawPages.isEmpty ? 0 : rawPages.last.endCharOffset)
                   : pageLines.last.endCharOffset,
+          width: spec.contentWidth,
+          localStartY: localStartY,
+          localEndY: localStartY + contentHeight,
           contentHeight: contentHeight,
           viewportHeight: viewportHeight,
+          hasExplicitLocalRange: true,
           isChapterStart: pageIndex == 0,
           isChapterEnd: false,
         ),
@@ -376,5 +401,20 @@ class LayoutEngine {
       );
     }
     return pages;
+  }
+
+  List<TextLine> _chapterLocalLinesFromPages(List<TextPage> pages) {
+    return pages
+        .expand((page) {
+          return page.lines.map((line) {
+            final pageTop = page.localStartY;
+            return line.copyWith(
+              lineTop: pageTop + line.lineTop,
+              lineBottom: pageTop + line.lineBottom,
+              baseline: pageTop + line.baseline,
+            );
+          });
+        })
+        .toList(growable: false);
   }
 }

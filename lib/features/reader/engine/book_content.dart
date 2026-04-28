@@ -8,6 +8,7 @@ class BookContent {
     required this.title,
     required this.paragraphs,
     required this.plainText,
+    required this.displayText,
     required this.contentHash,
   });
 
@@ -15,7 +16,13 @@ class BookContent {
   final String title;
   final List<String> paragraphs;
   final String plainText;
+  final String displayText;
   final String contentHash;
+
+  int get bodyStartOffset {
+    if (title.isEmpty) return 0;
+    return plainText.isEmpty ? title.length : title.length + 2;
+  }
 
   factory BookContent.fromRaw({
     required int chapterIndex,
@@ -32,12 +39,20 @@ class BookContent {
                 .where((line) => line.isNotEmpty)
                 .toList(growable: false);
     final plainText = paragraphs.join('\n\n');
-    final hashMaterial = '$chapterIndex\n$title\n$plainText';
+    final normalizedTitle = title.trim();
+    final displayText =
+        normalizedTitle.isEmpty
+            ? plainText
+            : plainText.isEmpty
+            ? normalizedTitle
+            : '$normalizedTitle\n\n$plainText';
+    final hashMaterial = '$chapterIndex\n$displayText';
     return BookContent(
       chapterIndex: chapterIndex,
-      title: title.trim(),
+      title: normalizedTitle,
       paragraphs: List<String>.unmodifiable(paragraphs),
       plainText: plainText,
+      displayText: displayText,
       contentHash: sha1.convert(utf8.encode(hashMaterial)).toString(),
     );
   }

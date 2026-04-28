@@ -121,42 +121,42 @@ void main() {
       },
     );
 
-    test(
-      'title-only lines do not pull durable charOffset back to title page',
-      () {
-        final layout = LineLayout.fromPages([
-          TextPage(
-            index: 0,
-            title: 'c0',
-            chapterIndex: 0,
-            lines: [
-              TextLine(
-                text: '很長很長的章節標題',
-                width: 100,
-                height: 40,
-                isTitle: true,
-                chapterPosition: 0,
-                lineTop: 0,
-                lineBottom: 40,
-                startCharOffset: 0,
-                endCharOffset: 8,
-              ),
-            ],
-          ),
-          TextPage(
-            index: 1,
-            title: 'c0',
-            chapterIndex: 0,
-            lines: [
-              _line(text: '正文第一行', chapterPosition: 0, top: 0, bottom: 40),
-            ],
-          ),
-        ]);
+    test('title-only lines participate in durable charOffset lookup', () {
+      final layout = LineLayout.fromPages([
+        TextPage(
+          index: 0,
+          title: 'c0',
+          chapterIndex: 0,
+          lines: [
+            TextLine(
+              text: '很長很長的章節標題',
+              width: 100,
+              height: 40,
+              isTitle: true,
+              chapterPosition: 0,
+              lineTop: 0,
+              lineBottom: 40,
+              startCharOffset: 0,
+              endCharOffset: 8,
+            ),
+          ],
+        ),
+        TextPage(
+          index: 1,
+          title: 'c0',
+          chapterIndex: 0,
+          lines: [
+            _line(text: '正文第一行', chapterPosition: 10, top: 0, bottom: 40),
+          ],
+        ),
+      ]);
 
-        expect(layout.findPageIndexByCharOffset(0), 1);
-        expect(layout.localOffsetForCharOffset(0), 40);
-        expect(layout.charOffsetFromLocalOffset(10), 0);
-      },
-    );
+      expect(layout.findPageIndexByCharOffset(0), 0);
+      expect(layout.findPageIndexByCharOffset(10), 1);
+      expect(layout.localOffsetForCharOffset(0), 0);
+      expect(layout.localOffsetForCharOffset(10), 40);
+      expect(layout.charOffsetFromLocalOffset(10), 0);
+      expect(layout.charOffsetFromLocalOffset(45), 10);
+    });
   });
 }

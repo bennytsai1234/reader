@@ -63,7 +63,7 @@ class ReaderTtsController extends ChangeNotifier {
     );
     final content = await runtime.loadContentForTts(location);
     final safeOffset =
-        location.charOffset.clamp(0, content.plainText.length).toInt();
+        location.charOffset.clamp(0, content.displayText.length).toInt();
     final text = await runtime.textFromVisibleLocation();
     if (text.isEmpty) return;
     _speechStartLocation = ReaderLocation(

@@ -161,7 +161,7 @@ void main() {
           (line) => !line.isTitle,
         );
         expect(firstBodyLine.text.startsWith('　　'), isTrue);
-        expect(firstBodyLine.startCharOffset, 0);
+        expect(firstBodyLine.startCharOffset, content.bodyStartOffset);
         expect(
           justified.lines
               .where((line) => !line.isTitle && !line.isParagraphEnd)
@@ -192,60 +192,58 @@ void main() {
       },
     );
 
-    test(
-      'ChapterLayout.pageForCharOffset skips title-only pages for durable offset restore',
-      () {
-        final layout = ChapterLayout(
-          chapterIndex: 0,
-          contentHash: 'hash',
-          layoutSignature: 'sig',
-          lines: const <TextLine>[],
-          pages: <TextPage>[
-            TextPage(
-              index: 0,
-              title: 'long title',
-              chapterIndex: 0,
-              startCharOffset: 0,
-              endCharOffset: 8,
-              lines: <TextLine>[
-                TextLine(
-                  text: '很長很長的章節標題',
-                  width: 100,
-                  height: 40,
-                  isTitle: true,
-                  chapterPosition: 0,
-                  lineTop: 0,
-                  lineBottom: 40,
-                  startCharOffset: 0,
-                  endCharOffset: 8,
-                ),
-              ],
-            ),
-            TextPage(
-              index: 1,
-              title: 'long title',
-              chapterIndex: 0,
-              startCharOffset: 0,
-              endCharOffset: 12,
-              lines: <TextLine>[
-                TextLine(
-                  text: '正文第一行',
-                  width: 100,
-                  height: 40,
-                  chapterPosition: 0,
-                  lineTop: 0,
-                  lineBottom: 40,
-                  startCharOffset: 0,
-                  endCharOffset: 4,
-                ),
-              ],
-            ),
-          ],
-        );
+    test('ChapterLayout.pageForCharOffset can restore to title-only pages', () {
+      final layout = ChapterLayout(
+        chapterIndex: 0,
+        contentHash: 'hash',
+        layoutSignature: 'sig',
+        lines: const <TextLine>[],
+        pages: <TextPage>[
+          TextPage(
+            index: 0,
+            title: 'long title',
+            chapterIndex: 0,
+            startCharOffset: 0,
+            endCharOffset: 8,
+            lines: <TextLine>[
+              TextLine(
+                text: '很長很長的章節標題',
+                width: 100,
+                height: 40,
+                isTitle: true,
+                chapterPosition: 0,
+                lineTop: 0,
+                lineBottom: 40,
+                startCharOffset: 0,
+                endCharOffset: 8,
+              ),
+            ],
+          ),
+          TextPage(
+            index: 1,
+            title: 'long title',
+            chapterIndex: 0,
+            startCharOffset: 10,
+            endCharOffset: 14,
+            lines: <TextLine>[
+              TextLine(
+                text: '正文第一行',
+                width: 100,
+                height: 40,
+                chapterPosition: 10,
+                lineTop: 0,
+                lineBottom: 40,
+                startCharOffset: 10,
+                endCharOffset: 14,
+              ),
+            ],
+          ),
+        ],
+      );
 
-        expect(layout.pageForCharOffset(0).pageIndex, 1);
-      },
-    );
+      expect(layout.pageForCharOffset(0).pageIndex, 0);
+      expect(layout.pageForCharOffset(10).pageIndex, 1);
+    });
 
     test(
       'ChapterLayout.pageForCharOffset respects page end boundaries before falling back to start offsets',
