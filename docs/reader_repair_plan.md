@@ -14,6 +14,8 @@
 
 Overlay、TTS 高亮與手勢分流見 `docs/reader_overlay_gesture_design.md`。
 
+PageCache 渲染模型見 `docs/reader_page_cache_render_design.md`。
+
 ## 核心決策
 
 閱讀位置改成三個值：
