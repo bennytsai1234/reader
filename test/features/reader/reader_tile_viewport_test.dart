@@ -15,6 +15,7 @@ import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_progress_controller.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
+import 'package:inkpage_reader/features/reader/viewport/reader_screen.dart';
 import 'package:inkpage_reader/features/reader/viewport/reader_tile_layer.dart';
 import 'package:inkpage_reader/features/reader/viewport/reader_viewport_controller.dart';
 import 'package:inkpage_reader/features/reader/viewport/scroll_reader_viewport.dart';
@@ -554,6 +555,100 @@ void main() {
         lessThanOrEqualTo(targetPage.endCharOffset),
       );
 
+      env.runtime.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+
+    testWidgets('scroll window follows next and previous chapters', (
+      tester,
+    ) async {
+      final env = _RuntimeEnv(initialChapterIndex: 1);
+      final controller = ReaderViewportController();
+      await env.runtime.openBook();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 360,
+            child: ScrollReaderViewport(
+              runtime: env.runtime,
+              backgroundColor: Colors.white,
+              textColor: Colors.black,
+              style: _style(ReaderPageMode.scroll),
+              controller: controller,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final currentLayout = env.runtime.debugResolver.cachedLayout(1);
+      expect(currentLayout, isNotNull);
+
+      final nextFollow = controller.ensureCharRangeVisible!(
+        chapterIndex: 2,
+        startCharOffset: 0,
+        endCharOffset: 80,
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(await nextFollow, isTrue);
+      expect(env.runtime.state.visibleLocation.chapterIndex, 2);
+
+      final previousFollow = controller.ensureCharRangeVisible!(
+        chapterIndex: 0,
+        startCharOffset: 0,
+        endCharOffset: 80,
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(await previousFollow, isTrue);
+      expect(env.runtime.state.visibleLocation.chapterIndex, 0);
+
+      env.runtime.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+
+    testWidgets('app lifecycle pause flushes latest visible location', (
+      tester,
+    ) async {
+      final env = _RuntimeEnv();
+      await env.runtime.openBook();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 360,
+            child: EngineReaderScreen(
+              runtime: env.runtime,
+              backgroundColor: Colors.white,
+              textColor: Colors.black,
+              style: _style(ReaderPageMode.scroll),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(EngineReaderScreen)),
+      );
+      await gesture.moveBy(const Offset(0, -220));
+      await tester.pump();
+
+      expect(env.bookDao.writes, 0);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(env.bookDao.writes, 1);
+      expect(env.bookDao.lastLocation, env.runtime.state.committedLocation);
+
+      await gesture.up();
       env.runtime.dispose();
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 500));
