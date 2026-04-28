@@ -18,6 +18,7 @@ Current project facts:
 
 Development database policy:
 
+- Treat the current latest `reader` app as a new-app development baseline.
 - This project is still in active development. The maintainer commonly deletes the installed app and starts with a fresh local database between updates.
 - Do not treat migration from older development schemas as a reader recovery blocker unless the user explicitly asks for upgrade compatibility.
 - Keep the current Drift schema, generated code, DAOs, and model fields internally consistent for fresh installs.
