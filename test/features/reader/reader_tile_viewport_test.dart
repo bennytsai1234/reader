@@ -198,6 +198,15 @@ void main() {
       await tester.pump();
 
       expect(env.runtime.state.pageWindow!.next!.isLoading, isTrue);
+      final transforms = tester
+          .widgetList<Transform>(
+            find.descendant(of: viewport, matching: find.byType(Transform)),
+          )
+          .toList(growable: false);
+      expect(
+        transforms[1].transform.getTranslation().x,
+        greaterThan(-viewportWidth * 0.5),
+      );
 
       await gesture.up();
       await tester.pump();

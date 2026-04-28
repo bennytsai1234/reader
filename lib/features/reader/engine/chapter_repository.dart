@@ -82,14 +82,15 @@ class ChapterRepository {
       throw const ChapterRepositoryException('章節目錄載入失敗: 找不到書源');
     }
     final fetched = await service.getChapterList(source, book);
+    if (fetched.isEmpty) {
+      throw const ChapterRepositoryException('章節目錄載入失敗: 目錄為空');
+    }
     for (var i = 0; i < fetched.length; i++) {
       fetched[i].index = i;
       fetched[i].bookUrl = book.bookUrl;
     }
-    if (fetched.isNotEmpty) {
-      await chapterDao.insertChapters(fetched);
-      _chapters = fetched;
-    }
+    await chapterDao.insertChapters(fetched);
+    _chapters = fetched;
     return chapters;
   }
 
@@ -158,14 +159,13 @@ class ChapterRepository {
   ) async {
     final chapter = chapterAt(chapterIndex);
     if (chapter == null) {
-      return BookContent.fromRaw(
-        chapterIndex: chapterIndex,
-        title: '',
-        rawText: '',
-      );
+      throw const ChapterRepositoryException('章節內容載入失敗: 找不到章節');
     }
     final loaded = await _loadViaExistingContentPipeline(chapterIndex, chapter);
     if (loaded != null) {
+      if (loaded.isFailure) {
+        throw ChapterRepositoryException(loaded.failureMessage!.trim());
+      }
       final content = BookContent.fromRaw(
         chapterIndex: chapterIndex,
         title: loaded.displayTitle ?? chapter.title,

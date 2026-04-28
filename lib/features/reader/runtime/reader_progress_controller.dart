@@ -37,9 +37,11 @@ class ReaderProgressController {
   }
 
   Future<void> flush() {
-    final active = _activeFlush;
-    if (active != null) return active;
     _timer?.cancel();
+    final active = _activeFlush;
+    if (active != null) {
+      return active.then((_) => flush());
+    }
     if (_pendingLocation == null) return Future<void>.value();
     _activeFlush = _flushPendingLocations().whenComplete(() {
       _activeFlush = null;

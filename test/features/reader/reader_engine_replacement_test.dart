@@ -467,6 +467,42 @@ void main() {
     );
 
     test(
+      'PageResolver clearCachedLayouts prevents stale in-flight layout caching',
+      () async {
+        final book = Book(bookUrl: 'clear-layout-book', origin: 'local');
+        final chapters = _chaptersFor(book.bookUrl, 1);
+        final repository = _SequencedChapterRepository(
+          book: book,
+          chapters: chapters,
+        );
+        final resolver = PageResolver(
+          repository: repository,
+          layoutEngine: LayoutEngine(),
+          layoutSpec: _spec(fontSize: 18),
+        );
+
+        final stale = resolver.ensureLayout(0);
+        await Future<void>.delayed(Duration.zero);
+        expect(repository.loadCalls, 1);
+
+        resolver.clearCachedLayouts();
+        final fresh = resolver.ensureLayout(0);
+        await Future<void>.delayed(Duration.zero);
+        expect(repository.loadCalls, 2);
+
+        repository.completeCall(1, rawText: 'fresh body');
+        final freshLayout = await fresh;
+        expect(freshLayout.displayText, contains('fresh body'));
+        expect(resolver.cachedLayout(0)?.displayText, contains('fresh body'));
+
+        repository.completeCall(0, rawText: 'stale body');
+        final staleLayout = await stale;
+        expect(staleLayout.displayText, contains('stale body'));
+        expect(resolver.cachedLayout(0)?.displayText, contains('fresh body'));
+      },
+    );
+
+    test(
       'rolling scroll next page swaps prev/current/next without global offset',
       () async {
         final env = _RuntimeEnv();
@@ -1236,6 +1272,37 @@ class _QueuedChapterRepository extends ChapterRepository {
         title: 'c$chapterIndex',
         rawText: 'chapter $chapterIndex',
       ),
+    );
+  }
+}
+
+class _SequencedChapterRepository extends ChapterRepository {
+  _SequencedChapterRepository({
+    required super.book,
+    required List<BookChapter> chapters,
+  }) : super(
+         initialChapters: chapters,
+         bookDao: _FakeBookDao(),
+         chapterDao: _FakeChapterDao(chapters),
+         sourceDao: _FakeSourceDao(),
+       );
+
+  final List<Completer<BookContent>> _completers = <Completer<BookContent>>[];
+
+  int get loadCalls => _completers.length;
+
+  @override
+  Future<BookContent> loadContent(int chapterIndex) {
+    final completer = Completer<BookContent>();
+    _completers.add(completer);
+    return completer.future;
+  }
+
+  void completeCall(int callIndex, {required String rawText}) {
+    final completer = _completers[callIndex];
+    if (completer.isCompleted) return;
+    completer.complete(
+      BookContent.fromRaw(chapterIndex: 0, title: 'c0', rawText: rawText),
     );
   }
 }

@@ -140,6 +140,16 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
   int contentCalls = 0;
 
   @override
+  Future<List<BookChapter>> getChapterList(
+    BookSource source,
+    Book book, {
+    int? chapterLimit,
+    int? pageConcurrency,
+  }) async {
+    return const <BookChapter>[];
+  }
+
+  @override
   Future<String> getContent(
     BookSource source,
     Book book,
@@ -245,37 +255,50 @@ void main() {
       },
     );
 
-    test('failed content entry is displayed without retry loop', () async {
-      final book = _book();
-      final chapter = _chapter();
-      final contentDao = _FakeContentDao();
-      await contentDao.saveFailure(
-        contentKey: ReaderChapterContentStore.contentKeyFor(
+    test(
+      'failed content entry surfaces as error without remote retry',
+      () async {
+        final book = _book();
+        final chapter = _chapter();
+        final contentDao = _FakeContentDao();
+        await contentDao.saveFailure(
+          contentKey: ReaderChapterContentStore.contentKeyFor(
+            book: book,
+            chapter: chapter,
+          ),
+          origin: book.origin,
+          bookUrl: book.bookUrl,
+          chapterUrl: chapter.url,
+          chapterIndex: chapter.index,
+          message: '加載章節失敗: timeout',
+          updatedAt: 1,
+        );
+        final service = _FakeBookSourceService(<Object>['remote body']);
+        final repository = _repository(
           book: book,
-          chapter: chapter,
-        ),
-        origin: book.origin,
-        bookUrl: book.bookUrl,
-        chapterUrl: chapter.url,
-        chapterIndex: chapter.index,
-        message: '加載章節失敗: timeout',
-        updatedAt: 1,
-      );
-      final service = _FakeBookSourceService(<Object>['remote body']);
-      final repository = _repository(
-        book: book,
-        chapters: <BookChapter>[chapter],
-        contentDao: contentDao,
-        service: service,
-      );
+          chapters: <BookChapter>[chapter],
+          contentDao: contentDao,
+          service: service,
+        );
 
-      final first = await repository.loadContent(0);
-      final second = await repository.loadContent(0);
-
-      expect(first.plainText, '加載章節失敗: timeout');
-      expect(second.plainText, '加載章節失敗: timeout');
-      expect(service.contentCalls, 0);
-    });
+        await expectLater(
+          repository.loadContent(0),
+          throwsA(
+            isA<ChapterRepositoryException>().having(
+              (error) => error.message,
+              'message',
+              '加載章節失敗: timeout',
+            ),
+          ),
+        );
+        await expectLater(
+          repository.loadContent(0),
+          throwsA(isA<ChapterRepositoryException>()),
+        );
+        expect(service.contentCalls, 0);
+        expect(repository.cachedContent(0), isNull);
+      },
+    );
 
     test(
       'clearContentCache prevents stale in-flight load from repopulating cache',
@@ -336,6 +359,27 @@ void main() {
         );
       },
     );
+
+    test('ensureChapters reports empty remote TOC instead of ready state', () {
+      final book = _book();
+      final repository = _repository(
+        book: book,
+        chapters: <BookChapter>[],
+        contentDao: _FakeContentDao(),
+        service: _FakeBookSourceService(<Object>['unused']),
+      );
+
+      expect(
+        repository.ensureChapters(),
+        throwsA(
+          isA<ChapterRepositoryException>().having(
+            (error) => error.message,
+            'message',
+            '章節目錄載入失敗: 目錄為空',
+          ),
+        ),
+      );
+    });
   });
 }
 

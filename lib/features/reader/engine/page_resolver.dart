@@ -27,18 +27,21 @@ class PageResolver {
   final Map<String, Future<ChapterLayout>> _inFlight =
       <String, Future<ChapterLayout>>{};
   final Map<int, String> _layoutErrors = <int, String>{};
+  int _cacheGeneration = 0;
 
   int get chapterCount => repository.chapterCount;
 
   void updateLayoutSpec(LayoutSpec spec) {
     if (layoutSpec.layoutSignature == spec.layoutSignature) return;
     layoutSpec = spec;
+    _cacheGeneration += 1;
     _layouts.clear();
   }
 
   ChapterLayout? cachedLayout(int chapterIndex) => _layouts[chapterIndex];
 
   void clearCachedLayouts() {
+    _cacheGeneration += 1;
     _layouts.clear();
     _inFlight.clear();
     _layoutErrors.clear();
@@ -53,7 +56,8 @@ class PageResolver {
       return cached;
     }
     final spec = layoutSpec;
-    final taskKey = '$safeIndex|${spec.layoutSignature}';
+    final cacheGeneration = _cacheGeneration;
+    final taskKey = '$safeIndex|${spec.layoutSignature}|$cacheGeneration';
     final inFlight = _inFlight[taskKey];
     if (inFlight != null) return inFlight;
     late final Future<ChapterLayout> task;
@@ -65,13 +69,16 @@ class PageResolver {
           spec,
           chapterSize: repository.chapterCount,
         );
-        if (layoutSpec.layoutSignature == spec.layoutSignature) {
+        if (layoutSpec.layoutSignature == spec.layoutSignature &&
+            cacheGeneration == _cacheGeneration) {
           _layouts[safeIndex] = layout;
           _layoutErrors.remove(safeIndex);
         }
         return layout;
       } catch (e) {
-        _layoutErrors[safeIndex] = e.toString();
+        if (cacheGeneration == _cacheGeneration) {
+          _layoutErrors[safeIndex] = e.toString();
+        }
         rethrow;
       }
     }();
