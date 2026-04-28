@@ -25,8 +25,10 @@ ReaderLocation(chapterIndex, charOffset, visualOffsetPx)
 `visualOffsetPx` 不應是章節內的大型總位移，也不應是新的 page index。它只表示：
 
 ```text
-恢復時，讓 charOffset 對應的那一行，距離閱讀內容區頂部多少 px。
+恢復時，讓 charOffset 對應的那一行，和畫面 anchor line 相差多少 px。
 ```
+
+anchor line 是 scroll 模式裡一條穩定的隱形基準線，建議放在閱讀內容區頂部往下 16 到 32 px。保存時用它選目前讀到的行，恢復時也用它把同一行放回原來的相對位置。
 
 slide 模式不需要這個微調，保存：
 
@@ -71,18 +73,31 @@ scroll 模式退出、背景、或需要保存進度時：
    - `startCharOffset`
    - `visualOffsetPx`
 
+選行規則：
+
+```text
+1. 候選行包含標題和正文，但排除 loading / error placeholder。
+2. 優先選 vertical range 包住 anchorLineY 的文字行。
+3. 如果沒有行包住 anchorLineY，選 anchorLineY 下方最近的可見文字行。
+4. 如果下方沒有可見文字行，選 anchorLineY 上方最近的可見文字行。
+5. 保存該行的 startCharOffset，不保存行中間某個字。
+```
+
 其中：
 
 ```text
-visualOffsetPx = lineTopOnScreen - readableContentTop
+anchorLineY = readableContentTop + anchorLineOffsetPx
+visualOffsetPx = lineTopOnScreen - anchorLineY
 ```
 
 例子：
 
 ```text
 readableContentTop = 72
-lineTopOnScreen = 94
-visualOffsetPx = 22
+anchorLineOffsetPx = 24
+anchorLineY = 96
+lineTopOnScreen = 90
+visualOffsetPx = -6
 ```
 
 保存：
@@ -91,18 +106,19 @@ visualOffsetPx = 22
 ReaderLocation(
   chapterIndex: 12,
   charOffset: 3456,
-  visualOffsetPx: 22,
+  visualOffsetPx: -6,
 )
 ```
 
 建議限制：
 
 ```text
-visualOffsetPx >= 0
-visualOffsetPx <= 120
+-80 <= visualOffsetPx <= 120
 ```
 
-如果計算出負數、NaN、無限大、或太大的值，就回退到 `0`。這個值只做小範圍視覺微調，不應承擔完整 scroll 定位。
+`visualOffsetPx` 可以是負數。負數代表這一行的頂部已經在 anchor line 上方，但 anchor line 還落在這一行附近，這是正常狀態。
+
+如果計算出 NaN、無限大、或遠超過合理範圍的值，就回退到 `0`。這個值只做小範圍視覺微調，不應承擔完整 scroll 定位。
 
 ## scroll 開書怎麼用
 
@@ -114,20 +130,22 @@ scroll 模式開書恢復：
 3. 找到 charOffset 對應文字行的章內 localY。
 4. 計算目標 scroll：
 
+lineTopOnScreen = anchorLineY + visualOffsetPx
+
 targetScrollY =
   chapterBaseY
   + charLocalY
+  - anchorLineY
   - visualOffsetPx
-  - readableContentTop
 ```
 
 白話講：
 
 ```text
-先找到那個字，再把畫面往上一點點，讓它回到離開前差不多的位置。
+先找到那個字，再把它對應的那一行放回 anchor line 附近，而且保留離開前那一點點正負偏移。
 ```
 
-如果 `visualOffsetPx == 0`，就退化成一般 `chapterIndex + charOffset` 恢復。
+如果 `visualOffsetPx == 0`，代表那一行的頂部要剛好回到 anchor line。
 
 ## slide 模式怎麼用
 
@@ -172,7 +190,7 @@ visualOffsetPx
 要求：
 
 - `visualOffsetPx` 預設為 `0`。
-- normalize 時 clamp 到合理範圍。
+- normalize 時 clamp 到合理範圍，而且允許小幅負值。
 - equality / hashCode / copyWith 都包含這個欄位。
 - runtime 內所有位置傳遞都用同一個 `ReaderLocation`。
 
@@ -206,8 +224,25 @@ visualOffsetPx
 
 - debounce 只保存最後一次位置。
 - active flush 期間又收到新位置時，flush 結束後要繼續寫最後位置。
-- exit / dispose / app paused 時必須 drain pending progress。
+- exit / dispose / app paused 時必須走同一套 capture and flush。
 - loading / error placeholder 不可保存成進度。
+
+正常退出和意外退出不要維護兩套保存流程。只保留一個統一入口，例如：
+
+```text
+captureCurrentLocationAndFlush(reason)
+```
+
+這個入口負責：
+
+```text
+1. 由 viewport 依目前模式 capture ReaderLocation。
+2. 更新 runtime.visibleLocation / committedLocation。
+3. 取消或接管 debounce 中的 pending progress。
+4. 立刻 flush 到 DB。
+```
+
+正常退出只是比較有機會完整跑完這個入口；意外退出才是主要風險，所以 app paused、inactive、detached、dispose 都應盡量呼叫同一個入口做 best effort flush。
 
 ### 4. Scroll Viewport
 
@@ -222,7 +257,7 @@ ReaderLocation(chapterIndex, charOffset, visualOffsetPx)
 需要做：
 
 - 從目前可見行找 anchor line。
-- 算 `visualOffsetPx = lineTopOnScreen - readableContentTop`。
+- 算 `visualOffsetPx = lineTopOnScreen - anchorLineY`。
 - 保存前 clamp。
 - layout 改變或章節高度從估算變成實際值時，保持 anchor 不跳。
 
@@ -252,7 +287,7 @@ screen visible line -> charOffset
 需要確認：
 
 - 每條 `TextLine` 有穩定 `startCharOffset/endCharOffset`。
-- title-only line 不作為正文進度 anchor。
+- 標題直接算進 chapter offset，也可以作為 anchor line 候選，避免正文和標題分兩套 offset 規則。也就是說，排版用的 chapter display text 如果包含標題，`charOffset` 就以這份 display text 為準。
 - `charOffset` 落在頁邊界時能找對 page / line。
 - 字級、行距、padding 改變後，仍能用 `charOffset` 找回合理行。
 
@@ -277,13 +312,13 @@ content 改變時，舊的 visual offset 仍可保留為小範圍視覺修正，
 
 ```text
 使用者正在 scroll
- -> viewport 找目前 anchor line
+ -> viewport 用目前 anchor line 找穩定可見行
  -> 算 chapterIndex
  -> 算 charOffset
- -> 算 visualOffsetPx
+ -> 算 visualOffsetPx，允許小幅正負值
  -> runtime 更新 visibleLocation
  -> progress debounce 保存
- -> 退出 / 背景時 flush
+ -> 正常退出 / 意外退出都呼叫同一個 capture and flush
 ```
 
 ### scroll 開書恢復
@@ -295,7 +330,7 @@ content 改變時，舊的 visual offset 仍可保留為小範圍視覺修正，
  -> content 載入正文
  -> layout 排版
  -> charOffset 找到 line localY
- -> viewport scroll 到 targetScrollY
+ -> viewport 用 anchor line + visualOffsetPx scroll 到 targetScrollY
 ```
 
 ### slide 退出保存
@@ -303,6 +338,7 @@ content 改變時，舊的 visual offset 仍可保留為小範圍視覺修正，
 ```text
 使用者翻到某頁
  -> runtime 知道 current page start charOffset
+ -> 呼叫同一個 capture and flush
  -> 保存 ReaderLocation(chapterIndex, charOffset, 0)
 ```
 
@@ -321,7 +357,7 @@ content 改變時，舊的 visual offset 仍可保留為小範圍視覺修正，
 ### scroll
 
 - scroll 到章節中段，退出再進，視覺位置接近退出前。
-- 同一章內保存的 `visualOffsetPx` 是小數值，不是章節總 scroll offset。
+- 同一章內保存的 `visualOffsetPx` 是小範圍正負值，不是章節總 scroll offset。
 - app paused 後重開，最後位置不丟。
 - 快速滑動後立刻退出，保存最後可視位置。
 - loading/error placeholder 不保存進度。
@@ -342,7 +378,7 @@ content 改變時，舊的 visual offset 仍可保留為小範圍視覺修正，
 
 - debounce 期間多次更新，只保存最後一次。
 - DB 寫入中收到新位置，最後位置仍會被寫出。
-- dispose / exit / lifecycle flush 都能 drain pending progress。
+- dispose / exit / lifecycle flush 都走同一個 capture and flush，並能 drain pending progress。
 
 ## 不做的事
 
@@ -351,4 +387,4 @@ content 改變時，舊的 visual offset 仍可保留為小範圍視覺修正，
 - 不把 page index 作為主進度。
 - 不把大型章內 scroll offset 作為主進度。
 - 不讓 viewport 直接寫 DB。
-
+- 不維護正常退出與意外退出兩套保存流程。
