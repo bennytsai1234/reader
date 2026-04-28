@@ -16,6 +16,7 @@ class ReaderInvariants {
   static void validateChapterLayout(ChapterLayout layout) {
     var previousBottom = -double.infinity;
     var previousPageStart = -1;
+    var previousPageEnd = -1;
     for (final line in layout.lines) {
       if (line.startCharOffset > line.endCharOffset) {
         throw ReaderInvariantViolation('line char range is inverted');
@@ -33,7 +34,13 @@ class ReaderInvariants {
       if (page.startCharOffset < previousPageStart) {
         throw ReaderInvariantViolation('page char ranges are not increasing');
       }
+      if (page.endCharOffset < previousPageEnd) {
+        throw ReaderInvariantViolation(
+          'page char range ends are not increasing',
+        );
+      }
       previousPageStart = page.startCharOffset;
+      previousPageEnd = page.endCharOffset;
     }
   }
 

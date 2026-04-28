@@ -243,6 +243,64 @@ void main() {
     );
 
     test(
+      'ChapterLayout.pageForCharOffset respects page end boundaries before falling back to start offsets',
+      () {
+        final layout = ChapterLayout(
+          chapterIndex: 0,
+          contentHash: 'hash',
+          layoutSignature: 'sig',
+          lines: const <TextLine>[],
+          pages: <TextPage>[
+            TextPage(
+              index: 0,
+              title: 'chapter',
+              chapterIndex: 0,
+              startCharOffset: 0,
+              endCharOffset: 20,
+              isChapterEnd: false,
+              lines: <TextLine>[
+                TextLine(
+                  text: '第一頁內容',
+                  width: 100,
+                  height: 20,
+                  chapterPosition: 0,
+                  lineTop: 0,
+                  lineBottom: 20,
+                  startCharOffset: 0,
+                  endCharOffset: 20,
+                ),
+              ],
+            ),
+            TextPage(
+              index: 1,
+              title: 'chapter',
+              chapterIndex: 0,
+              startCharOffset: 20,
+              endCharOffset: 40,
+              isChapterEnd: true,
+              lines: <TextLine>[
+                TextLine(
+                  text: '第二頁內容',
+                  width: 100,
+                  height: 20,
+                  chapterPosition: 20,
+                  lineTop: 0,
+                  lineBottom: 20,
+                  startCharOffset: 20,
+                  endCharOffset: 40,
+                ),
+              ],
+            ),
+          ],
+        );
+
+        expect(layout.pageForCharOffset(19).pageIndex, 0);
+        expect(layout.pageForCharOffset(20).pageIndex, 1);
+        expect(layout.pageForCharOffset(39).pageIndex, 1);
+      },
+    );
+
+    test(
       'runtime opens only current window and keeps lookAhead optional',
       () async {
         final env = _RuntimeEnv();

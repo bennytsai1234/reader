@@ -26,6 +26,14 @@ class ChapterLayout {
     }
     final bodyPages = pages.where((page) => page.hasBodyContent).toList();
     if (bodyPages.isEmpty) return pages.first;
+    for (final page in bodyPages) {
+      if (page.containsCharOffset(charOffset)) {
+        return page;
+      }
+    }
+    if (charOffset <= bodyPages.first.startCharOffset) {
+      return bodyPages.first;
+    }
     var best = bodyPages.first;
     for (final page in bodyPages) {
       if (page.startCharOffset <= charOffset) {
