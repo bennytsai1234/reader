@@ -20,7 +20,7 @@ ReaderLocation(chapterIndex, charOffset, visualOffsetPx)
 
 - `chapterIndex`：第幾章。
 - `charOffset`：章內第幾個字，這是主要閱讀進度。
-- `visualOffsetPx`：scroll 模式恢復時的畫面微調位移，單位是 px。
+- `visualOffsetPx`：以 anchor line 為基準的畫面微調位移，單位是 px。
 
 `visualOffsetPx` 不應是章節內的大型總位移，也不應是新的 page index。它只表示：
 
@@ -28,15 +28,9 @@ ReaderLocation(chapterIndex, charOffset, visualOffsetPx)
 恢復時，讓 charOffset 對應的那一行，和畫面 anchor line 相差多少 px。
 ```
 
-anchor line 是 scroll 模式裡一條穩定的隱形基準線，建議放在閱讀內容區頂部往下 16 到 32 px。保存時用它選目前讀到的行，恢復時也用它把同一行放回原來的相對位置。
+anchor line 是閱讀畫面裡一條穩定的隱形基準線，建議放在閱讀內容區頂部往下 16 到 32 px。保存時用它選目前讀到的行，恢復時也用它把同一行放回原來的相對位置。
 
-slide 模式不需要這個微調，保存：
-
-```text
-ReaderLocation(chapterIndex, charOffset, 0)
-```
-
-scroll 模式需要它，保存：
+scroll / slide 都保存同一種位置：
 
 ```text
 ReaderLocation(chapterIndex, charOffset, visualOffsetPx)
@@ -50,7 +44,7 @@ ReaderLocation(chapterIndex, charOffset, visualOffsetPx)
 chapterIndex + charOffset
 ```
 
-可以知道「讀到哪個字」，但不知道「這個字離開前在畫面哪個位置」。scroll 模式恢復時，如果只把那個字捲到頂部，使用者看到的位置會和退出前有落差。
+可以知道「讀到哪個字」，但不知道「這個字離開前在畫面哪個位置」。恢復時如果只靠 `charOffset`，scroll 可能把那行捲到不對的位置，slide 也可能在頁邊界或重排後落到不直覺的頁。
 
 加上 `visualOffsetPx` 後，恢復流程變成：
 
@@ -60,11 +54,11 @@ chapterIndex + charOffset
 3. 用 visualOffsetPx 把那一行放回離開前接近的位置。
 ```
 
-這樣 scroll 恢復會比單純 `chapterIndex + charOffset` 更準，但又不需要保存龐大的章內 scroll offset。
+這樣恢復會比單純 `chapterIndex + charOffset` 更準，但又不需要保存龐大的章內 scroll offset 或舊 page index。
 
 ## visualOffsetPx 怎麼算
 
-scroll 模式退出、背景、或需要保存進度時：
+scroll / slide 模式退出、背景、或需要保存進度時：
 
 1. 取閱讀內容區的 anchor 線，建議是內容區頂部往下 16 到 32 px。
 2. 找到這條 anchor 線附近的第一條穩定可見文字行。
@@ -149,12 +143,12 @@ targetScrollY =
 
 ## slide 模式怎麼用
 
-slide 模式不使用視覺 offset。
+slide 模式也使用 `visualOffsetPx`，但它不是拿來 scroll。它是用來描述「保存時，這個 `charOffset` 對應的文字行在 page 畫面裡離 anchor line 多遠」。
 
 保存：
 
 ```text
-ReaderLocation(chapterIndex, charOffset, 0)
+ReaderLocation(chapterIndex, charOffset, visualOffsetPx)
 ```
 
 恢復：
@@ -162,11 +156,25 @@ ReaderLocation(chapterIndex, charOffset, 0)
 ```text
 1. 用 chapterIndex 載入章節。
 2. layout 出 pages。
-3. 用 charOffset 找到對應 page。
-4. 顯示該 page。
+3. 計算 desiredLineTopOnScreen = anchorLineY + visualOffsetPx。
+4. 找出在 desiredLineTopOnScreen 附近最接近 charOffset 的 page。
+5. 顯示該 page。
 ```
 
-slide 不應用舊 page index 作主進度，因為字級、行距、螢幕尺寸變了，page index 會變。
+建議查找方式：
+
+```text
+1. 先用 pageForCharOffset(charOffset) 找到基準 page。
+2. 取基準 page 前後少量候選頁。
+3. 對每一頁查 desiredLineTopOnScreen 附近的文字行。
+4. 選該行 startCharOffset 最接近保存 charOffset 的 page。
+```
+
+白話講：slide 不保存舊 page index，而是保存「anchor line 附近是哪一行」。重建頁面後，再找哪一頁在同一個 anchor 位置最接近這個 `charOffset`。
+
+如果找不到穩定 anchor page，fallback 才用一般 `pageForCharOffset(charOffset)`。
+
+slide 不應用舊 page index 作主進度，因為字級、行距、螢幕尺寸變了，page index 會變。`visualOffsetPx` 是 page 重建時的微調線索，不是新的 page index。
 
 ## 要修改的主要地方
 
@@ -270,10 +278,10 @@ ReaderLocation(chapterIndex, charOffset, visualOffsetPx)
 - `visibleLocation` 使用三元 `ReaderLocation`。
 - `committedLocation` 使用三元 `ReaderLocation`。
 - scroll 更新 visible location 時保留 `visualOffsetPx`。
-- slide 更新位置時把 `visualOffsetPx` 設為 `0`。
+- slide 更新 visible location 時也保留 `visualOffsetPx`。
 - mode switch 時：
-  - scroll -> slide：用 `chapterIndex + charOffset` 找 page，offset 歸零。
-  - slide -> scroll：用 `chapterIndex + charOffset` 找行，offset 可用 `0` 或預設 anchor。
+  - scroll -> slide：用 `chapterIndex + charOffset + visualOffsetPx` 找 anchor page。
+  - slide -> scroll：用 `chapterIndex + charOffset + visualOffsetPx` 找 scroll target。
 
 ### 6. Layout / Coordinate Mapping
 
@@ -289,6 +297,7 @@ screen visible line -> charOffset
 - 每條 `TextLine` 有穩定 `startCharOffset/endCharOffset`。
 - 標題直接算進 chapter offset，也可以作為 anchor line 候選，避免正文和標題分兩套 offset 規則。也就是說，排版用的 chapter display text 如果包含標題，`charOffset` 就以這份 display text 為準。
 - `charOffset` 落在頁邊界時能找對 page / line。
+- slide 需要 `charOffset + desiredLineTopOnScreen -> page` 或等價查找，不能只依賴舊 page index。
 - 字級、行距、padding 改變後，仍能用 `charOffset` 找回合理行。
 
 ### 7. Content
@@ -337,18 +346,22 @@ content 改變時，舊的 visual offset 仍可保留為小範圍視覺修正，
 
 ```text
 使用者翻到某頁
- -> runtime 知道 current page start charOffset
+ -> viewport 用目前 anchor line 找該頁上的穩定可見行
+ -> 算 chapterIndex
+ -> 算 charOffset
+ -> 算 visualOffsetPx，允許小幅正負值
  -> 呼叫同一個 capture and flush
- -> 保存 ReaderLocation(chapterIndex, charOffset, 0)
+ -> 保存 ReaderLocation(chapterIndex, charOffset, visualOffsetPx)
 ```
 
 ### slide 開書恢復
 
 ```text
 開書
- -> 讀取 chapterIndex / charOffset
+ -> 讀取 chapterIndex / charOffset / visualOffsetPx
  -> layout
- -> charOffset 找 page
+ -> desiredLineTopOnScreen = anchorLineY + visualOffsetPx
+ -> 找 desiredLineTopOnScreen 附近最接近 charOffset 的 page
  -> 顯示 page
 ```
 
@@ -364,14 +377,14 @@ content 改變時，舊的 visual offset 仍可保留為小範圍視覺修正，
 
 ### slide
 
-- slide 翻頁後退出再進，回到同一頁或同一 charOffset 對應頁。
-- slide 保存時 `visualOffsetPx == 0`。
+- slide 翻頁後退出再進，anchor line 附近回到同一段文字。
+- slide 保存時也保留小範圍正負 `visualOffsetPx`。
 - 改字級後，用 `charOffset` 重新找到合理 page。
 
 ### mode switch
 
-- scroll -> slide 不丟 `chapterIndex + charOffset`。
-- slide -> scroll 可回到同一段文字附近。
+- scroll -> slide 不丟 `chapterIndex + charOffset + visualOffsetPx`。
+- slide -> scroll 可回到同一段文字附近，並保留 anchor line 的相對偏移。
 - mode switch 不依賴舊 page index。
 
 ### progress
