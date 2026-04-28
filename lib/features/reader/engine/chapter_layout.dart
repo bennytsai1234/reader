@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'page_cache.dart';
 import 'text_page.dart';
 
 class ChapterLayout {
@@ -20,6 +21,10 @@ class ChapterLayout {
   final List<TextLine> lines;
   final List<TextPage> pages;
   final double contentHeight;
+
+  List<PageCache> get pageCaches {
+    return pages.map((page) => page.toPageCache()).toList(growable: false);
+  }
 
   TextPage pageForCharOffset(int charOffset) {
     if (pages.isEmpty) {

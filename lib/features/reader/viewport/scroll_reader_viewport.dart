@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_layout.dart';
+import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
@@ -47,7 +48,7 @@ class _LoadedChapter {
 
   final ChapterLayout layout;
   final ReaderChapter chapter;
-  final TextPage tile;
+  final PageCache tile;
   final double extent;
 }
 
@@ -204,17 +205,15 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
         .toDouble();
   }
 
-  TileKey _chapterTileKey(TextPage tile) {
-    return TileKey(
-      chapterIndex: tile.chapterIndex,
+  TileKey _chapterTileKey(PageCache tile) {
+    return TileKey.fromPageCache(
+      tile,
       tileIndex: -1,
-      startOffset: tile.startCharOffset,
-      endOffset: tile.endCharOffset,
       layoutRevision: widget.runtime.state.layoutGeneration,
     );
   }
 
-  TextPage _chapterTile(ChapterLayout layout) {
+  PageCache _chapterTile(ChapterLayout layout) {
     final lines = layout.lines;
     final contentHeight =
         lines.isEmpty
@@ -234,11 +233,15 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
       startCharOffset:
           layout.pages.isEmpty ? 0 : layout.pages.first.startCharOffset,
       endCharOffset: layout.pages.isEmpty ? 0 : layout.pages.last.endCharOffset,
+      width: widget.runtime.state.layoutSpec.contentWidth,
+      localStartY: 0.0,
+      localEndY: contentHeight,
       contentHeight: contentHeight,
       viewportHeight: viewportHeight,
+      hasExplicitLocalRange: true,
       isChapterStart: true,
       isChapterEnd: true,
-    );
+    ).toPageCache();
   }
 
   ReaderChapter _runtimeChapterForLayout(ChapterLayout layout) {

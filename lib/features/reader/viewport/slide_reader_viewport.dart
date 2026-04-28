@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/page_window.dart';
@@ -173,24 +174,22 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     _animateTo(target);
   }
 
-  TileKey _tileKey(TextPage tile) {
-    return TileKey(
-      chapterIndex: tile.chapterIndex,
-      tileIndex: tile.pageIndex,
-      startOffset: tile.startCharOffset,
-      endOffset: tile.endCharOffset,
+  TileKey _tileKey(PageCache tile) {
+    return TileKey.fromPageCache(
+      tile,
       layoutRevision: widget.runtime.state.layoutGeneration,
     );
   }
 
   Widget _buildTile(TextPage tile) {
+    final pageCache = tile.toPageCache();
     return GestureDetector(
-      key: ValueKey<TileKey>(_tileKey(tile)),
+      key: ValueKey<TileKey>(_tileKey(pageCache)),
       behavior: HitTestBehavior.opaque,
       onTapUp: widget.onTapUp,
       child: ReaderTileLayer(
-        tile: tile,
-        tileKey: _tileKey(tile),
+        tile: pageCache,
+        tileKey: _tileKey(pageCache),
         style: widget.style,
         backgroundColor: widget.backgroundColor,
         textColor: widget.textColor,

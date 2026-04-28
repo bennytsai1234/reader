@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
-import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/tile_key.dart';
 
 import 'reader_tile_painter.dart';
@@ -18,7 +18,7 @@ class ReaderTileLayer extends StatelessWidget {
     this.enableJustification = true,
   });
 
-  final TextPage tile;
+  final PageCache tile;
   final ReadStyle style;
   final Color backgroundColor;
   final Color textColor;
@@ -47,7 +47,7 @@ class ReaderTileLayer extends StatelessWidget {
               ? SizedBox.expand(child: paint)
               : SizedBox(
                 width: double.infinity,
-                height: tile.viewportHeight,
+                height: tile.height,
                 child: paint,
               ),
     );

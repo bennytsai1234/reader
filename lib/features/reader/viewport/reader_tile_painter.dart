@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 
-typedef ReaderTilePaintObserver = void Function(TextPage tile);
+typedef ReaderTilePaintObserver = void Function(PageCache tile);
 
 class ReaderTilePainter extends CustomPainter {
   ReaderTilePainter({
@@ -14,7 +15,7 @@ class ReaderTilePainter extends CustomPainter {
     this.enableJustification = true,
   });
 
-  final TextPage tile;
+  final PageCache tile;
   final Color backgroundColor;
   final Color textColor;
   final ReadStyle style;

@@ -1,3 +1,5 @@
+import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
+
 class TileKey {
   const TileKey({
     required this.chapterIndex,
@@ -12,6 +14,20 @@ class TileKey {
   final int startOffset;
   final int endOffset;
   final int layoutRevision;
+
+  factory TileKey.fromPageCache(
+    PageCache page, {
+    required int layoutRevision,
+    int? tileIndex,
+  }) {
+    return TileKey(
+      chapterIndex: page.chapterIndex,
+      tileIndex: tileIndex ?? page.pageIndexInChapter,
+      startOffset: page.startCharOffset,
+      endOffset: page.endCharOffset,
+      layoutRevision: layoutRevision,
+    );
+  }
 
   @override
   bool operator ==(Object other) {
