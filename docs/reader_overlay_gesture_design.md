@@ -266,13 +266,3 @@ glyph-level hit test
 charOffset -> x position
 自訂 ReaderPageShell 選單
 ```
-
-保留未來擴充空間：
-
-```text
-SelectionOverlayLayer
-glyph positions
-text selection controller
-copy/share/action menu
-```
-
