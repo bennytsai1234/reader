@@ -107,6 +107,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
       this,
       _captureVisibleLocation,
     );
+    widget.runtime.registerViewportRestore(this, _restoreToLocation);
     _attachController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -119,12 +120,14 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.runtime != widget.runtime) {
       oldWidget.runtime.unregisterVisibleLocationCapture(this);
+      oldWidget.runtime.unregisterViewportRestore(this);
       oldWidget.runtime.removeListener(_onRuntimeChanged);
       widget.runtime.addListener(_onRuntimeChanged);
       widget.runtime.registerVisibleLocationCapture(
         this,
         _captureVisibleLocation,
       );
+      widget.runtime.registerViewportRestore(this, _restoreToLocation);
       _resetLoadedState();
       _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
       _lastReportedLocation = widget.runtime.state.visibleLocation;
@@ -149,6 +152,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
   void dispose() {
     widget.runtime.removeListener(_onRuntimeChanged);
     widget.runtime.unregisterVisibleLocationCapture(this);
+    widget.runtime.unregisterViewportRestore(this);
     _detachController(widget.controller);
     _scrollAnimation
       ..removeListener(_handleScrollAnimationTick)
@@ -483,6 +487,23 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
       charOffset: item.chapterPosition,
       visualOffsetPx: anchorLineY - lineTopOnScreen,
     );
+  }
+
+  Future<bool> _restoreToLocation(ReaderLocation location) async {
+    if (!mounted || widget.runtime.chapterCount <= 0) return false;
+    _scrollAnimation.stop();
+    _isDragging = false;
+    await _ensureWindowAround(location.chapterIndex);
+    if (!mounted) return false;
+    final target = _virtualScrollYForLocation(location);
+    if (target == null) return false;
+    _virtualScrollY = _clampVirtualScrollY(target);
+    _initialJumpCompleted = true;
+    _lastSyncedLocation = location;
+    _lastReportedLocation = location;
+    if (mounted) setState(() {});
+    await Future<void>.delayed(Duration.zero);
+    return mounted && _captureVisibleLocation() != null;
   }
 
   LineItem? _lineItemAtOrNearLocalY(LineLayout layout, double localY) {

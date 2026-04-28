@@ -49,6 +49,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       this,
       _captureVisibleLocation,
     );
+    widget.runtime.registerViewportRestore(this, _restoreToLocation);
   }
 
   @override
@@ -56,12 +57,14 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.runtime != widget.runtime) {
       oldWidget.runtime.unregisterVisibleLocationCapture(this);
+      oldWidget.runtime.unregisterViewportRestore(this);
       oldWidget.runtime.removeListener(_onRuntimeChanged);
       widget.runtime.addListener(_onRuntimeChanged);
       widget.runtime.registerVisibleLocationCapture(
         this,
         _captureVisibleLocation,
       );
+      widget.runtime.registerViewportRestore(this, _restoreToLocation);
       _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
       _resetViewport();
     } else if (oldWidget.style.pageMode != widget.style.pageMode) {
@@ -73,6 +76,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
   void dispose() {
     widget.runtime.removeListener(_onRuntimeChanged);
     widget.runtime.unregisterVisibleLocationCapture(this);
+    widget.runtime.unregisterViewportRestore(this);
     _slideController.dispose();
     super.dispose();
   }
@@ -243,6 +247,15 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       charOffset: nearest.startCharOffset,
       visualOffsetPx: contentY - nearest.top,
     );
+  }
+
+  Future<bool> _restoreToLocation(ReaderLocation location) async {
+    if (!mounted || widget.runtime.state.phase != ReaderPhase.ready) {
+      return false;
+    }
+    _resetViewport();
+    await Future<void>.delayed(Duration.zero);
+    return mounted && _captureVisibleLocation() != null;
   }
 
   double _anchorOffsetInViewport() {

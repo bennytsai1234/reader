@@ -18,6 +18,7 @@ import 'reader_progress_controller.dart';
 import 'reader_state.dart';
 
 typedef ReaderVisibleLocationCapture = ReaderLocation? Function();
+typedef ReaderViewportRestore = Future<bool> Function(ReaderLocation location);
 
 class ReaderRuntime extends ChangeNotifier {
   ReaderRuntime({
@@ -78,8 +79,11 @@ class ReaderRuntime extends ChangeNotifier {
   ReaderState state;
 
   bool _disposed = false;
+  bool _restoreInProgress = false;
   Object? _visibleLocationCaptureOwner;
   ReaderVisibleLocationCapture? _visibleLocationCapture;
+  Object? _viewportRestoreOwner;
+  ReaderViewportRestore? _viewportRestore;
   PageAddress? _pendingNeighborAdvanceOrigin;
   int _pendingNeighborAdvanceDirection = 0;
   String? _pendingUserNotice;
@@ -110,6 +114,17 @@ class ReaderRuntime extends ChangeNotifier {
     _visibleLocationCapture = null;
   }
 
+  void registerViewportRestore(Object owner, ReaderViewportRestore restore) {
+    _viewportRestoreOwner = owner;
+    _viewportRestore = restore;
+  }
+
+  void unregisterViewportRestore(Object owner) {
+    if (!identical(_viewportRestoreOwner, owner)) return;
+    _viewportRestoreOwner = null;
+    _viewportRestore = null;
+  }
+
   String? takeUserNotice() {
     final notice = _pendingUserNotice;
     _pendingUserNotice = null;
@@ -123,6 +138,10 @@ class ReaderRuntime extends ChangeNotifier {
       final location = _initialLocation.normalized(
         chapterCount: _repository.chapterCount,
       );
+      if (_viewportRestore != null) {
+        final restored = await restoreFromLocation(location);
+        if (restored || state.phase == ReaderPhase.error) return;
+      }
       await jumpToLocation(location, immediateSave: false);
     } catch (e) {
       _setState(
@@ -269,6 +288,164 @@ class ReaderRuntime extends ChangeNotifier {
         state.copyWith(phase: ReaderPhase.error, errorMessage: e.toString()),
       );
     }
+  }
+
+  Future<bool> restoreFromLocation(ReaderLocation location) async {
+    if (_disposed || _viewportRestore == null) return false;
+    _clearPendingNeighborAdvance();
+    final generation = state.layoutGeneration;
+    _restoreInProgress = true;
+    _setState(
+      state.copyWith(
+        phase: ReaderPhase.restoring,
+        clearError: true,
+        clearPageWindow: true,
+        clearCurrentSlidePage: true,
+      ),
+    );
+    try {
+      await _repository.ensureChapters();
+      final normalized = await _normalizeRestoreLocation(location);
+      final page = await _pageForRestoreLocation(normalized);
+      if (_disposed || generation != state.layoutGeneration) return false;
+      final window = await _windowAroundPage(page);
+      if (_disposed || generation != state.layoutGeneration) return false;
+      final restoreTarget = _locationForRestorePage(normalized, page);
+      _setState(
+        state.copyWith(
+          phase: ReaderPhase.ready,
+          pageWindow: window,
+          currentSlidePage: page,
+          clearError: true,
+        ),
+      );
+      final restore = _viewportRestore;
+      if (restore == null) return false;
+      final positioned = await restore(restoreTarget);
+      if (!positioned || _disposed) return false;
+      final captured = _captureVisibleLocation(allowDuringRestore: true);
+      return captured != null;
+    } catch (e) {
+      if (!_disposed) {
+        _setState(
+          state.copyWith(phase: ReaderPhase.error, errorMessage: e.toString()),
+        );
+      }
+      return false;
+    } finally {
+      _restoreInProgress = false;
+    }
+  }
+
+  Future<ReaderLocation> _normalizeRestoreLocation(
+    ReaderLocation location,
+  ) async {
+    await _repository.ensureChapters();
+    final chapterCount = _repository.chapterCount;
+    final chapterIndex =
+        chapterCount <= 0
+            ? 0
+            : location.chapterIndex.clamp(0, chapterCount - 1).toInt();
+    final content = await _repository.loadContent(chapterIndex);
+    return ReaderLocation(
+      chapterIndex: chapterIndex,
+      charOffset: location.charOffset,
+      visualOffsetPx: location.visualOffsetPx,
+    ).normalized(
+      chapterCount: chapterCount,
+      chapterLength: content.displayText.length,
+    );
+  }
+
+  Future<TextPage> _pageForRestoreLocation(ReaderLocation location) async {
+    if (state.mode == ReaderMode.slide) {
+      return _slidePageForRestoreLocation(location);
+    }
+    return _resolver.pageForLocation(location);
+  }
+
+  Future<TextPage> _slidePageForRestoreLocation(ReaderLocation location) async {
+    final layout = await _resolver.ensureLayout(location.chapterIndex);
+    if (layout.pages.isEmpty) return layout.pageForCharOffset(0);
+    final basePage = layout.pageForCharOffset(location.charOffset);
+    final anchorY = _anchorOffsetInViewport();
+    final desiredLineTopOnScreen = anchorY - location.visualOffsetPx;
+    TextPage? bestPage;
+    int? bestCharDistance;
+    double? bestVisualDistance;
+    for (
+      var index = basePage.pageIndex - 1;
+      index <= basePage.pageIndex + 1;
+      index++
+    ) {
+      if (index < 0 || index >= layout.pages.length) continue;
+      final page = layout.pages[index];
+      final nearestLine = _nearestLineOnPage(page, desiredLineTopOnScreen);
+      final charDistance =
+          ((nearestLine?.startCharOffset ?? page.startCharOffset) -
+                  location.charOffset)
+              .abs();
+      final visualDistance =
+          nearestLine == null
+              ? double.infinity
+              : (nearestLine.top - desiredLineTopOnScreen).abs();
+      if (bestPage == null ||
+          charDistance < bestCharDistance! ||
+          (charDistance == bestCharDistance &&
+              visualDistance < bestVisualDistance!)) {
+        bestPage = page;
+        bestCharDistance = charDistance;
+        bestVisualDistance = visualDistance;
+      }
+    }
+    return bestPage ?? basePage;
+  }
+
+  TextLine? _nearestLineOnPage(TextPage page, double pageY) {
+    TextLine? nearest;
+    var nearestDistance = double.infinity;
+    for (final line in page.lines) {
+      if (line.text.isEmpty) continue;
+      if (pageY >= line.top && pageY <= line.bottom) return line;
+      final distance =
+          pageY < line.top ? line.top - pageY : pageY - line.bottom;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = line;
+      }
+    }
+    return nearest;
+  }
+
+  Future<PageWindow> _windowAroundPage(TextPage page) async {
+    final prev = await _resolver.prevPage(page, allowAsyncLoad: true);
+    final next = await _resolver.nextPage(page, allowAsyncLoad: true);
+    return PageWindow(
+      prev: prev,
+      current: page,
+      next: next,
+      lookAhead: const <TextPage>[],
+    );
+  }
+
+  ReaderLocation _locationForRestorePage(
+    ReaderLocation location,
+    TextPage page,
+  ) {
+    return ReaderLocation(
+      chapterIndex: page.chapterIndex,
+      charOffset:
+          location.charOffset
+              .clamp(page.startCharOffset, page.endCharOffset)
+              .toInt(),
+      visualOffsetPx: location.visualOffsetPx,
+    );
+  }
+
+  double _anchorOffsetInViewport() {
+    final height = state.layoutSpec.viewportSize.height;
+    final viewportHeight = height.isFinite && height > 0 ? height : 1.0;
+    return (viewportHeight * 0.2).clamp(24.0, 120.0).toDouble();
   }
 
   Future<void> switchMode(ReaderMode mode) async {
@@ -494,7 +671,12 @@ class ReaderRuntime extends ChangeNotifier {
   }
 
   ReaderLocation? captureVisibleLocation() {
+    return _captureVisibleLocation();
+  }
+
+  ReaderLocation? _captureVisibleLocation({bool allowDuringRestore = false}) {
     if (_disposed || state.phase != ReaderPhase.ready) return null;
+    if (_restoreInProgress && !allowDuringRestore) return null;
     final capture = _visibleLocationCapture;
     if (capture == null) return null;
     final captured = _normalizeCapturedLocation(capture());
@@ -505,6 +687,7 @@ class ReaderRuntime extends ChangeNotifier {
   }
 
   Future<ReaderLocation?> saveProgress() async {
+    if (_restoreInProgress) return null;
     final location = captureVisibleLocation();
     if (location == null) return null;
     if (location == state.committedLocation) return location;

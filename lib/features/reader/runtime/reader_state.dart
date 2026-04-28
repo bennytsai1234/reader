@@ -5,7 +5,15 @@ import 'page_window.dart';
 
 enum ReaderMode { scroll, slide }
 
-enum ReaderPhase { cold, loading, layingOut, ready, switchingMode, error }
+enum ReaderPhase {
+  cold,
+  loading,
+  layingOut,
+  restoring,
+  ready,
+  switchingMode,
+  error,
+}
 
 class ReaderScrollState {
   const ReaderScrollState({

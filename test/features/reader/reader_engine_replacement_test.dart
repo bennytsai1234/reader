@@ -724,6 +724,100 @@ void main() {
     );
 
     test(
+      'restoreFromLocation normalizes and updates visible location without DB write',
+      () async {
+        final env = _RuntimeEnv();
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final owner = Object();
+        final committedBefore = runtime.state.committedLocation;
+        ReaderLocation? captured;
+        ReaderLocation? restoreRequest;
+        runtime.registerVisibleLocationCapture(owner, () => captured);
+        runtime.registerViewportRestore(owner, (location) async {
+          restoreRequest = location;
+          captured = location;
+          expect(runtime.captureVisibleLocation(), isNull);
+          expect(await runtime.saveProgress(), isNull);
+          return true;
+        });
+
+        final restored = await runtime.restoreFromLocation(
+          const ReaderLocation(
+            chapterIndex: -4,
+            charOffset: -12,
+            visualOffsetPx: double.nan,
+          ),
+        );
+
+        expect(restored, isTrue);
+        expect(
+          restoreRequest,
+          const ReaderLocation(chapterIndex: 0, charOffset: 0),
+        );
+        expect(runtime.state.visibleLocation, restoreRequest);
+        expect(runtime.state.committedLocation, committedBefore);
+        expect(env.bookDao.writes, 0);
+        expect(runtime.state.phase, ReaderPhase.ready);
+        runtime.unregisterVisibleLocationCapture(owner);
+        runtime.unregisterViewportRestore(owner);
+      },
+    );
+
+    test('restoreFromLocation fails without active viewport', () async {
+      final env = _RuntimeEnv();
+      final runtime = env.runtime;
+      await runtime.openBook();
+      final visibleBefore = runtime.state.visibleLocation;
+      final committedBefore = runtime.state.committedLocation;
+
+      final restored = await runtime.restoreFromLocation(
+        const ReaderLocation(chapterIndex: 1, charOffset: 20),
+      );
+
+      expect(restored, isFalse);
+      expect(runtime.state.visibleLocation, visibleBefore);
+      expect(runtime.state.committedLocation, committedBefore);
+      expect(runtime.state.phase, ReaderPhase.ready);
+      expect(env.bookDao.writes, 0);
+    });
+
+    test(
+      'restoreFromLocation prepares slide target page before final capture',
+      () async {
+        final env = _RuntimeEnv(mode: ReaderMode.slide);
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final owner = Object();
+        final target = runtime.state.pageWindow!.next!;
+        ReaderLocation? captured;
+        runtime.registerVisibleLocationCapture(owner, () => captured);
+        runtime.registerViewportRestore(owner, (location) async {
+          final currentPage = runtime.state.currentSlidePage;
+          expect(currentPage, isNotNull);
+          expect(currentPage!.chapterIndex, target.chapterIndex);
+          expect(currentPage.containsCharOffset(location.charOffset), isTrue);
+          captured = location;
+          return true;
+        });
+
+        final restored = await runtime.restoreFromLocation(
+          ReaderLocation(
+            chapterIndex: target.chapterIndex,
+            charOffset: target.startCharOffset,
+            visualOffsetPx: 12,
+          ),
+        );
+
+        expect(restored, isTrue);
+        expect(runtime.state.visibleLocation.chapterIndex, target.chapterIndex);
+        expect(env.bookDao.writes, 0);
+        runtime.unregisterVisibleLocationCapture(owner);
+        runtime.unregisterViewportRestore(owner);
+      },
+    );
+
+    test(
       'missing cross-chapter neighbor auto-advances after loading completes',
       () async {
         final book = Book(bookUrl: 'delayed-book', origin: 'local', name: 'd');

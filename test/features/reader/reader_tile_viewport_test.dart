@@ -400,6 +400,60 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(milliseconds: 500));
     });
+
+    testWidgets(
+      'scroll canvas restoreFromLocation positions without DB write',
+      (tester) async {
+        final env = _RuntimeEnv();
+        await env.runtime.openBook();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: SizedBox(
+              width: 320,
+              height: 360,
+              child: ScrollReaderViewport(
+                runtime: env.runtime,
+                backgroundColor: Colors.white,
+                textColor: Colors.black,
+                style: _style(ReaderPageMode.scroll),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+
+        final targetPage = env.runtime.state.pageWindow!.next!;
+        final restored = await tester.runAsync(
+          () => env.runtime.restoreFromLocation(
+            ReaderLocation(
+              chapterIndex: targetPage.chapterIndex,
+              charOffset: targetPage.startCharOffset,
+              visualOffsetPx: 18,
+            ),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 16));
+
+        expect(restored, isTrue);
+        expect(
+          env.runtime.state.visibleLocation.chapterIndex,
+          targetPage.chapterIndex,
+        );
+        expect(
+          (env.runtime.state.visibleLocation.charOffset -
+                  targetPage.startCharOffset)
+              .abs(),
+          lessThanOrEqualTo(80),
+        );
+        expect(env.bookDao.writes, 0);
+
+        env.runtime.dispose();
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 500));
+      },
+    );
   });
 }
 
