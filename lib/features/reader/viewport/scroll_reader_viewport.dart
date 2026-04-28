@@ -5,6 +5,9 @@ import 'package:inkpage_reader/features/reader/engine/chapter_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_chapter_metrics.dart';
+import 'package:inkpage_reader/features/reader/runtime/reader_coordinate_mapper.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
 import 'package:inkpage_reader/features/reader/runtime/tile_key.dart';
@@ -37,11 +40,13 @@ class ScrollReaderViewport extends StatefulWidget {
 class _LoadedChapter {
   const _LoadedChapter({
     required this.layout,
+    required this.chapter,
     required this.tile,
     required this.extent,
   });
 
   final ChapterLayout layout;
+  final ReaderChapter chapter;
   final TextPage tile;
   final double extent;
 }
@@ -56,6 +61,19 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
   int _lastLayoutGeneration = 0;
   bool _applyingProgrammaticScroll = false;
   bool _initialJumpCompleted = false;
+
+  ReaderCoordinateMapper get _coordinateMapper {
+    return ReaderCoordinateMapper(
+      chapterAt: (chapterIndex) => _loadedChapters[chapterIndex]?.chapter,
+      pagesForChapter: (chapterIndex) {
+        final loaded = _loadedChapters[chapterIndex];
+        if (loaded != null) return loaded.chapter.pages;
+        return widget.runtime.debugResolver.cachedLayout(chapterIndex)?.pages ??
+            const <TextPage>[];
+      },
+      slidePages: () => const <TextPage>[],
+    );
+  }
 
   @override
   void initState() {
@@ -165,69 +183,25 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
     return offset;
   }
 
-  double _localOffsetForLine(TextLine line) {
-    return line.top.clamp(0.0, double.infinity).toDouble();
+  double _viewportHeight() {
+    return widget.runtime.state.layoutSpec.viewportSize.height;
   }
 
-  double _localOffsetForLocationInLayout(
-    ChapterLayout layout,
-    ReaderLocation location,
-  ) {
-    if (layout.lines.isEmpty) return 0.0;
-    for (final line in layout.lines) {
-      if (location.charOffset <= line.startCharOffset) {
-        return _localOffsetForLine(line);
-      }
-      if (location.charOffset >= line.startCharOffset &&
-          location.charOffset < line.endCharOffset) {
-        return _localOffsetForLine(line);
-      }
-    }
-    return _localOffsetForLine(layout.lines.last);
-  }
-
-  ReaderLocation _locationForChapterLocalOffset(
-    int chapterIndex,
-    double localOffset,
-  ) {
-    final loaded = _loadedChapters[chapterIndex];
-    if (loaded == null || loaded.layout.lines.isEmpty) {
-      return ReaderLocation(chapterIndex: chapterIndex, charOffset: 0);
-    }
-    final safeOffset = localOffset.clamp(0.0, loaded.extent).toDouble();
-    TextLine nearest = loaded.layout.lines.first;
-    var nearestDistance = double.infinity;
-    for (final line in loaded.layout.lines) {
-      if (safeOffset >= line.top && safeOffset <= line.bottom) {
-        return ReaderLocation(
-          chapterIndex: chapterIndex,
-          charOffset: line.startCharOffset,
-        );
-      }
-      final distance =
-          safeOffset < line.top
-              ? line.top - safeOffset
-              : safeOffset - line.bottom;
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearest = line;
-      }
-    }
-    return ReaderLocation(
-      chapterIndex: chapterIndex,
-      charOffset: nearest.startCharOffset,
-    );
+  double _anchorOffsetInViewport() {
+    final viewportHeight = _viewportHeight();
+    return (viewportHeight * 0.2).clamp(24.0, 120.0).toDouble();
   }
 
   double _globalOffsetForLocation(ReaderLocation location) {
     final baseOffset = _chapterBaseOffset(location.chapterIndex);
-    final loaded = _loadedChapters[location.chapterIndex];
-    if (loaded == null) return baseOffset;
-    final localOffset = _localOffsetForLocationInLayout(
-      loaded.layout,
-      location,
-    );
+    final localOffset = _coordinateMapper.localOffsetForLocation(location);
     return baseOffset + widget.style.paddingTop + localOffset;
+  }
+
+  double _scrollOffsetForLocation(ReaderLocation location) {
+    return (_globalOffsetForLocation(location) - _anchorOffsetInViewport())
+        .clamp(0.0, double.infinity)
+        .toDouble();
   }
 
   TileKey _chapterTileKey(TextPage tile) {
@@ -264,6 +238,22 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
     );
   }
 
+  ReaderChapter _runtimeChapterForLayout(ChapterLayout layout) {
+    final chapter = widget.runtime.chapterAt(layout.chapterIndex);
+    return ReaderChapter(
+      chapter:
+          chapter ??
+          widget.runtime.chapters[layout.chapterIndex.clamp(
+            0,
+            widget.runtime.chapters.length - 1,
+          )],
+      index: layout.chapterIndex,
+      title: layout.pages.isEmpty ? '' : layout.pages.first.title,
+      pages: layout.pages,
+      metrics: ReaderChapterMetrics.fromPages(layout.pages, isEstimated: false),
+    );
+  }
+
   Future<void> _ensureChapterLoaded(int chapterIndex) {
     final safeChapterIndex = chapterIndex.clamp(
       0,
@@ -282,23 +272,25 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
             _lastReportedLocation ?? widget.runtime.state.visibleLocation;
         final anchorOffsetBefore =
             _controller.hasClients
-                ? _globalOffsetForLocation(anchorLocation)
+                ? _scrollOffsetForLocation(anchorLocation)
                 : null;
         final layout = await widget.runtime.debugResolver.ensureLayout(
           safeChapterIndex,
         );
         if (!mounted) return;
+        final chapter = _runtimeChapterForLayout(layout);
         final tile = _chapterTile(layout);
         final loaded = _LoadedChapter(
           layout: layout,
+          chapter: chapter,
           tile: tile,
-          extent: tile.viewportHeight,
+          extent: chapter.metrics.itemExtent,
         );
         _loadedChapters[safeChapterIndex] = loaded;
         _chapterExtents[safeChapterIndex] = loaded.extent;
         final anchorOffsetAfter =
             _controller.hasClients
-                ? _globalOffsetForLocation(anchorLocation)
+                ? _scrollOffsetForLocation(anchorLocation)
                 : null;
         final delta =
             anchorOffsetAfter == null || anchorOffsetBefore == null
@@ -334,7 +326,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
   }
 
   double _targetOffsetForLocation(ReaderLocation location) {
-    return _globalOffsetForLocation(location);
+    return _scrollOffsetForLocation(location);
   }
 
   Future<void> _primeAndSyncToRuntimeLocation({bool force = false}) async {
@@ -356,11 +348,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
 
   void _handleScroll() {
     if (!_controller.hasClients || widget.runtime.chapterCount <= 0) return;
-    final viewportHeight =
-        context.size?.height ??
-        widget.runtime.state.layoutSpec.viewportSize.height;
-    final anchor =
-        _controller.offset + (viewportHeight * 0.2).clamp(24.0, 120.0);
+    final anchor = _controller.offset + _anchorOffsetInViewport();
     var chapterTop = 0.0;
     for (var i = 0; i < widget.runtime.chapterCount; i++) {
       final extent = _chapterExtent(i);
@@ -371,9 +359,12 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport> {
         if (loaded != null) {
           final localOffset =
               (anchor - chapterTop - widget.style.paddingTop)
-                  .clamp(0.0, loaded.extent)
+                  .clamp(0.0, loaded.chapter.metrics.contentHeight)
                   .toDouble();
-          final location = _locationForChapterLocalOffset(i, localOffset);
+          final location = _coordinateMapper.locationFromScrollOffset(
+            chapterIndex: i,
+            localOffset: localOffset,
+          );
           _lastReportedLocation = location;
           widget.runtime.updateVisibleLocation(location);
         }
