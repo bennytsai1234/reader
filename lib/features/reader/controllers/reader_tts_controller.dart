@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:inkpage_reader/core/constant/prefer_key.dart';
 import 'package:inkpage_reader/core/services/tts_service.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_tts_highlight.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,12 +24,25 @@ class ReaderTtsController extends ChangeNotifier {
   String? get language => _tts.language;
   ReaderLocation? get speechStartLocation => _speechStartLocation;
 
-  ReaderLocation? get highlightLocation {
+  ReaderTtsHighlight? get currentHighlight {
     final start = _speechStartLocation;
-    if (start == null || _tts.currentWordStart < 0) return null;
-    return ReaderLocation(
+    final wordStart = _tts.currentWordStart;
+    if (start == null || wordStart < 0) return null;
+    final wordEnd =
+        _tts.currentWordEnd > wordStart ? _tts.currentWordEnd : wordStart + 1;
+    return ReaderTtsHighlight(
       chapterIndex: start.chapterIndex,
-      charOffset: start.charOffset + _tts.currentWordStart,
+      highlightStart: start.charOffset + wordStart,
+      highlightEnd: start.charOffset + wordEnd,
+    );
+  }
+
+  ReaderLocation? get highlightLocation {
+    final highlight = currentHighlight;
+    if (highlight == null) return null;
+    return ReaderLocation(
+      chapterIndex: highlight.chapterIndex,
+      charOffset: highlight.highlightStart,
     );
   }
 

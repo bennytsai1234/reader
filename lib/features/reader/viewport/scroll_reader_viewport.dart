@@ -7,12 +7,14 @@ import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_tts_highlight.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
 import 'package:inkpage_reader/features/reader/runtime/tile_key.dart';
 
 import 'reader_tile_layer.dart';
 import 'reader_viewport_controller.dart';
+import 'tts_highlight_overlay_layer.dart';
 
 class ScrollReaderViewport extends StatefulWidget {
   const ScrollReaderViewport({
@@ -23,6 +25,7 @@ class ScrollReaderViewport extends StatefulWidget {
     required this.style,
     this.onTapUp,
     this.controller,
+    this.ttsHighlight,
   });
 
   final ReaderRuntime runtime;
@@ -31,6 +34,7 @@ class ScrollReaderViewport extends StatefulWidget {
   final ReadStyle style;
   final GestureTapUpCallback? onTapUp;
   final ReaderViewportController? controller;
+  final ReaderTtsHighlight? ttsHighlight;
 
   @override
   State<ScrollReaderViewport> createState() => _ScrollReaderViewportState();
@@ -694,13 +698,24 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
           right: 0,
           top: screenY,
           height: pageHeight,
-          child: ReaderTileLayer(
-            tile: placement.page,
-            tileKey: _tileKey(placement.page),
-            style: widget.style,
-            backgroundColor: widget.backgroundColor,
-            textColor: widget.textColor,
-            expand: true,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ReaderTileLayer(
+                tile: placement.page,
+                tileKey: _tileKey(placement.page),
+                style: widget.style,
+                backgroundColor: widget.backgroundColor,
+                textColor: widget.textColor,
+                expand: true,
+              ),
+              TtsHighlightOverlayLayer(
+                tile: placement.page,
+                style: widget.style,
+                textColor: widget.textColor,
+                highlight: widget.ttsHighlight,
+              ),
+            ],
           ),
         ),
       );

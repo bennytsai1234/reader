@@ -3,12 +3,14 @@ import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
 import 'package:inkpage_reader/features/reader/engine/text_page.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_tts_highlight.dart';
 import 'package:inkpage_reader/features/reader/runtime/page_window.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
 import 'package:inkpage_reader/features/reader/runtime/tile_key.dart';
 
 import 'reader_tile_layer.dart';
+import 'tts_highlight_overlay_layer.dart';
 
 class SlideReaderViewport extends StatefulWidget {
   const SlideReaderViewport({
@@ -18,6 +20,7 @@ class SlideReaderViewport extends StatefulWidget {
     required this.textColor,
     required this.style,
     this.onTapUp,
+    this.ttsHighlight,
   });
 
   final ReaderRuntime runtime;
@@ -25,6 +28,7 @@ class SlideReaderViewport extends StatefulWidget {
   final Color textColor;
   final ReadStyle style;
   final GestureTapUpCallback? onTapUp;
+  final ReaderTtsHighlight? ttsHighlight;
 
   @override
   State<SlideReaderViewport> createState() => _SlideReaderViewportState();
@@ -214,13 +218,24 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       key: ValueKey<TileKey>(_tileKey(pageCache)),
       behavior: HitTestBehavior.opaque,
       onTapUp: widget.onTapUp,
-      child: ReaderTileLayer(
-        tile: pageCache,
-        tileKey: _tileKey(pageCache),
-        style: widget.style,
-        backgroundColor: widget.backgroundColor,
-        textColor: widget.textColor,
-        expand: true,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ReaderTileLayer(
+            tile: pageCache,
+            tileKey: _tileKey(pageCache),
+            style: widget.style,
+            backgroundColor: widget.backgroundColor,
+            textColor: widget.textColor,
+            expand: true,
+          ),
+          TtsHighlightOverlayLayer(
+            tile: pageCache,
+            style: widget.style,
+            textColor: widget.textColor,
+            highlight: widget.ttsHighlight,
+          ),
+        ],
       ),
     );
   }

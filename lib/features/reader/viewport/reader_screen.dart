@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
+import 'package:inkpage_reader/features/reader/runtime/models/reader_tts_highlight.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
 
+import 'reader_gesture_layer.dart';
 import 'reader_viewport_controller.dart';
 import 'scroll_reader_viewport.dart';
 import 'slide_reader_viewport.dart';
@@ -18,6 +20,7 @@ class EngineReaderScreen extends StatefulWidget {
     required this.style,
     this.onContentTapUp,
     this.viewportController,
+    this.ttsHighlight,
   });
 
   final ReaderRuntime runtime;
@@ -26,6 +29,7 @@ class EngineReaderScreen extends StatefulWidget {
   final ReadStyle style;
   final GestureTapUpCallback? onContentTapUp;
   final ReaderViewportController? viewportController;
+  final ReaderTtsHighlight? ttsHighlight;
 
   @override
   State<EngineReaderScreen> createState() => _EngineReaderScreenState();
@@ -72,22 +76,27 @@ class _EngineReaderScreenState extends State<EngineReaderScreen>
   @override
   Widget build(BuildContext context) {
     final state = widget.runtime.state;
-    if (state.mode == ReaderMode.scroll) {
-      return ScrollReaderViewport(
-        runtime: widget.runtime,
-        backgroundColor: widget.backgroundColor,
-        textColor: widget.textColor,
-        style: widget.style,
-        onTapUp: widget.onContentTapUp,
-        controller: widget.viewportController,
-      );
-    }
-    return SlideReaderViewport(
-      runtime: widget.runtime,
-      backgroundColor: widget.backgroundColor,
-      textColor: widget.textColor,
-      style: widget.style,
+    final viewport =
+        state.mode == ReaderMode.scroll
+            ? ScrollReaderViewport(
+              runtime: widget.runtime,
+              backgroundColor: widget.backgroundColor,
+              textColor: widget.textColor,
+              style: widget.style,
+              controller: widget.viewportController,
+              ttsHighlight: widget.ttsHighlight,
+            )
+            : SlideReaderViewport(
+              runtime: widget.runtime,
+              backgroundColor: widget.backgroundColor,
+              textColor: widget.textColor,
+              style: widget.style,
+              ttsHighlight: widget.ttsHighlight,
+            );
+    return ReaderGestureLayer(
       onTapUp: widget.onContentTapUp,
+      gesturesEnabled: widget.onContentTapUp != null,
+      child: viewport,
     );
   }
 }

@@ -285,6 +285,7 @@ class _ReaderPageState extends State<ReaderPage>
           textColor: theme.textColor,
           style: style,
           viewportController: _viewportController,
+          ttsHighlight: _tts?.currentHighlight,
           onContentTapUp:
               _menu.controlsVisible ? null : (details) => _handleTap(details),
         );
