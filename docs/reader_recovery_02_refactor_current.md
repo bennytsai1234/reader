@@ -63,38 +63,7 @@ ReaderPage
 - `git status --short` 乾淨。
 - 已有基線測試輸出。
 
-## Phase 1: 資料庫與進度欄位
-
-這是最高優先級。
-
-目前問題：
-
-- 舊版 schemaVersion 是 10。
-- 新版 schemaVersion 是 1。
-- 舊版欄位是 `durChapterIndex/durChapterPos`。
-- 新版欄位是 `chapterIndex/charOffset`。
-
-推薦做法：
-
-1. 把 schemaVersion 提升到 11 或更高，不允許降版。
-2. `books` table 支援從舊欄位遷移：
-   - 如果缺 `chapterIndex`，新增並從 `durChapterIndex` backfill。
-   - 如果缺 `charOffset`，新增並從 `durChapterPos` backfill。
-   - 如果舊欄位存在，可以暫時保留，不要急著 drop。
-3. `beforeOpen` 做自我修復：
-   - 檢查 `PRAGMA table_info(books)`。
-   - 缺欄位時補欄位。
-   - 新舊欄位互相 backfill。
-4. backup/restore、book detail、bookshelf update、source switch 都統一讀寫新版欄位。
-5. 加 migration test，使用模擬舊 schema 建庫後升級。
-
-驗收：
-
-- 0.2.28 資料庫升級後，`chapterIndex/charOffset` 等於舊 `durChapterIndex/durChapterPos`。
-- 新資料庫建庫正常。
-- 已經被目前 dev 版本建成 schemaVersion 1 的資料庫也能升到新版本。
-
-## Phase 2: 進度寫入與 flush
+## Phase 1: 進度寫入與 flush
 
 目前 `ReaderProgressController` 太簡化，active write 期間的新 pending location 可能不會被 drain。
 
@@ -129,7 +98,7 @@ flush()
 - lifecycle flush 能寫出最後位置。
 - placeholder page 不寫入。
 
-## Phase 3: 恢復 `ReaderAnchor`，但不改 durable truth
+## Phase 2: 恢復 `ReaderAnchor`，但不改 durable truth
 
 `chapterIndex + charOffset` 仍是唯一 durable progress。`ReaderAnchor` 只用於精準 restore。
 
@@ -145,7 +114,7 @@ flush()
 - 內容變了還相信舊 page snapshot。
 - restore 期間 visible 暫態被 debounce 寫成正式進度。
 
-## Phase 4: 排版與位置映射收斂
+## Phase 3: 排版與位置映射收斂
 
 所有位置映射都應由 `LineLayout` / `ChapterLayout` 提供。
 
@@ -164,7 +133,7 @@ flush()
 - 字級、行距、padding、段距變更後位置保持。
 - 繁簡轉換或替換規則改變後，content hash 改變，anchor snapshot 失效。
 
-## Phase 5: scroll viewport 重構
+## Phase 4: scroll viewport 重構
 
 目前 scroll viewport 同時有自己的 chapter loading、estimated extent、global offset 計算，容易跟 runtime 競爭。
 
@@ -194,7 +163,7 @@ flush()
 - 跨章 scroll 保存正確章節。
 - 模式切換後位置不漂移。
 
-## Phase 6: slide viewport 重構
+## Phase 5: slide viewport 重構
 
 slide 可以保留目前 `PageWindow(prev/current/next)` 方向。
 
@@ -213,7 +182,7 @@ slide 可以保留目前 `PageWindow(prev/current/next)` 方向。
 - 快速連翻不丟 pending progress。
 - 字級變更後仍在同一 charOffset 對應頁。
 
-## Phase 7: 章節內容接入
+## Phase 6: 章節內容接入
 
 保留目前 `ChapterRepository` 方向，但補齊契約：
 
@@ -230,7 +199,7 @@ slide 可以保留目前 `PageWindow(prev/current/next)` 方向。
 - 遠端正文失敗顯示 error，不保存 error placeholder 為閱讀進度。
 - 換源後 reload content 並保留 `chapterIndex + charOffset` 語義。
 
-## Phase 8: 清理旁支
+## Phase 7: 清理旁支
 
 目前 runtime 目錄中仍有一些測試或候選架構，但不一定接主線。
 
@@ -253,7 +222,7 @@ flutter test test/core test/features/book_detail test/features/bookshelf
 
 人工測試：
 
-- 舊資料庫升級。
+- fresh install 後新建資料庫。
 - 空資料庫第一次開書。
 - 本地 TXT。
 - 遠端書源。
@@ -264,7 +233,18 @@ flutter test test/core test/features/book_detail test/features/bookshelf
 - background/foreground。
 - 單章換源與整書 fallback 換源。
 
+## DB schema 開發前提
+
+目前專案仍在開發階段，維護者會在更新時刪除舊 app 並重新開始，所以舊 schema migration 不是 reader recovery 的當前阻塞項。
+
+當前要求：
+
+- Drift schema、generated code、DAO、Book model 對 fresh install 一致。
+- 書架、詳情頁、閱讀頁都讀寫同一組 progress 欄位。
+- 不因為舊版 `durChapterIndex/durChapterPos` 兼容問題延後 reader runtime 修復。
+
+正式需要支援既有安裝升級時，再把 migration 作為獨立任務補回。
+
 ## 最終判斷
 
 這條路能最大化保留新版的正確方向，同時拿回舊版已經證明重要的 restore/anchor/flush 經驗。它的成本比退回高，但比完全重做低，而且會把 reader 的核心問題一次性收斂。
-

@@ -28,7 +28,7 @@
 
 ## 主要風險判斷
 
-### 1. 資料庫進度欄位有升級風險
+### 1. 資料庫進度欄位在正式升級前有風險
 
 `reader-0.2.28` 使用：
 
@@ -42,7 +42,7 @@
 - `Book.charOffset`
 - database schemaVersion 1
 
-這是高風險問題。現有使用者如果從 0.2.28 的資料庫升到目前版本，可能遇到 schema downgrade、欄位不存在、進度無法讀取或被歸零。這比單純閱讀器體感問題更嚴重，必須優先處理。
+這在正式提供升級路徑時是高風險問題。不過目前專案仍在開發階段，維護者會刪除舊 app 並用新資料庫重來，所以它不是當前 reader recovery 的阻塞項。當前只要求 fresh install 的 schema、DAO、model 欄位一致。
 
 ### 2. 新版進度 flush 太簡化
 
@@ -132,18 +132,19 @@ viewport 不直接決定 durable progress，不自行保存 DB，不自行創造
 
 ## 立即處理順序
 
-1. 修資料庫 schemaVersion 與 progress 欄位 migration。
-2. 修 `ReaderProgressController`：active flush 期間的新 pending location 必須被 drain。
-3. 恢復 `ReaderAnchor` 作為 restore precision，不把它當 durable truth。
-4. 收斂 scroll viewport 與 runtime 的責任邊界。
+1. 修 `ReaderProgressController`：active flush 期間的新 pending location 必須被 drain。
+2. 恢復 `ReaderAnchor` 作為 restore precision，不把它當 durable truth。
+3. 收斂 scroll viewport 與 runtime 的責任邊界。
+4. 穩定 chapter content 接入、layout、charOffset 與 visual offset 映射。
 5. 補上 0.2.28 中有價值的 restore/progress/viewport 測試。
 6. 清理未接主線的 runtime 旁支，避免文檔與測試誤導。
+7. 保持 fresh install DB schema 一致；正式需要升級相容時再補 migration。
 
 ## 最低驗收
 
 必須通過以下行為，才算 reader 被救回來：
 
-- 從 0.2.28 資料庫升級後，書籍進度不丟。
+- fresh install 後，書籍進度欄位、DAO、model 讀寫一致。
 - 打開書後能穩定載入目前章節正文。
 - slide 翻頁後退出再進，落在同一頁或同一字元附近。
 - scroll 滑動後立刻退出，重開落在最後可視位置附近。
@@ -152,4 +153,3 @@ viewport 不直接決定 durable progress，不自行保存 DB，不自行創造
 - DB 寫入慢時，最後一次 pending progress 不會被舊 flush 吃掉。
 - app 進入 paused/inactive/detached 時，pending progress 會 flush。
 - 單章正文載入失敗不會把 placeholder 當成正式 progress。
-

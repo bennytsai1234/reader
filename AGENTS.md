@@ -16,6 +16,13 @@ Current project facts:
 - JS engine: `flutter_js`
 - Release version source: tag `vX.Y.Z`; release workflow rewrites `pubspec.yaml` to `X.Y.Z+<github.run_number>`
 
+Development database policy:
+
+- This project is still in active development. The maintainer commonly deletes the installed app and starts with a fresh local database between updates.
+- Do not treat migration from older development schemas as a reader recovery blocker unless the user explicitly asks for upgrade compatibility.
+- Keep the current Drift schema, generated code, DAOs, and model fields internally consistent for fresh installs.
+- For reader work, prioritize runtime correctness, progress flush, restore semantics, viewport behavior, content loading, and layout mapping over backward-compatible DB migration work.
+
 ## Architecture
 
 ```text
@@ -80,6 +87,14 @@ Durable reader progress is:
 ```text
 ReaderLocation(chapterIndex, charOffset)
 ```
+
+Reader recovery priority:
+
+1. Stabilize `ReaderRuntime` as the single reader state owner.
+2. Make progress writes latest-wins and reliably flushed on exit/lifecycle.
+3. Restore `ReaderAnchor` as a precision aid, while keeping `chapterIndex + charOffset` as the durable truth.
+4. Clarify slide/scroll viewport responsibilities so viewport reports visual anchors but does not own durable progress.
+5. Keep content loading, layout, and coordinate mapping deterministic and covered by tests.
 
 ## Common Commands
 
