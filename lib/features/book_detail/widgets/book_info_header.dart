@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/widgets/book_cover_widget.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_open_target.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_open_target.dart';
 import '../book_detail_provider.dart';
 
 class BookInfoHeader extends StatelessWidget {

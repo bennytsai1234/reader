@@ -65,13 +65,11 @@ class PreferKey {
 
   static const String chineseConverterType = 'chineseConverterType';
   static const String launcherIcon = 'launcherIcon';
-  static const String textSelectAble = 'selectText';
   static const String shareLayout = 'shareLayout';
   static const String comicStyleSelect = 'comicStyleSelect';
   static const String readStyleSelect = 'readStyleSelect';
   static const String systemTypefaces = 'system_typefaces';
   static const String readBodyToLh = 'readBodyToLh';
-  static const String textFullJustify = 'textFullJustify';
   static const String textBottomJustify = 'textBottomJustify';
   static const String autoReadSpeed = 'autoReadSpeed';
   static const String barElevation = 'barElevation';
@@ -82,7 +80,6 @@ class PreferKey {
   static const String replaceEnableDefault = 'replaceEnableDefault';
   static const String showBrightnessView = 'showBrightnessView';
   static const String autoClearExpired = 'autoClearExpired';
-  static const String autoChangeSource = 'autoChangeSource';
   static const String importKeepName = 'importKeepName';
   static const String importKeepGroup = 'importKeepGroup';
   static const String screenOrientation = 'screenOrientation';
@@ -110,7 +107,6 @@ class PreferKey {
   static const String exportCharset = 'exportCharset';
   static const String exportUseReplace = 'exportUseReplace';
   static const String useZhLayout = 'useZhLayout';
-  static const String brightness = 'brightness';
   static const String nightBrightness = 'nightBrightness';
   static const String expandTextMenu = 'expandTextMenu';
   static const String doublePageHorizontal = 'doubleHorizontalPage';
@@ -199,11 +195,9 @@ class PreferKey {
   static const String readerParagraphSpacing = 'reader_paragraph_spacing';
   static const String readerLetterSpacing = 'reader_letter_spacing';
   static const String readerTextIndent = 'reader_text_indent';
-  static const String readerTextFullJustify = 'reader_text_full_justify';
   static const String readerThemeIndex = 'reader_theme_index';
   static const String readerDayThemeIndex = 'reader_day_theme_index';
   static const String readerNightThemeIndex = 'reader_night_theme_index';
-  static const String readerBrightness = 'reader_brightness';
   static const String readerPageTurnMode = 'reader_page_turn_mode';
   static const String readerChineseConvert = 'reader_chinese_convert_v2';
   static const String readerTtsRate = 'reader_tts_rate';

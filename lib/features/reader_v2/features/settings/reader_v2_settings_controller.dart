@@ -27,13 +27,11 @@ class ReaderV2SettingsController extends ChangeNotifier {
   int themeIndex = 0;
   int lastDayThemeIndex = 0;
   int lastNightThemeIndex = 1;
-  double brightness = 1.0;
   int chineseConvert = 0;
   int pageTurnMode = PageAnim.slide;
   bool showAddToShelfAlert = true;
   bool showReadTitleAddition = true;
   bool readBarStyleFollowPage = false;
-  bool selectText = true;
   List<int> clickActions = ReaderV2PrefsSnapshot.defaults().clickActions;
   int _contentSettingsGeneration = 0;
 
@@ -47,14 +45,12 @@ class ReaderV2SettingsController extends ChangeNotifier {
     letterSpacing = snapshot.letterSpacing;
     textIndent = snapshot.textIndent;
     themeIndex = snapshot.themeIndex;
-    brightness = snapshot.brightness;
     pageTurnMode = snapshot.pageTurnMode;
     AppConfig.readerPageAnim = pageTurnMode;
     chineseConvert = snapshot.chineseConvert;
     showAddToShelfAlert = snapshot.showAddToShelfAlert;
     showReadTitleAddition = snapshot.showReadTitleAddition;
     readBarStyleFollowPage = snapshot.readBarStyleFollowPage;
-    selectText = snapshot.selectText;
     clickActions = List<int>.from(snapshot.clickActions);
     lastDayThemeIndex = snapshot.lastDayThemeIndex;
     lastNightThemeIndex = snapshot.lastNightThemeIndex;
@@ -82,7 +78,6 @@ class ReaderV2SettingsController extends ChangeNotifier {
       paddingRight: textPadding,
       bold: false,
       textIndent: textIndent,
-      selectText: selectText,
       pageMode: ReaderV2PageMode.fromPageAnim(pageTurnMode),
     );
   }
@@ -144,12 +139,6 @@ class ReaderV2SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setBrightness(double value) {
-    brightness = value;
-    unawaited(_prefsRepository.saveBrightness(value));
-    notifyListeners();
-  }
-
   void setShowReadTitleAddition(bool value) {
     showReadTitleAddition = value;
     unawaited(_prefsRepository.saveShowReadTitleAddition(value));
@@ -159,12 +148,6 @@ class ReaderV2SettingsController extends ChangeNotifier {
   void setReadBarStyleFollowPage(bool value) {
     readBarStyleFollowPage = value;
     unawaited(_prefsRepository.saveReadBarStyleFollowPage(value));
-    notifyListeners();
-  }
-
-  void setSelectText(bool value) {
-    selectText = value;
-    unawaited(_prefsRepository.saveSelectText(value));
     notifyListeners();
   }
 

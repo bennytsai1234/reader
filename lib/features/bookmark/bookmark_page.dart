@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'bookmark_provider.dart';
 import 'package:inkpage_reader/core/models/bookmark.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_open_target.dart';
-import 'package:inkpage_reader/features/reader_v2/page/reader_v2_page.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_open_target.dart';
+import 'package:inkpage_reader/features/reader_v2/shell/reader_v2_page.dart';
 
 class BookmarkPage extends StatefulWidget {
   const BookmarkPage({super.key});

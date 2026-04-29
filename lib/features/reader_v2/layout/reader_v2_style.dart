@@ -31,7 +31,6 @@ class ReaderV2Style {
     this.fontFamily,
     this.bold = false,
     this.textIndent = 0,
-    this.selectText = true,
     required this.pageMode,
   });
 
@@ -46,7 +45,6 @@ class ReaderV2Style {
   final String? fontFamily;
   final bool bold;
   final int textIndent;
-  final bool selectText;
   final ReaderV2PageMode pageMode;
 
   double get effectiveLineHeight => normalizeLineHeight(lineHeight);
@@ -68,7 +66,6 @@ class ReaderV2Style {
     String? fontFamily,
     bool? bold,
     int? textIndent,
-    bool? selectText,
     ReaderV2PageMode? pageMode,
   }) {
     return ReaderV2Style(
@@ -83,7 +80,6 @@ class ReaderV2Style {
       fontFamily: fontFamily ?? this.fontFamily,
       bold: bold ?? this.bold,
       textIndent: textIndent ?? this.textIndent,
-      selectText: selectText ?? this.selectText,
       pageMode: pageMode ?? this.pageMode,
     );
   }
@@ -102,7 +98,6 @@ class ReaderV2Style {
         other.fontFamily == fontFamily &&
         other.bold == bold &&
         other.textIndent == textIndent &&
-        other.selectText == selectText &&
         other.pageMode == pageMode;
   }
 
@@ -119,7 +114,6 @@ class ReaderV2Style {
     fontFamily,
     bold,
     textIndent,
-    selectText,
     pageMode,
   );
 }

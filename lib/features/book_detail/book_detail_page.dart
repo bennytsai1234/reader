@@ -13,8 +13,8 @@ import 'package:inkpage_reader/core/services/export_book_service.dart';
 import 'package:inkpage_reader/core/storage/storage_metrics.dart';
 import 'package:inkpage_reader/features/source_manager/source_editor_page.dart';
 import 'package:inkpage_reader/features/source_manager/source_debug_page.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_open_target.dart';
-import 'package:inkpage_reader/features/reader_v2/page/reader_v2_page.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_open_target.dart';
+import 'package:inkpage_reader/features/reader_v2/shell/reader_v2_page.dart';
 
 import 'widgets/book_info_header.dart';
 import 'widgets/book_info_intro.dart';

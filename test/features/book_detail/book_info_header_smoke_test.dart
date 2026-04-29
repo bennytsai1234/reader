@@ -11,8 +11,8 @@ import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/models/search_book.dart';
 import 'package:inkpage_reader/features/book_detail/book_detail_provider.dart';
 import 'package:inkpage_reader/features/book_detail/widgets/book_info_header.dart';
-import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
-import 'package:inkpage_reader/features/reader/runtime/models/reader_open_target.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_location.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_open_target.dart';
 
 class _FakeBookDao extends Fake implements BookDao {
   @override
@@ -139,7 +139,7 @@ void main() {
     );
     provider.book.chapterIndex = 3;
     provider.book.charOffset = 1200;
-    ReaderOpenTarget? receivedTarget;
+    ReaderV2OpenTarget? receivedTarget;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -161,10 +161,10 @@ void main() {
     );
     await tester.tap(find.widgetWithText(FilledButton, '繼續閱讀'));
 
-    expect(receivedTarget?.intent, ReaderOpenIntent.resume);
+    expect(receivedTarget?.intent, ReaderV2OpenIntent.resume);
     expect(
       receivedTarget?.location,
-      const ReaderLocation(chapterIndex: 3, charOffset: 1200),
+      const ReaderV2Location(chapterIndex: 3, charOffset: 1200),
     );
   });
 }

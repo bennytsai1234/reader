@@ -261,12 +261,6 @@ class _ReaderInterfaceSheetState extends State<_ReaderInterfaceSheet> {
               value: settings.readBarStyleFollowPage,
               onChanged: settings.setReadBarStyleFollowPage,
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('允許文字選取（新閱讀器暫未支援）'),
-              value: settings.selectText,
-              onChanged: settings.setSelectText,
-            ),
           ],
         );
       },

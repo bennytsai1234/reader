@@ -8,8 +8,8 @@ import 'package:inkpage_reader/core/services/bookshelf_exchange_service.dart';
 import 'package:inkpage_reader/core/services/restore_service.dart';
 import 'package:inkpage_reader/core/widgets/book_cover_widget.dart';
 import 'package:inkpage_reader/features/bookshelf/bookshelf_provider.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_open_target.dart';
-import 'package:inkpage_reader/features/reader_v2/page/reader_v2_page.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_open_target.dart';
+import 'package:inkpage_reader/features/reader_v2/shell/reader_v2_page.dart';
 import 'package:inkpage_reader/features/search/search_page.dart';
 import 'package:file_picker/file_picker.dart';
 

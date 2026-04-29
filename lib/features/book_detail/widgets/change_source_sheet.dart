@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/features/book_detail/book_detail_provider.dart';
-import 'package:inkpage_reader/features/reader/source/change_source_provider.dart';
-import 'package:inkpage_reader/features/reader/widgets/change_source_filter_bar.dart';
-import 'package:inkpage_reader/features/reader/widgets/change_source_item.dart';
+import 'package:inkpage_reader/features/book_detail/source/book_detail_change_source_provider.dart';
+import 'package:inkpage_reader/features/book_detail/widgets/book_detail_change_source_filter_bar.dart';
+import 'package:inkpage_reader/features/book_detail/widgets/book_detail_change_source_item.dart';
 
 class ChangeSourceSheet extends StatelessWidget {
   final Book book;
@@ -19,7 +19,7 @@ class ChangeSourceSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ChangeSourceProvider(book),
+      create: (_) => BookDetailChangeSourceProvider(book),
       child: _ChangeSourceContent(
         originalBook: book,
         detailProvider: detailProvider,
@@ -52,7 +52,7 @@ class _ChangeSourceContentState extends State<_ChangeSourceContent> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ChangeSourceProvider>();
+    final provider = context.watch<BookDetailChangeSourceProvider>();
     final sources =
         provider.filteredResults
             .where((result) => result.name == widget.originalBook.name)
@@ -68,7 +68,7 @@ class _ChangeSourceContentState extends State<_ChangeSourceContent> {
         children: [
           _buildHeader(provider),
           const Divider(height: 1),
-          ChangeSourceFilterBar(
+          BookDetailChangeSourceFilterBar(
             provider: provider,
             filterController: _filterController,
           ),
@@ -104,7 +104,7 @@ class _ChangeSourceContentState extends State<_ChangeSourceContent> {
                       separatorBuilder: (ctx, i) => const Divider(height: 1),
                       itemBuilder: (ctx, i) {
                         final result = sources[i];
-                        return ChangeSourceItem(
+                        return BookDetailChangeSourceItem(
                           searchBook: result,
                           isCurrent:
                               result.origin == widget.originalBook.origin,
@@ -129,7 +129,7 @@ class _ChangeSourceContentState extends State<_ChangeSourceContent> {
     );
   }
 
-  Widget _buildHeader(ChangeSourceProvider provider) {
+  Widget _buildHeader(BookDetailChangeSourceProvider provider) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(

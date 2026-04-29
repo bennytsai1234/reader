@@ -16,9 +16,9 @@ import 'package:inkpage_reader/core/models/search_book.dart';
 import 'package:inkpage_reader/core/services/book_source_service.dart';
 import 'package:inkpage_reader/core/services/book_cover_storage_service.dart';
 import 'package:inkpage_reader/core/services/download_service.dart';
+import 'package:inkpage_reader/core/services/reader_chapter_content_store.dart';
 import 'package:inkpage_reader/core/engine/app_event_bus.dart';
 import 'package:inkpage_reader/core/di/injection.dart';
-import 'package:inkpage_reader/features/reader/engine/reader_chapter_content_store.dart';
 
 class StorageDownloadQueueResult {
   const StorageDownloadQueueResult._({

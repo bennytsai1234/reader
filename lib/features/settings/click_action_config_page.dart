@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:inkpage_reader/features/reader/models/reader_tap_action.dart';
-import 'package:inkpage_reader/features/reader/settings/reader_prefs_repository.dart';
+import 'package:inkpage_reader/features/reader_v2/features/menu/reader_v2_tap_action.dart';
+import 'package:inkpage_reader/features/reader_v2/features/settings/reader_v2_prefs_repository.dart';
 
 class ClickActionConfigPage extends StatefulWidget {
   const ClickActionConfigPage({super.key});
@@ -10,10 +10,11 @@ class ClickActionConfigPage extends StatefulWidget {
 }
 
 class _ClickActionConfigPageState extends State<ClickActionConfigPage> {
-  final ReaderPrefsRepository _prefsRepository = const ReaderPrefsRepository();
+  final ReaderV2PrefsRepository _prefsRepository =
+      const ReaderV2PrefsRepository();
 
   bool _isLoading = true;
-  List<int> _actions = ReaderTapAction.defaultGrid();
+  List<int> _actions = ReaderV2TapAction.defaultGrid();
 
   @override
   void initState() {
@@ -36,7 +37,7 @@ class _ClickActionConfigPageState extends State<ClickActionConfigPage> {
 
   Future<void> _resetActions() async {
     setState(() {
-      _actions = ReaderTapAction.defaultGrid();
+      _actions = ReaderV2TapAction.defaultGrid();
     });
     await _saveActions();
   }
@@ -108,7 +109,7 @@ class _ClickActionConfigPageState extends State<ClickActionConfigPage> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      ReaderTapAction.fromCode(
+                                      ReaderV2TapAction.fromCode(
                                         _actions[index],
                                       ).label,
                                       textAlign: TextAlign.center,
@@ -142,7 +143,7 @@ class _ClickActionConfigPageState extends State<ClickActionConfigPage> {
               child: ListView(
                 shrinkWrap: true,
                 children:
-                    ReaderTapAction.values.map((entry) {
+                    ReaderV2TapAction.values.map((entry) {
                       return ListTile(
                         title: Text(entry.label),
                         onTap: () async {

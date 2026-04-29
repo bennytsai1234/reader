@@ -50,7 +50,6 @@ class SettingsProvider extends SettingsProviderBase {
   bool textBottomJustify = true;
   bool mouseWheelPage = true;
   bool keyPageOnLongPress = false;
-  bool autoChangeSource = true;
   bool showBrightnessView = true;
   bool noAnimScrollPage = false;
   bool previewImageByClick = false;
@@ -474,7 +473,6 @@ class SettingsProvider extends SettingsProviderBase {
     textBottomJustify = prefs.getBool(PreferKey.textBottomJustify) ?? true;
     mouseWheelPage = prefs.getBool(PreferKey.mouseWheelPage) ?? true;
     keyPageOnLongPress = prefs.getBool(PreferKey.keyPageOnLongPress) ?? false;
-    autoChangeSource = prefs.getBool(PreferKey.autoChangeSource) ?? true;
     showBrightnessView = prefs.getBool(PreferKey.showBrightnessView) ?? true;
     noAnimScrollPage = prefs.getBool(PreferKey.noAnimScrollPage) ?? false;
     previewImageByClick = prefs.getBool(PreferKey.previewImageByClick) ?? false;
@@ -659,12 +657,6 @@ class SettingsProvider extends SettingsProviderBase {
   void setHideNavigationBar(bool v) {
     hideNavigationBar = v;
     save(PreferKey.hideNavigationBar, v);
-    update();
-  }
-
-  void setAutoChangeSource(bool v) {
-    autoChangeSource = v;
-    save(PreferKey.autoChangeSource, v);
     update();
   }
 

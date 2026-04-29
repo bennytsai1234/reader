@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:inkpage_reader/features/reader/settings/reader_prefs_repository.dart';
+import 'package:inkpage_reader/features/reader_v2/features/settings/reader_v2_prefs_repository.dart';
 import 'package:provider/provider.dart';
 import 'data_privacy_settings_page.dart';
 import 'settings_provider.dart';
@@ -12,8 +12,9 @@ class OtherSettingsPage extends StatefulWidget {
 }
 
 class _OtherSettingsPageState extends State<OtherSettingsPage> {
-  final ReaderPrefsRepository _prefsRepository = const ReaderPrefsRepository();
-  ReaderPrefsSnapshot? _readerPrefs;
+  final ReaderV2PrefsRepository _prefsRepository =
+      const ReaderV2PrefsRepository();
+  ReaderV2PrefsSnapshot? _readerPrefs;
 
   @override
   void initState() {
