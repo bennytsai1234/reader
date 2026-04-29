@@ -183,6 +183,13 @@ class LayoutEngine {
           (localStart - indentLength).clamp(0, text.length).toInt();
       final contentEnd =
           (localEnd - indentLength).clamp(contentStart, text.length).toInt();
+      final endsAtHardBreak =
+          localEnd < laidOutText.length &&
+          laidOutText.codeUnitAt(localEnd) == 10;
+      final sourceEnd =
+          endsAtHardBreak
+              ? (contentEnd + 1).clamp(contentEnd, text.length).toInt()
+              : contentEnd;
       final lineHeight =
           metric.height > 0
               ? metric.height
@@ -206,7 +213,7 @@ class LayoutEngine {
           lineBottom: lineBottom,
           paragraphNum: paragraphNum,
           startCharOffset: startOffset + contentStart,
-          endCharOffset: startOffset + contentEnd,
+          endCharOffset: startOffset + sourceEnd,
           baseline: lineTop + metric.baseline,
         ),
       );

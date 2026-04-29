@@ -46,7 +46,12 @@ class BookContent {
             : plainText.isEmpty
             ? normalizedTitle
             : '$normalizedTitle\n\n$plainText';
-    final hashMaterial = '$chapterIndex\n$displayText';
+    final hashMaterial = jsonEncode(<String, Object>{
+      'chapterIndex': chapterIndex,
+      'title': normalizedTitle,
+      'paragraphs': paragraphs,
+      'displayText': displayText,
+    });
     return BookContent(
       chapterIndex: chapterIndex,
       title: normalizedTitle,

@@ -134,6 +134,30 @@ void main() {
       expect(rects.first.top, greaterThanOrEqualTo(12));
     });
 
+    test('content hash distinguishes title/body structure', () {
+      final withTitle = BookContent.fromRaw(
+        chapterIndex: 7,
+        title: '序章',
+        rawText: '正文',
+      );
+      final rawBody = BookContent.fromRaw(
+        chapterIndex: 7,
+        title: '',
+        rawText: '序章\n\n正文',
+      );
+
+      expect(withTitle.displayText, rawBody.displayText);
+      expect(withTitle.contentHash, isNot(rawBody.contentHash));
+
+      final engine = LayoutEngine();
+      final spec = _spec(width: 180, height: 260);
+      final titleLayout = engine.layout(withTitle, spec);
+      final rawLayout = engine.layout(rawBody, spec);
+
+      expect(titleLayout.lines.any((line) => line.isTitle), isTrue);
+      expect(rawLayout.lines.any((line) => line.isTitle), isFalse);
+    });
+
     test('supports title-only and empty chapters without bogus body lines', () {
       final titleOnly = LayoutEngine().layout(
         BookContent.fromRaw(
@@ -191,14 +215,46 @@ void main() {
     test('hard line breaks never render inside a single TextLine', () {
       const rawText = '第一行是來源內硬換行\n第二行是一句很長很長的中文內容，必須重新排到自己的 line box。';
       final spec = _spec(width: 180, height: 280);
-      final layout = LayoutEngine().layout(
-        BookContent.fromRaw(chapterIndex: 0, title: '標題', rawText: rawText),
-        spec,
+      final content = BookContent.fromRaw(
+        chapterIndex: 0,
+        title: '標題',
+        rawText: rawText,
       );
+      final layout = LayoutEngine().layout(content, spec);
       final bodyLines = layout.lines.where((line) => !line.isTitle).toList();
 
       expect(bodyLines, isNotEmpty);
       expect(bodyLines.every((line) => !line.text.contains('\n')), isTrue);
+      final newlineOffset = layout.displayText.indexOf(
+        '\n',
+        content.bodyStartOffset,
+      );
+      expect(newlineOffset, greaterThanOrEqualTo(content.bodyStartOffset));
+      final coveringLines = bodyLines
+          .where(
+            (line) =>
+                line.startCharOffset <= newlineOffset &&
+                newlineOffset < line.endCharOffset,
+          )
+          .toList(growable: false);
+      expect(coveringLines, hasLength(1));
+      expect(coveringLines.single.text.contains('\n'), isFalse);
+
+      final cacheLines = layout.pageCaches
+          .expand(
+            (cache) => cache.linesForRange(newlineOffset, newlineOffset + 1),
+          )
+          .toList(growable: false);
+      expect(cacheLines, hasLength(1));
+      expect(cacheLines.single.text, coveringLines.single.text);
+      expect(
+        cacheLines.single.startCharOffset,
+        coveringLines.single.startCharOffset,
+      );
+      expect(
+        cacheLines.single.endCharOffset,
+        coveringLines.single.endCharOffset,
+      );
       for (final line in bodyLines) {
         expect(line.width, lessThanOrEqualTo(spec.contentWidth + 0.5));
       }
