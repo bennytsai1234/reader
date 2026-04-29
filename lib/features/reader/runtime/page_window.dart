@@ -13,6 +13,15 @@ class PageWindow {
   final TextPage? next;
   final List<TextPage> lookAhead;
 
+  List<TextPage> get pages => <TextPage>[
+    if (prev != null) prev!,
+    current,
+    if (next != null) next!,
+    ...lookAhead,
+  ];
+
+  Set<int> get chapterIndexes => pages.map((page) => page.chapterIndex).toSet();
+
   PageWindow copyWith({
     TextPage? prev,
     bool clearPrev = false,

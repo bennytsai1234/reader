@@ -161,7 +161,11 @@ class ChapterRepository {
     if (chapter == null) {
       throw const ChapterRepositoryException('章節內容載入失敗: 找不到章節');
     }
-    final loaded = await _loadViaExistingContentPipeline(chapterIndex, chapter);
+    final loaded = await _loadViaExistingContentPipeline(
+      chapterIndex,
+      chapter,
+      cacheGeneration,
+    );
     if (loaded != null) {
       if (loaded.isFailure) {
         throw ChapterRepositoryException(loaded.failureMessage!.trim());
@@ -190,6 +194,7 @@ class ChapterRepository {
 
   void clearContentCache() {
     _contentCacheGeneration += 1;
+    _source = null;
     _contentCache.clear();
     _contentInFlight.clear();
   }
@@ -197,8 +202,12 @@ class ChapterRepository {
   Future<BookSource?> _ensureSource() async {
     if (_source != null) return _source;
     if (book.origin.isEmpty || book.origin == 'local') return null;
-    _source = await sourceDao.getByUrl(book.origin);
-    return _source;
+    final cacheGeneration = _contentCacheGeneration;
+    final source = await sourceDao.getByUrl(book.origin);
+    if (cacheGeneration == _contentCacheGeneration) {
+      _source = source;
+    }
+    return source;
   }
 
   bool _isValidChapterIndex(int chapterIndex) {
@@ -213,6 +222,7 @@ class ChapterRepository {
   Future<FetchResult?> _loadViaExistingContentPipeline(
     int chapterIndex,
     BookChapter chapter,
+    int cacheGeneration,
   ) async {
     final contentDao = this.contentDao;
     final replaceDao = this.replaceDao;
@@ -227,8 +237,13 @@ class ChapterRepository {
       sourceDao: sourceDao,
       service: service,
       currentChineseConvert: currentChineseConvert,
-      getSource: () => _source,
-      setSource: (source) => _source = source,
+      getSource:
+          () => cacheGeneration == _contentCacheGeneration ? _source : null,
+      setSource: (source) {
+        if (cacheGeneration == _contentCacheGeneration) {
+          _source = source;
+        }
+      },
       resolveNextChapterUrl: (index) => chapterAt(index + 1)?.url,
     );
     return loader.load(chapterIndex, chapter);

@@ -42,6 +42,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
   double _rawDragDx = 0;
   double _lastAnimationValue = 0;
   int _pendingDirection = 0;
+  bool _postFrameCapturePending = false;
 
   @override
   void initState() {
@@ -55,6 +56,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       _captureVisibleLocation,
     );
     widget.runtime.registerViewportRestore(this, _restoreToLocation);
+    _schedulePostFrameVisibleLocationCapture();
   }
 
   @override
@@ -72,6 +74,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       widget.runtime.registerViewportRestore(this, _restoreToLocation);
       _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
       _resetViewport();
+      _schedulePostFrameVisibleLocationCapture();
     } else if (oldWidget.style.pageMode != widget.style.pageMode) {
       _resetViewport();
     }
@@ -94,7 +97,20 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
       _resetViewport();
     }
+    if (widget.runtime.state.phase == ReaderPhase.ready) {
+      _schedulePostFrameVisibleLocationCapture();
+    }
     setState(() {});
+  }
+
+  void _schedulePostFrameVisibleLocationCapture() {
+    if (_postFrameCapturePending) return;
+    _postFrameCapturePending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _postFrameCapturePending = false;
+      if (!mounted) return;
+      widget.runtime.captureVisibleLocation();
+    });
   }
 
   void _onAnimationTick() {
@@ -280,17 +296,15 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     if (current == null || current.isPlaceholder) return null;
     final page = widget.runtime.pageCacheFor(current);
     if (page.lines.isEmpty) return null;
-    final anchorY = _anchorOffsetInViewport();
-    final contentY =
-        (anchorY - widget.style.paddingTop)
-            .clamp(0.0, page.contentHeight)
-            .toDouble();
+    final anchorLineY = _anchorOffsetInViewport();
+    final anchorContentY = anchorLineY - widget.style.paddingTop;
+    final contentY = anchorContentY.clamp(0.0, page.contentHeight).toDouble();
     final nearest = page.lineAtOrNearLocalY(page.localStartY + contentY);
     if (nearest == null) return null;
     return ReaderLocation(
       chapterIndex: page.chapterIndex,
       charOffset: nearest.startCharOffset,
-      visualOffsetPx: contentY - nearest.top,
+      visualOffsetPx: anchorContentY - nearest.top,
     );
   }
 

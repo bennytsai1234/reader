@@ -87,6 +87,8 @@ class ReaderRuntime extends ChangeNotifier {
   ReaderViewportRestore? _viewportRestore;
   PageAddress? _pendingNeighborAdvanceOrigin;
   int _pendingNeighborAdvanceDirection = 0;
+  int _jumpRequestId = 0;
+  int _presentationRequestId = 0;
   String? _pendingUserNotice;
 
   PageResolver get debugResolver => _resolver;
@@ -177,6 +179,7 @@ class ReaderRuntime extends ChangeNotifier {
     final needMode = state.mode != mode;
     if (!needLayout && !needMode) return;
 
+    final requestId = ++_presentationRequestId;
     _clearPendingNeighborAdvance();
     var generation = state.layoutGeneration;
     if (needLayout) {
@@ -188,6 +191,10 @@ class ReaderRuntime extends ChangeNotifier {
     }
 
     final location = captureVisibleLocation() ?? state.visibleLocation;
+    if (needMode) {
+      await _saveProgressLocation(location);
+      if (_disposed || requestId != _presentationRequestId) return;
+    }
     _setState(
       state.copyWith(
         phase: ReaderPhase.switchingMode,
@@ -199,8 +206,13 @@ class ReaderRuntime extends ChangeNotifier {
     );
     await jumpToLocation(location, immediateSave: false);
     if (!_disposed &&
-        (state.mode != mode || state.phase != ReaderPhase.ready)) {
-      _setState(state.copyWith(mode: mode, phase: ReaderPhase.ready));
+        requestId == _presentationRequestId &&
+        state.layoutGeneration == generation &&
+        state.layoutSpec.layoutSignature == spec.layoutSignature &&
+        state.mode == mode &&
+        state.phase != ReaderPhase.error &&
+        state.phase != ReaderPhase.ready) {
+      _setState(state.copyWith(phase: ReaderPhase.ready));
     }
   }
 
@@ -215,9 +227,20 @@ class ReaderRuntime extends ChangeNotifier {
   }
 
   Future<void> reloadContentPreservingLocation() async {
-    final location = state.visibleLocation;
+    final location = captureVisibleLocation() ?? state.visibleLocation;
+    final generation = _preloadScheduler.bumpGeneration();
     _repository.clearContentCache();
     _resolver.clearCachedLayouts();
+    _layoutEngine.clear();
+    _setState(
+      state.copyWith(
+        phase: ReaderPhase.layingOut,
+        layoutGeneration: generation,
+        clearError: true,
+        clearPageWindow: true,
+        clearCurrentSlidePage: true,
+      ),
+    );
     await jumpToLocation(location, immediateSave: false);
   }
 
@@ -250,6 +273,7 @@ class ReaderRuntime extends ChangeNotifier {
     bool immediateSave = true,
   }) async {
     _clearPendingNeighborAdvance();
+    final requestId = ++_jumpRequestId;
     final generation = state.layoutGeneration;
     _setState(
       state.copyWith(
@@ -264,9 +288,9 @@ class ReaderRuntime extends ChangeNotifier {
         chapterCount: _repository.chapterCount,
       );
       final page = await _resolver.pageForLocation(normalized);
-      if (generation != state.layoutGeneration) return;
+      if (!_isCurrentJump(requestId, generation)) return;
       final window = await _resolver.buildWindowAround(normalized);
-      if (generation != state.layoutGeneration) return;
+      if (!_isCurrentJump(requestId, generation)) return;
       final resolvedLocation = ReaderLocation(
         chapterIndex: page.chapterIndex,
         charOffset:
@@ -286,10 +310,17 @@ class ReaderRuntime extends ChangeNotifier {
       );
       unawaited(_preloadScheduler.scheduleJump(resolvedLocation.chapterIndex));
     } catch (e) {
+      if (!_isCurrentJump(requestId, generation)) return;
       _setState(
         state.copyWith(phase: ReaderPhase.error, errorMessage: e.toString()),
       );
     }
+  }
+
+  bool _isCurrentJump(int requestId, int generation) {
+    return !_disposed &&
+        requestId == _jumpRequestId &&
+        generation == state.layoutGeneration;
   }
 
   Future<bool> restoreFromLocation(ReaderLocation location) async {
@@ -313,6 +344,7 @@ class ReaderRuntime extends ChangeNotifier {
       final window = await _windowAroundPage(page);
       if (_disposed || generation != state.layoutGeneration) return false;
       final restoreTarget = _locationForRestorePage(normalized, page);
+      _retainLayoutsForWindow(window);
       _setState(
         state.copyWith(
           phase: ReaderPhase.ready,
@@ -324,11 +356,13 @@ class ReaderRuntime extends ChangeNotifier {
       final restore = _viewportRestore;
       if (restore == null) return false;
       final positioned = await restore(restoreTarget);
-      if (!positioned || _disposed) return false;
+      if (!positioned || _disposed || generation != state.layoutGeneration) {
+        return false;
+      }
       final captured = _captureVisibleLocation(allowDuringRestore: true);
       return captured != null;
     } catch (e) {
-      if (!_disposed) {
+      if (!_disposed && generation == state.layoutGeneration) {
         _setState(
           state.copyWith(phase: ReaderPhase.error, errorMessage: e.toString()),
         );
@@ -467,18 +501,7 @@ class ReaderRuntime extends ChangeNotifier {
   }
 
   Future<void> switchMode(ReaderMode mode) async {
-    if (state.mode == mode) return;
-    final location = captureVisibleLocation() ?? state.visibleLocation;
-    _setState(
-      state.copyWith(
-        phase: ReaderPhase.switchingMode,
-        mode: mode,
-        clearPageWindow: true,
-        clearCurrentSlidePage: true,
-      ),
-    );
-    await jumpToLocation(location, immediateSave: false);
-    _setState(state.copyWith(mode: mode, phase: ReaderPhase.ready));
+    return applyPresentation(spec: state.layoutSpec, mode: mode);
   }
 
   bool moveToNextPage() {
@@ -507,6 +530,7 @@ class ReaderRuntime extends ChangeNotifier {
       next: newNext,
       lookAhead: const <TextPage>[],
     );
+    _retainLayoutsForWindow(newWindow);
     final location = ReaderLocation(
       chapterIndex: next.chapterIndex,
       charOffset: next.startCharOffset,
@@ -520,6 +544,7 @@ class ReaderRuntime extends ChangeNotifier {
       ),
     );
     unawaited(_preloadScheduler.scheduleScrollSettled(next));
+    _saveSettledSlideProgress(location);
     return true;
   }
 
@@ -554,6 +579,7 @@ class ReaderRuntime extends ChangeNotifier {
       next: window.current,
       lookAhead: const <TextPage>[],
     );
+    _retainLayoutsForWindow(newWindow);
     final location = ReaderLocation(
       chapterIndex: prev.chapterIndex,
       charOffset: prev.startCharOffset,
@@ -567,6 +593,7 @@ class ReaderRuntime extends ChangeNotifier {
       ),
     );
     unawaited(_preloadScheduler.scheduleScrollSettled(prev));
+    _saveSettledSlideProgress(location);
     return true;
   }
 
@@ -670,27 +697,42 @@ class ReaderRuntime extends ChangeNotifier {
   Future<void> refreshNeighbors() async {
     final window = state.pageWindow;
     if (window == null) return;
+    final generation = state.layoutGeneration;
+    final current = window.current;
+    final currentAddress = _resolver.addressOf(current);
     final prev =
-        _resolver.prevPageSync(window.current) ??
-        await _resolver.prevPage(window.current, allowAsyncLoad: false);
+        _resolver.prevPageSync(current) ??
+        await _resolver.prevPage(current, allowAsyncLoad: false);
     final next =
-        _resolver.nextPageSync(window.current) ??
-        await _resolver.nextPage(window.current, allowAsyncLoad: false);
-    _setState(
-      state.copyWith(
-        pageWindow: PageWindow(
-          prev: prev ?? _resolver.prevPageOrPlaceholder(window.current),
-          current: window.current,
-          next: next ?? _resolver.nextPageOrPlaceholder(window.current),
-          lookAhead: const <TextPage>[],
-        ),
-      ),
+        _resolver.nextPageSync(current) ??
+        await _resolver.nextPage(current, allowAsyncLoad: false);
+    final latestWindow = state.pageWindow;
+    if (_disposed ||
+        generation != state.layoutGeneration ||
+        latestWindow == null ||
+        !_samePageAddress(
+          _resolver.addressOf(latestWindow.current),
+          currentAddress,
+        )) {
+      return;
+    }
+    final refreshedWindow = PageWindow(
+      prev: prev ?? _resolver.prevPageOrPlaceholder(current),
+      current: current,
+      next: next ?? _resolver.nextPageOrPlaceholder(current),
+      lookAhead: const <TextPage>[],
     );
+    _retainLayoutsForWindow(refreshedWindow);
+    _setState(state.copyWith(pageWindow: refreshedWindow));
     _maybeAutoAdvancePendingNeighbor();
   }
 
   ReaderLocation? captureVisibleLocation() {
     return _captureVisibleLocation();
+  }
+
+  bool _samePageAddress(PageAddress a, PageAddress b) {
+    return a.chapterIndex == b.chapterIndex && a.pageIndex == b.pageIndex;
   }
 
   ReaderLocation? _captureVisibleLocation({bool allowDuringRestore = false}) {
@@ -709,10 +751,33 @@ class ReaderRuntime extends ChangeNotifier {
     if (_restoreInProgress) return null;
     final location = captureVisibleLocation();
     if (location == null) return null;
-    if (location == state.committedLocation) return location;
-    _setState(state.copyWith(committedLocation: location));
-    await _progressController.saveImmediately(location);
-    return location;
+    return _saveProgressLocation(location);
+  }
+
+  Future<ReaderLocation?> _saveProgressLocation(ReaderLocation location) async {
+    if (_disposed || _restoreInProgress) return null;
+    final normalized = location.normalized(
+      chapterCount: _repository.chapterCount,
+    );
+    if (normalized == state.committedLocation) {
+      if (normalized != state.visibleLocation) {
+        _setState(state.copyWith(visibleLocation: normalized));
+      }
+      return normalized;
+    }
+    _setState(
+      state.copyWith(
+        visibleLocation: normalized,
+        committedLocation: normalized,
+      ),
+    );
+    await _progressController.saveImmediately(normalized);
+    return normalized;
+  }
+
+  void _saveSettledSlideProgress(ReaderLocation location) {
+    if (state.mode != ReaderMode.slide) return;
+    unawaited(_saveProgressLocation(location));
   }
 
   Future<ReaderLocation?> flushProgress() => saveProgress();
@@ -826,6 +891,18 @@ class ReaderRuntime extends ChangeNotifier {
     if (_disposed || message.isEmpty) return;
     _pendingUserNotice = message;
     notifyListeners();
+  }
+
+  void _retainLayoutsForWindow(PageWindow window) {
+    final chapterIndexes = <int>{...window.chapterIndexes};
+    final currentChapterIndex = window.current.chapterIndex;
+    if (currentChapterIndex > 0) {
+      chapterIndexes.add(currentChapterIndex - 1);
+    }
+    if (currentChapterIndex + 1 < _repository.chapterCount) {
+      chapterIndexes.add(currentChapterIndex + 1);
+    }
+    _resolver.retainLayoutsFor(chapterIndexes);
   }
 
   void _setState(ReaderState next) {

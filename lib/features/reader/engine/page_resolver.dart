@@ -13,6 +13,10 @@ class PageAddress {
   final int pageIndex;
 }
 
+class _StaleLayoutGeneration implements Exception {
+  const _StaleLayoutGeneration();
+}
+
 class PageResolver {
   PageResolver({
     required this.repository,
@@ -47,7 +51,22 @@ class PageResolver {
     _layoutErrors.clear();
   }
 
-  Future<ChapterLayout> ensureLayout(int chapterIndex) async {
+  Future<ChapterLayout> ensureLayout(
+    int chapterIndex, {
+    bool retryOnStale = true,
+  }) async {
+    while (true) {
+      try {
+        return await _ensureLayoutForCurrentGeneration(chapterIndex);
+      } on _StaleLayoutGeneration {
+        if (!retryOnStale) rethrow;
+      }
+    }
+  }
+
+  Future<ChapterLayout> _ensureLayoutForCurrentGeneration(
+    int chapterIndex,
+  ) async {
     await repository.ensureChapters();
     final safeIndex = _normalizeChapterIndex(chapterIndex);
     final cached = _layouts[safeIndex];
@@ -64,19 +83,19 @@ class PageResolver {
     task = () async {
       try {
         final content = await repository.loadContent(safeIndex);
+        _throwIfStale(spec, cacheGeneration);
         final layout = layoutEngine.layout(
           content,
           spec,
           chapterSize: repository.chapterCount,
         );
-        if (layoutSpec.layoutSignature == spec.layoutSignature &&
-            cacheGeneration == _cacheGeneration) {
-          _layouts[safeIndex] = layout;
-          _layoutErrors.remove(safeIndex);
-        }
+        _throwIfStale(spec, cacheGeneration);
+        _layouts[safeIndex] = layout;
+        _layoutErrors.remove(safeIndex);
         return layout;
       } catch (e) {
-        if (cacheGeneration == _cacheGeneration) {
+        if (e is! _StaleLayoutGeneration &&
+            cacheGeneration == _cacheGeneration) {
           _layoutErrors[safeIndex] = e.toString();
         }
         rethrow;
@@ -90,6 +109,28 @@ class PageResolver {
         _inFlight.remove(taskKey);
       }
     }
+  }
+
+  void retainLayoutsFor(Iterable<int> chapterIndexes) {
+    final retained = chapterIndexes.toSet();
+    final staleInFlightKeys =
+        _inFlight.keys.where((key) {
+          final chapterIndex = _chapterIndexFromTaskKey(key);
+          return chapterIndex != null && !retained.contains(chapterIndex);
+        }).toList();
+    if (staleInFlightKeys.isNotEmpty) {
+      _cacheGeneration += 1;
+      for (final key in staleInFlightKeys) {
+        _inFlight.remove(key);
+      }
+    }
+    _layouts.removeWhere((chapterIndex, _) => !retained.contains(chapterIndex));
+    _layoutErrors.removeWhere(
+      (chapterIndex, _) => !retained.contains(chapterIndex),
+    );
+    layoutEngine.invalidateWhere(
+      (layout) => !retained.contains(layout.chapterIndex),
+    );
   }
 
   bool isLoading(int chapterIndex) {
@@ -109,7 +150,7 @@ class PageResolver {
     final current = await pageForLocation(location);
     final prev = await prevPage(current, allowAsyncLoad: true);
     final next = await nextPage(current, allowAsyncLoad: true);
-    return PageWindow(
+    final window = PageWindow(
       prev: prev,
       current: current,
       next: next,
@@ -118,6 +159,8 @@ class PageResolver {
               ? const <TextPage>[]
               : await lookAheadPages(after: next, maxCount: lookAheadCount),
     );
+    retainLayoutsFor(window.chapterIndexes);
+    return window;
   }
 
   Future<TextPage?> nextPage(
@@ -275,5 +318,18 @@ class PageResolver {
     final count = repository.chapterCount;
     if (count <= 0) return chapterIndex < 0 ? 0 : chapterIndex;
     return chapterIndex.clamp(0, count - 1).toInt();
+  }
+
+  void _throwIfStale(LayoutSpec spec, int cacheGeneration) {
+    if (layoutSpec.layoutSignature != spec.layoutSignature ||
+        cacheGeneration != _cacheGeneration) {
+      throw const _StaleLayoutGeneration();
+    }
+  }
+
+  int? _chapterIndexFromTaskKey(String key) {
+    final separator = key.indexOf('|');
+    if (separator <= 0) return null;
+    return int.tryParse(key.substring(0, separator));
   }
 }

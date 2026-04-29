@@ -35,7 +35,7 @@ class _FakeChapterDao implements ChapterDao {
 class _FakeSourceDao implements BookSourceDao {
   _FakeSourceDao(this.source);
 
-  final BookSource? source;
+  BookSource? source;
 
   @override
   Future<BookSource?> getByUrl(String url) async => source;
@@ -137,6 +137,7 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
   _FakeBookSourceService(this.responses);
 
   final List<Object> responses;
+  final List<String> sourceNames = <String>[];
   int contentCalls = 0;
 
   @override
@@ -157,6 +158,7 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
     String? nextChapterUrl,
     int? pageConcurrency,
   }) async {
+    sourceNames.add(source.bookSourceName);
     final response =
         responses[contentCalls.clamp(0, responses.length - 1).toInt()];
     contentCalls += 1;
@@ -334,6 +336,44 @@ void main() {
         expect(repository.cachedContent(0)?.plainText, 'fresh body');
       },
     );
+
+    test('clearContentCache drops cached BookSource', () async {
+      final book = _book();
+      final chapter = _chapter();
+      final contentDao = _FakeContentDao();
+      final sourceDao = _FakeSourceDao(
+        BookSource(bookSourceUrl: book.origin, bookSourceName: 'old source'),
+      );
+      final service = _FakeBookSourceService(<Object>[
+        'old source body',
+        'new source body',
+      ]);
+      final repository = ChapterRepository(
+        book: book,
+        initialChapters: <BookChapter>[chapter],
+        bookDao: _FakeBookDao(),
+        chapterDao: _FakeChapterDao(<BookChapter>[chapter]),
+        sourceDao: sourceDao,
+        contentDao: contentDao,
+        replaceDao: _FakeReplaceRuleDao(),
+        service: service,
+      );
+
+      final first = await repository.loadContent(0);
+      expect(first.plainText, 'old source body');
+      expect(service.sourceNames, <String>['old source']);
+
+      sourceDao.source = BookSource(
+        bookSourceUrl: book.origin,
+        bookSourceName: 'new source',
+      );
+      contentDao.entries.clear();
+      repository.clearContentCache();
+
+      final second = await repository.loadContent(0);
+      expect(second.plainText, 'new source body');
+      expect(service.sourceNames, <String>['old source', 'new source']);
+    });
 
     test(
       'ensureChapters reports missing source instead of empty ready TOC',

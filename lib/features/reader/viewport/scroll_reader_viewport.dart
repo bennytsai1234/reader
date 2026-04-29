@@ -257,6 +257,31 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     ];
   }
 
+  Set<int> _windowChapterIndexSetFor(int centerChapterIndex) {
+    final chapterCount = widget.runtime.chapterCount;
+    if (chapterCount <= 0) return const <int>{};
+    final center = _safeChapterIndex(centerChapterIndex);
+    return <int>{
+      if (center > 0) center - 1,
+      center,
+      if (center + 1 < chapterCount) center + 1,
+    };
+  }
+
+  void _evictOutsideWindow(int centerChapterIndex) {
+    final retained = _windowChapterIndexSetFor(centerChapterIndex);
+    _loadedChapters.removeWhere(
+      (chapterIndex, _) => !retained.contains(chapterIndex),
+    );
+    _chapterExtents.removeWhere(
+      (chapterIndex, _) => !retained.contains(chapterIndex),
+    );
+    _chapterVirtualTops.removeWhere(
+      (chapterIndex, _) => !retained.contains(chapterIndex),
+    );
+    widget.runtime.debugResolver.retainLayoutsFor(retained);
+  }
+
   Future<_LoadedChapter> _loadChapter(int safeChapterIndex) {
     final existing = _inFlightLoads[safeChapterIndex];
     if (existing != null) return existing;
@@ -265,6 +290,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
       try {
         final layout = await widget.runtime.debugResolver.ensureLayout(
           safeChapterIndex,
+          retryOnStale: false,
         );
         final pages = layout.pageCaches;
         return _LoadedChapter(layout: layout, pages: pages);
@@ -352,6 +378,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
 
     if (stillCurrent()) {
       _currentChapterIndex = center;
+      _evictOutsideWindow(center);
       setState(() {});
     }
   }
@@ -400,7 +427,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
       loaded.layout.pages,
       chapterIndex: chapterIndex,
     );
-    final item = layout.itemAtCharOffset(location.charOffset);
+    final item = _lineItemAtOrNearCharOffset(layout, location.charOffset);
     if (item == null) return chapterTop - _anchorOffsetInViewport();
     final lineVirtualTop = _lineVirtualTop(
       loaded: loaded,
@@ -603,6 +630,19 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
       }
     }
     return nearest;
+  }
+
+  LineItem? _lineItemAtOrNearCharOffset(LineLayout layout, int charOffset) {
+    LineItem? previous;
+    for (final item in layout.textItems) {
+      if (charOffset >= item.chapterPosition &&
+          charOffset < item.endChapterPosition) {
+        return item;
+      }
+      if (charOffset < item.chapterPosition) return item;
+      previous = item;
+    }
+    return previous;
   }
 
   void _captureAndReportVisibleLocation() {

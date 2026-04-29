@@ -231,6 +231,46 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     });
 
+    testWidgets('slide viewport captures visible anchor after mount', (
+      tester,
+    ) async {
+      final env = _RuntimeEnv(mode: ReaderMode.slide);
+      await env.runtime.openBook();
+      final current = env.runtime.state.pageWindow!.current;
+      final staleLocation = ReaderLocation(
+        chapterIndex: current.chapterIndex,
+        charOffset: current.endCharOffset,
+      );
+      env.runtime.state = env.runtime.state.copyWith(
+        visibleLocation: staleLocation,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 360,
+            child: SlideReaderViewport(
+              runtime: env.runtime,
+              backgroundColor: Colors.white,
+              textColor: Colors.black,
+              style: _style(ReaderPageMode.slide),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final captured = env.runtime.state.visibleLocation;
+      expect(captured.chapterIndex, current.chapterIndex);
+      expect(captured.charOffset, isNot(staleLocation.charOffset));
+      expect(current.containsCharOffset(captured.charOffset), isTrue);
+
+      env.runtime.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+
     testWidgets(
       'slide viewport renders page cache tiles with slide placement',
       (tester) async {
@@ -297,6 +337,49 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
       },
     );
+
+    testWidgets('slide capture uses unclamped anchor for visual offset', (
+      tester,
+    ) async {
+      final env = _RuntimeEnv(mode: ReaderMode.slide);
+      final style = _style(
+        ReaderPageMode.slide,
+      ).copyWith(paddingTop: 140, paddingBottom: 12);
+      await env.runtime.openBook();
+      await env.runtime.updateStyle(style, const Size(320, 360));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 360,
+            child: SlideReaderViewport(
+              runtime: env.runtime,
+              backgroundColor: Colors.white,
+              textColor: Colors.black,
+              style: style,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final page = env.runtime.pageCacheFor(
+        env.runtime.state.pageWindow!.current,
+      );
+      final captured = env.runtime.captureVisibleLocation();
+      expect(captured, isNotNull);
+      final anchorContentY = (360 * 0.2).clamp(24.0, 120.0) - style.paddingTop;
+      final line = page.lines.firstWhere(
+        (line) => line.startCharOffset == captured!.charOffset,
+      );
+      expect(captured!.visualOffsetPx, closeTo(anchorContentY - line.top, 0.1));
+      expect(captured.visualOffsetPx, lessThan(0));
+
+      env.runtime.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 500));
+    });
 
     testWidgets('scroll viewport uses fixed canvas with page cache tiles', (
       tester,
@@ -889,6 +972,58 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
       },
     );
+
+    testWidgets('scroll canvas restoreFromLocation keeps EOF on last page', (
+      tester,
+    ) async {
+      final env = _RuntimeEnv();
+      await env.runtime.openBook();
+      final layout = await env.runtime.debugResolver.ensureLayout(0);
+      final eofOffset = layout.displayText.length;
+      final lastPage = layout.pages.last;
+      expect(layout.pages.length, greaterThan(1));
+      expect(lastPage.startCharOffset, greaterThan(0));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 360,
+            child: ScrollReaderViewport(
+              runtime: env.runtime,
+              backgroundColor: Colors.white,
+              textColor: Colors.black,
+              style: _style(ReaderPageMode.scroll),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final restored = await tester.runAsync(
+        () => env.runtime.restoreFromLocation(
+          ReaderLocation(chapterIndex: 0, charOffset: eofOffset),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(restored, isTrue);
+      expect(env.runtime.state.visibleLocation.chapterIndex, 0);
+      expect(
+        env.runtime.state.visibleLocation.charOffset,
+        greaterThanOrEqualTo(lastPage.startCharOffset),
+      );
+      expect(
+        env.runtime.state.visibleLocation.charOffset,
+        lessThanOrEqualTo(eofOffset),
+      );
+      expect(env.bookDao.writes, 0);
+
+      env.runtime.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 500));
+    });
   });
 }
 

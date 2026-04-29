@@ -143,6 +143,9 @@ class ReaderPreloadScheduler {
       for (final index in order)
         if ((index - center).abs() <= layoutRadius) index,
     };
+    if (layoutRadius >= 0) {
+      resolver.retainLayoutsFor(layoutIndexes);
+    }
     for (final index in order) {
       if ((index - center).abs() <= contentRadius &&
           !layoutIndexes.contains(index)) {
@@ -316,7 +319,7 @@ class ReaderPreloadScheduler {
   Future<void> _runLayoutTask(_PreloadTask task, String key) async {
     try {
       if (task.generation == _generation) {
-        await resolver.ensureLayout(task.chapterIndex);
+        await resolver.ensureLayout(task.chapterIndex, retryOnStale: false);
       }
     } catch (_) {
       // Layout preload records resolver errors for placeholders, but does not
