@@ -14,7 +14,6 @@ class ReaderV2TilePainter extends CustomPainter {
     required this.textColor,
     required this.style,
     this.debugOverlay = false,
-    this.enableJustification = true,
     this.paintBackground = true,
   });
 
@@ -23,12 +22,12 @@ class ReaderV2TilePainter extends CustomPainter {
   final Color textColor;
   final ReaderV2Style style;
   final bool debugOverlay;
-  final bool enableJustification;
   final bool paintBackground;
 
-  /// Capacity for the TextPainter cache. Sized for justified text:
-  /// ~20 chars/line × 25 lines/page × 8 visible pages ≈ 4000 entries.
-  static const int _cacheCapacity = 4000;
+  /// Capacity for the TextPainter cache.
+  /// ~1 painter/line × 25 lines/page × 8 visible pages ≈ 200 active entries.
+  /// We keep a comfortable headroom for scrolling overlap and preloaded tiles.
+  static const int _cacheCapacity = 800;
 
   /// LinkedHashMap preserves insertion order, enabling efficient
   /// eviction of the oldest half instead of clearing everything at once.
@@ -68,13 +67,8 @@ class ReaderV2TilePainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(contentRect);
     for (final line in tile.lines) {
-      final offset = Offset(left, top + line.top);
-      if (_canJustify(line, contentWidth)) {
-        _paintJustifiedLine(canvas, line, offset, contentWidth);
-      } else {
-        final painter = _painterFor(line);
-        painter.paint(canvas, offset);
-      }
+      final painter = _painterFor(line);
+      painter.paint(canvas, Offset(left, top + line.top));
     }
     canvas.restore();
 
@@ -95,46 +89,10 @@ class ReaderV2TilePainter extends CustomPainter {
     }
   }
 
-  bool _canJustify(ReaderV2RenderLine line, double contentWidth) {
-    if (!enableJustification ||
-        !line.shouldJustify ||
-        line.isTitle ||
-        line.isParagraphEnd) {
-      return false;
-    }
-    if (line.text.trimRight().length < 2) return false;
-    return contentWidth > line.width + 1;
-  }
-
-  void _paintJustifiedLine(
-    Canvas canvas,
-    ReaderV2RenderLine line,
-    Offset offset,
-    double contentWidth,
-  ) {
-    final glyphs = line.text.characters.toList(growable: false);
-    if (glyphs.length < 2) {
-      _painterFor(line).paint(canvas, offset);
-      return;
-    }
-    final extra = (contentWidth - line.width).clamp(0.0, style.fontSize * 1.5);
-    final gap = extra / (glyphs.length - 1);
-    var dx = offset.dx;
-    for (var i = 0; i < glyphs.length; i++) {
-      final painter = _painterForText(glyphs[i], line);
-      painter.paint(canvas, Offset(dx, offset.dy));
-      dx += painter.width + (i == glyphs.length - 1 ? 0 : gap);
-    }
-  }
-
   TextPainter _painterFor(ReaderV2RenderLine line) {
-    return _painterForText(line.text, line);
-  }
-
-  TextPainter _painterForText(String text, ReaderV2RenderLine line) {
     final effectiveLineHeight = style.effectiveLineHeight;
     final key = <Object?>[
-      text,
+      line.text,
       line.isTitle,
       style.fontSize,
       effectiveLineHeight,
@@ -156,7 +114,7 @@ class ReaderV2TilePainter extends CustomPainter {
           line.isTitle || style.bold ? FontWeight.bold : FontWeight.normal,
     );
     final painter = TextPainter(
-      text: TextSpan(text: text, style: textStyle),
+      text: TextSpan(text: line.text, style: textStyle),
       textDirection: TextDirection.ltr,
       textScaler: TextScaler.noScaling,
       maxLines: 1,
@@ -184,7 +142,6 @@ class ReaderV2TilePainter extends CustomPainter {
         oldDelegate.textColor != textColor ||
         oldDelegate.style != style ||
         oldDelegate.debugOverlay != debugOverlay ||
-        oldDelegate.enableJustification != enableJustification ||
         oldDelegate.paintBackground != paintBackground;
   }
 }
