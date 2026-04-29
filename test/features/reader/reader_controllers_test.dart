@@ -77,7 +77,7 @@ class _FakeRuntime implements ReaderRuntime {
   int get chapterCount => 3;
 
   @override
-  bool moveToNextPage() {
+  bool moveToNextPage({bool saveSettledProgress = true}) {
     final index = nextPageCalls;
     nextPageCalls += 1;
     return index < nextPageResults.length ? nextPageResults[index] : false;

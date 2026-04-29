@@ -17,6 +17,13 @@ class _StaleLayoutGeneration implements Exception {
   const _StaleLayoutGeneration();
 }
 
+class _InFlightLayout {
+  const _InFlightLayout({required this.id, required this.future});
+
+  final int id;
+  final Future<ChapterLayout> future;
+}
+
 class PageResolver {
   PageResolver({
     required this.repository,
@@ -28,10 +35,11 @@ class PageResolver {
   final LayoutEngine layoutEngine;
   LayoutSpec layoutSpec;
   final Map<int, ChapterLayout> _layouts = <int, ChapterLayout>{};
-  final Map<String, Future<ChapterLayout>> _inFlight =
-      <String, Future<ChapterLayout>>{};
+  final Map<String, _InFlightLayout> _inFlight = <String, _InFlightLayout>{};
+  final Set<int> _invalidatedInFlightTaskIds = <int>{};
   final Map<int, String> _layoutErrors = <int, String>{};
   int _cacheGeneration = 0;
+  int _nextInFlightTaskId = 0;
 
   int get chapterCount => repository.chapterCount;
 
@@ -78,36 +86,40 @@ class PageResolver {
     final cacheGeneration = _cacheGeneration;
     final taskKey = '$safeIndex|${spec.layoutSignature}|$cacheGeneration';
     final inFlight = _inFlight[taskKey];
-    if (inFlight != null) return inFlight;
+    if (inFlight != null) return inFlight.future;
+    final taskId = _nextInFlightTaskId++;
     late final Future<ChapterLayout> task;
     task = () async {
       try {
         final content = await repository.loadContent(safeIndex);
-        _throwIfStale(spec, cacheGeneration);
+        _throwIfStale(spec, cacheGeneration, taskId);
         final layout = layoutEngine.layout(
           content,
           spec,
           chapterSize: repository.chapterCount,
         );
-        _throwIfStale(spec, cacheGeneration);
+        _throwIfStale(spec, cacheGeneration, taskId);
         _layouts[safeIndex] = layout;
         _layoutErrors.remove(safeIndex);
         return layout;
       } catch (e) {
         if (e is! _StaleLayoutGeneration &&
-            cacheGeneration == _cacheGeneration) {
+            cacheGeneration == _cacheGeneration &&
+            !_invalidatedInFlightTaskIds.contains(taskId)) {
           _layoutErrors[safeIndex] = e.toString();
         }
         rethrow;
       }
     }();
-    _inFlight[taskKey] = task;
+    _inFlight[taskKey] = _InFlightLayout(id: taskId, future: task);
     try {
       return await task;
     } finally {
-      if (identical(_inFlight[taskKey], task)) {
+      final current = _inFlight[taskKey];
+      if (current != null && identical(current.future, task)) {
         _inFlight.remove(taskKey);
       }
+      _invalidatedInFlightTaskIds.remove(taskId);
     }
   }
 
@@ -119,9 +131,11 @@ class PageResolver {
           return chapterIndex != null && !retained.contains(chapterIndex);
         }).toList();
     if (staleInFlightKeys.isNotEmpty) {
-      _cacheGeneration += 1;
       for (final key in staleInFlightKeys) {
-        _inFlight.remove(key);
+        final evicted = _inFlight.remove(key);
+        if (evicted != null) {
+          _invalidatedInFlightTaskIds.add(evicted.id);
+        }
       }
     }
     _layouts.removeWhere((chapterIndex, _) => !retained.contains(chapterIndex));
@@ -320,9 +334,10 @@ class PageResolver {
     return chapterIndex.clamp(0, count - 1).toInt();
   }
 
-  void _throwIfStale(LayoutSpec spec, int cacheGeneration) {
+  void _throwIfStale(LayoutSpec spec, int cacheGeneration, int taskId) {
     if (layoutSpec.layoutSignature != spec.layoutSignature ||
-        cacheGeneration != _cacheGeneration) {
+        cacheGeneration != _cacheGeneration ||
+        _invalidatedInFlightTaskIds.contains(taskId)) {
       throw const _StaleLayoutGeneration();
     }
   }

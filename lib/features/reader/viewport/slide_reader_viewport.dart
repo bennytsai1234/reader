@@ -189,8 +189,8 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
         direction == 0
             ? false
             : (direction > 0
-                ? widget.runtime.moveToNextTile()
-                : widget.runtime.moveToPrevTile());
+                ? widget.runtime.moveToNextTile(saveSettledProgress: false)
+                : widget.runtime.moveToPrevTile(saveSettledProgress: false));
     setState(() {
       _slideController.value = 0;
       _lastAnimationValue = 0;
@@ -393,8 +393,8 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     _resetViewport();
     final moved =
         forward
-            ? widget.runtime.moveToNextTile()
-            : widget.runtime.moveToPrevTile();
+            ? widget.runtime.moveToNextTile(saveSettledProgress: false)
+            : widget.runtime.moveToPrevTile(saveSettledProgress: false);
     if (!moved || !mounted) return false;
     final current = widget.runtime.state.pageWindow?.current;
     if (!_pageContainsChar(
@@ -404,7 +404,13 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     )) {
       return false;
     }
-    widget.runtime.handleSlidePageSettled(current!);
+    widget.runtime.handleSlidePageSettled(
+      current!,
+      settledLocation: ReaderLocation(
+        chapterIndex: chapterIndex,
+        charOffset: charOffset,
+      ),
+    );
     return true;
   }
 
@@ -430,7 +436,13 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     )) {
       return false;
     }
-    widget.runtime.handleSlidePageSettled(current!);
+    widget.runtime.handleSlidePageSettled(
+      current!,
+      settledLocation: ReaderLocation(
+        chapterIndex: chapterIndex,
+        charOffset: charOffset,
+      ),
+    );
     return true;
   }
 

@@ -46,6 +46,62 @@ class _FakeBookDao extends Fake implements BookDao {
   }
 }
 
+class _DelayedBookDao extends _FakeBookDao {
+  final Completer<void> started = Completer<void>();
+  final Completer<void> _gate = Completer<void>();
+
+  @override
+  Future<void> updateProgress(
+    String bookUrl,
+    int chapterIndex,
+    String chapterTitle,
+    int pos, {
+    double visualOffsetPx = 0.0,
+    String? readerAnchorJson,
+  }) async {
+    writes += 1;
+    lastLocation = ReaderLocation(
+      chapterIndex: chapterIndex,
+      charOffset: pos,
+      visualOffsetPx: visualOffsetPx,
+    );
+    if (!started.isCompleted) started.complete();
+    await _gate.future;
+  }
+
+  void complete() {
+    if (!_gate.isCompleted) _gate.complete();
+  }
+}
+
+class _GatedBookDao extends _FakeBookDao {
+  final Completer<void> saveStarted = Completer<void>();
+  final Completer<void> releaseSave = Completer<void>();
+
+  @override
+  Future<void> updateProgress(
+    String bookUrl,
+    int chapterIndex,
+    String chapterTitle,
+    int pos, {
+    double visualOffsetPx = 0.0,
+    String? readerAnchorJson,
+  }) async {
+    if (!saveStarted.isCompleted) {
+      saveStarted.complete();
+    }
+    await releaseSave.future;
+    return super.updateProgress(
+      bookUrl,
+      chapterIndex,
+      chapterTitle,
+      pos,
+      visualOffsetPx: visualOffsetPx,
+      readerAnchorJson: readerAnchorJson,
+    );
+  }
+}
+
 class _FakeChapterDao extends Fake implements ChapterDao {
   _FakeChapterDao(this.chapterList);
 
@@ -523,6 +579,39 @@ void main() {
         final staleLayout = await stale;
         expect(staleLayout.displayText, contains('fresh body'));
         expect(resolver.cachedLayout(0)?.displayText, contains('fresh body'));
+      },
+    );
+
+    test(
+      'PageResolver retainLayoutsFor does not stale retained in-flight layouts',
+      () async {
+        final book = Book(bookUrl: 'retain-layout-book', origin: 'local');
+        final chapters = _chaptersFor(book.bookUrl, 4);
+        final repository = _QueuedChapterRepository(
+          book: book,
+          chapters: chapters,
+        );
+        final resolver = PageResolver(
+          repository: repository,
+          layoutEngine: LayoutEngine(),
+          layoutSpec: _spec(fontSize: 18),
+        );
+
+        final retained = resolver.ensureLayout(1, retryOnStale: false);
+        final evicted = resolver.ensureLayout(2, retryOnStale: false);
+        await Future<void>.delayed(Duration.zero);
+        expect(repository.loadOrder, <int>[1, 2]);
+
+        resolver.retainLayoutsFor(<int>{1});
+
+        repository.complete(1);
+        final retainedLayout = await retained;
+        expect(retainedLayout.chapterIndex, 1);
+        expect(resolver.cachedLayout(1), isNotNull);
+
+        repository.complete(2);
+        await expectLater(evicted, throwsA(isA<Exception>()));
+        expect(resolver.cachedLayout(2), isNull);
       },
     );
 
@@ -1229,6 +1318,28 @@ void main() {
       expect(env.bookDao.lastLocation, prevLocation);
     });
 
+    test('slide viewport settle writes progress once per swipe', () async {
+      final env = _RuntimeEnv(mode: ReaderMode.slide);
+      final runtime = env.runtime;
+      await runtime.openBook();
+      final next = runtime.state.pageWindow!.next!;
+      final settledAnchor = ReaderLocation(
+        chapterIndex: next.chapterIndex,
+        charOffset: next.startCharOffset,
+        visualOffsetPx: 12,
+      );
+      final owner = Object();
+      runtime.registerVisibleLocationCapture(owner, () => settledAnchor);
+
+      expect(runtime.moveToNextTile(saveSettledProgress: false), isTrue);
+      runtime.handleSlidePageSettled(runtime.state.pageWindow!.current);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(env.bookDao.writes, 1);
+      expect(env.bookDao.lastLocation, settledAnchor);
+      runtime.unregisterVisibleLocationCapture(owner);
+    });
+
     test(
       'applyPresentation flushes captured location on mode switch',
       () async {
@@ -1251,6 +1362,131 @@ void main() {
         expect(env.bookDao.writes, 1);
         expect(env.bookDao.lastLocation, captured);
         expect(runtime.state.committedLocation, captured);
+        runtime.unregisterVisibleLocationCapture(owner);
+      },
+    );
+
+    test(
+      'pending mode switch cannot overwrite relayout after progress save',
+      () async {
+        final env = _DelayedProgressRuntimeEnv(
+          bookUrl: 'presentation-relayout-race',
+        );
+        final runtime = env.runtime;
+        await runtime.openBook();
+        expect(runtime.moveToNextPage(), isTrue);
+        final owner = Object();
+        final captured = runtime.state.visibleLocation.copyWith(
+          visualOffsetPx: 19,
+        );
+        runtime.registerVisibleLocationCapture(owner, () => captured);
+
+        final stale = runtime.switchMode(ReaderMode.slide);
+        await env.bookDao.started.future;
+
+        final latestSpec = _spec(fontSize: 22);
+        await runtime.updateLayoutSpec(latestSpec);
+        final latestGeneration = runtime.state.layoutGeneration;
+        env.bookDao.complete();
+        await stale;
+
+        expect(runtime.state.mode, ReaderMode.scroll);
+        expect(runtime.state.phase, ReaderPhase.ready);
+        expect(runtime.state.layoutGeneration, latestGeneration);
+        expect(
+          runtime.state.layoutSpec.layoutSignature,
+          latestSpec.layoutSignature,
+        );
+        runtime.unregisterVisibleLocationCapture(owner);
+      },
+    );
+
+    test(
+      'pending mode switch cannot overwrite reload after progress save',
+      () async {
+        final env = _DelayedProgressRuntimeEnv(
+          bookUrl: 'presentation-reload-race',
+        );
+        final runtime = env.runtime;
+        await runtime.openBook();
+        expect(runtime.moveToNextPage(), isTrue);
+        final owner = Object();
+        final captured = runtime.state.visibleLocation.copyWith(
+          visualOffsetPx: 23,
+        );
+        runtime.registerVisibleLocationCapture(owner, () => captured);
+
+        final stale = runtime.switchMode(ReaderMode.slide);
+        await env.bookDao.started.future;
+
+        await runtime.reloadContentPreservingLocation();
+        final latestGeneration = runtime.state.layoutGeneration;
+        env.bookDao.complete();
+        await stale;
+
+        expect(runtime.state.mode, ReaderMode.scroll);
+        expect(runtime.state.phase, ReaderPhase.ready);
+        expect(runtime.state.layoutGeneration, latestGeneration);
+        runtime.unregisterVisibleLocationCapture(owner);
+      },
+    );
+
+    test(
+      'applyPresentation ignores stale mode switch after progress save awaits',
+      () async {
+        final book = Book(
+          bookUrl: 'presentation-save-race-book',
+          origin: 'local',
+          name: 'save race',
+        );
+        final bookDao = _GatedBookDao();
+        final chapters = _chaptersFor(book.bookUrl, 4);
+        final repository = ChapterRepository(
+          book: book,
+          initialChapters: chapters,
+          bookDao: bookDao,
+          chapterDao: _FakeChapterDao(chapters),
+          sourceDao: _FakeSourceDao(),
+          contentDao: _FakeContentDao(),
+        );
+        final runtime = ReaderRuntime(
+          book: book,
+          repository: repository,
+          layoutEngine: LayoutEngine(),
+          progressController: ReaderProgressController(
+            book: book,
+            repository: repository,
+            bookDao: bookDao,
+          ),
+          initialLayoutSpec: _spec(fontSize: 18),
+          initialMode: ReaderMode.scroll,
+        );
+        addTearDown(runtime.dispose);
+        await runtime.openBook();
+        runtime.moveToNextPage();
+        final owner = Object();
+        runtime.registerVisibleLocationCapture(
+          owner,
+          () => runtime.state.visibleLocation,
+        );
+
+        final stale = runtime.applyPresentation(
+          spec: runtime.state.layoutSpec,
+          mode: ReaderMode.slide,
+        );
+        await bookDao.saveStarted.future;
+
+        final latestSpec = _spec(fontSize: 22);
+        await runtime.updateLayoutSpec(latestSpec);
+        bookDao.releaseSave.complete();
+        await stale;
+
+        expect(runtime.state.mode, ReaderMode.scroll);
+        expect(
+          runtime.state.layoutSpec.layoutSignature,
+          latestSpec.layoutSignature,
+        );
+        expect(runtime.state.phase, ReaderPhase.ready);
         runtime.unregisterVisibleLocationCapture(owner);
       },
     );
@@ -1650,6 +1886,47 @@ class _RuntimeEnv {
 
   final Book book;
   final _FakeBookDao bookDao;
+  late final ChapterRepository repository;
+  late final ReaderRuntime runtime;
+}
+
+class _DelayedProgressRuntimeEnv {
+  _DelayedProgressRuntimeEnv({required String bookUrl})
+    : book = Book(
+        bookUrl: bookUrl,
+        origin: 'local',
+        name: '測試書',
+        chapterIndex: 0,
+        charOffset: 0,
+      ),
+      bookDao = _DelayedBookDao() {
+    final chapters = _chaptersFor(book.bookUrl, 4);
+    repository = ChapterRepository(
+      book: book,
+      initialChapters: chapters,
+      bookDao: bookDao,
+      chapterDao: _FakeChapterDao(chapters),
+      sourceDao: _FakeSourceDao(),
+      contentDao: _FakeContentDao(),
+    );
+    runtime = ReaderRuntime(
+      book: book,
+      repository: repository,
+      layoutEngine: LayoutEngine(),
+      progressController: ReaderProgressController(
+        book: book,
+        repository: repository,
+        bookDao: bookDao,
+      ),
+      initialLayoutSpec: _spec(fontSize: 18),
+      initialMode: ReaderMode.scroll,
+    );
+    addTearDown(bookDao.complete);
+    addTearDown(runtime.dispose);
+  }
+
+  final Book book;
+  final _DelayedBookDao bookDao;
   late final ChapterRepository repository;
   late final ReaderRuntime runtime;
 }
