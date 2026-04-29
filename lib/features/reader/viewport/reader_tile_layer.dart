@@ -16,6 +16,7 @@ class ReaderTileLayer extends StatelessWidget {
     this.expand = false,
     this.debugOverlay = false,
     this.enableJustification = true,
+    this.paintBackground = true,
   });
 
   final PageCache tile;
@@ -26,6 +27,7 @@ class ReaderTileLayer extends StatelessWidget {
   final bool expand;
   final bool debugOverlay;
   final bool enableJustification;
+  final bool paintBackground;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +39,7 @@ class ReaderTileLayer extends StatelessWidget {
         textColor: textColor,
         debugOverlay: debugOverlay,
         enableJustification: enableJustification,
+        paintBackground: paintBackground,
       ),
     );
 

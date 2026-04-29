@@ -363,6 +363,7 @@ void main() {
         expect(layout, isNotNull);
         expect(layers, isNotEmpty);
         expect(layers.first.tile, layout!.pageCaches[window.current.pageIndex]);
+        expect(layers.every((layer) => !layer.paintBackground), isTrue);
 
         final transforms = tester
             .widgetList<Transform>(
@@ -459,12 +460,61 @@ void main() {
 
       expect(find.byType(Scrollable), findsNothing);
       expect(find.byType(ReaderTileLayer), findsWidgets);
+      final layers = tester.widgetList<ReaderTileLayer>(
+        find.byType(ReaderTileLayer),
+      );
+      expect(layers.every((layer) => !layer.paintBackground), isTrue);
       final renderedHeight =
           tester.getSize(find.byType(ReaderTileLayer).first).height;
       final layout = env.runtime.debugResolver.cachedLayout(0);
       expect(layout, isNotNull);
       expect(layout!.pageCaches, isNotEmpty);
-      expect(renderedHeight, 360);
+      expect(renderedHeight, greaterThan(120));
+      expect(renderedHeight, lessThanOrEqualTo(360));
+
+      env.runtime.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+
+    testWidgets('scroll viewport compacts short pages and attaches next tile', (
+      tester,
+    ) async {
+      final env = _RuntimeEnv(chapters: _shortChaptersFor('book', 4));
+      await env.runtime.openBook();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 360,
+            child: ScrollReaderViewport(
+              runtime: env.runtime,
+              backgroundColor: Colors.white,
+              textColor: Colors.black,
+              style: _style(ReaderPageMode.scroll),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final viewport = find.byType(ScrollReaderViewport);
+      final viewportHeight = tester.getSize(viewport).height;
+      final layerElements = find.byType(ReaderTileLayer).evaluate().toList();
+      expect(layerElements.length, greaterThanOrEqualTo(2));
+
+      final firstLayer = layerElements[0].widget as ReaderTileLayer;
+      final secondLayer = layerElements[1].widget as ReaderTileLayer;
+      expect(firstLayer.tile.chapterIndex, 0);
+      expect(secondLayer.tile.chapterIndex, 1);
+
+      final firstBox = layerElements[0].renderObject! as RenderBox;
+      final secondBox = layerElements[1].renderObject! as RenderBox;
+      final firstTop = firstBox.localToGlobal(Offset.zero).dy;
+      final secondTop = secondBox.localToGlobal(Offset.zero).dy;
+      expect(firstBox.size.height, lessThan(viewportHeight));
+      expect(secondTop, closeTo(firstTop + firstBox.size.height, 0.5));
 
       env.runtime.dispose();
       await tester.pumpWidget(const SizedBox.shrink());
@@ -753,15 +803,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final firstMoved = await controller.scrollBy!(324);
+      final firstMoved = await controller.scrollBy!(72);
       await tester.pumpAndSettle();
       expect(firstMoved, isTrue);
       expect(env.runtime.state.visibleLocation.chapterIndex, 1);
 
-      final secondMoved = await controller.scrollBy!(324);
+      final secondMoved = await controller.scrollBy!(240);
       await tester.pumpAndSettle();
       expect(secondMoved, isTrue);
-      expect(env.runtime.state.visibleLocation.chapterIndex, 2);
+      expect(
+        env.runtime.state.visibleLocation.chapterIndex,
+        greaterThanOrEqualTo(2),
+      );
 
       env.runtime.dispose();
       await tester.pumpWidget(const SizedBox.shrink());
@@ -872,9 +925,9 @@ void main() {
       'scroll window ignores stale async shift after anchor moves back',
       (tester) async {
         final env = _RuntimeEnv(
-          chapters: _shortChaptersFor('book', 4),
+          chapters: _shortChaptersFor('book', 6),
           initialChapterIndex: 1,
-          delayedContentChapterIndex: 3,
+          delayedContentChapterIndex: 5,
         );
         final controller = ReaderViewportController();
         await env.runtime.openBook();
@@ -904,25 +957,28 @@ void main() {
         final delayedRepository = env.delayedRepository!;
         for (
           var pump = 0;
-          pump < 5 && !delayedRepository.isWaiting(3);
+          pump < 5 && !delayedRepository.isWaiting(5);
           pump++
         ) {
           await tester.pump();
         }
-        expect(delayedRepository.isWaiting(3), isTrue);
+        expect(delayedRepository.isWaiting(5), isTrue);
 
         await gesture.moveBy(const Offset(0, 96));
         await tester.pump();
         await gesture.up();
         await tester.pump();
 
-        delayedRepository.release(3);
+        delayedRepository.release(5);
         await tester.pumpAndSettle();
 
         final movedBack = await controller.scrollBy!(-650);
         await tester.pumpAndSettle();
+        final movedBackAgain = await controller.scrollBy!(-650);
+        await tester.pumpAndSettle();
 
         expect(movedBack, isTrue);
+        expect(movedBackAgain, isTrue);
         expect(env.runtime.state.visibleLocation.chapterIndex, 0);
 
         env.runtime.dispose();

@@ -13,6 +13,7 @@ class ReaderTilePainter extends CustomPainter {
     required this.style,
     this.debugOverlay = false,
     this.enableJustification = true,
+    this.paintBackground = true,
   });
 
   final PageCache tile;
@@ -21,6 +22,7 @@ class ReaderTilePainter extends CustomPainter {
   final ReadStyle style;
   final bool debugOverlay;
   final bool enableJustification;
+  final bool paintBackground;
 
   static final Map<String, TextPainter> _textPainterCache =
       <String, TextPainter>{};
@@ -33,7 +35,9 @@ class ReaderTilePainter extends CustomPainter {
       return true;
     }());
 
-    canvas.drawColor(backgroundColor, BlendMode.src);
+    if (paintBackground) {
+      canvas.drawColor(backgroundColor, BlendMode.src);
+    }
     final left = style.paddingLeft;
     final top = style.paddingTop;
     final contentWidth =
@@ -158,6 +162,7 @@ class ReaderTilePainter extends CustomPainter {
         oldDelegate.textColor != textColor ||
         oldDelegate.style != style ||
         oldDelegate.debugOverlay != debugOverlay ||
-        oldDelegate.enableJustification != enableJustification;
+        oldDelegate.enableJustification != enableJustification ||
+        oldDelegate.paintBackground != paintBackground;
   }
 }

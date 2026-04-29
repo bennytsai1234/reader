@@ -41,12 +41,17 @@ class ScrollReaderViewport extends StatefulWidget {
 }
 
 class _LoadedChapter {
-  _LoadedChapter({required this.layout, required List<PageCache> pages})
-    : pages = List<PageCache>.unmodifiable(pages),
-      extent = _visualExtent(pages);
+  _LoadedChapter({
+    required this.layout,
+    required List<PageCache> pages,
+    required List<double> pageExtents,
+  }) : pages = List<PageCache>.unmodifiable(pages),
+       pageExtents = List<double>.unmodifiable(pageExtents),
+       extent = _visualExtent(pageExtents);
 
   final ChapterLayout layout;
   final List<PageCache> pages;
+  final List<double> pageExtents;
   final double extent;
 
   PageCache? pageAt(int pageIndex) {
@@ -54,16 +59,18 @@ class _LoadedChapter {
     return pages[pageIndex];
   }
 
-  static double _visualExtent(List<PageCache> pages) {
-    final extent = pages.fold<double>(
-      0.0,
-      (total, page) => total + _safePageHeight(page),
-    );
-    return extent <= 0 ? 1.0 : extent;
+  double pageExtentAt(int pageIndex) {
+    if (pageIndex < 0 || pageIndex >= pageExtents.length) return 1.0;
+    final extent = pageExtents[pageIndex];
+    return extent.isFinite && extent > 0 ? extent : 1.0;
   }
 
-  static double _safePageHeight(PageCache page) {
-    return page.height.isFinite && page.height > 0 ? page.height : 1.0;
+  static double _visualExtent(List<double> pageExtents) {
+    final extent = pageExtents.fold<double>(
+      0.0,
+      (total, pageExtent) => total + pageExtent,
+    );
+    return extent <= 0 ? 1.0 : extent;
   }
 }
 
@@ -72,13 +79,15 @@ class _CanvasPagePlacement {
     required this.layout,
     required this.page,
     required this.virtualTop,
+    required this.extent,
   });
 
   final ChapterLayout layout;
   final PageCache page;
   final double virtualTop;
+  final double extent;
 
-  double get virtualBottom => virtualTop + _LoadedChapter._safePageHeight(page);
+  double get virtualBottom => virtualTop + extent;
 }
 
 class _ScrollReaderViewportState extends State<ScrollReaderViewport>
@@ -238,6 +247,35 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     return math.min(120.0, _viewportHeight() * 0.2);
   }
 
+  double _fullPageHeight(PageCache page) {
+    return page.height.isFinite && page.height > 0 ? page.height : 1.0;
+  }
+
+  double _scrollPageExtent(PageCache page) {
+    final fullHeight = _fullPageHeight(page);
+    if (page.lines.isEmpty) return fullHeight;
+
+    final contentBottom = page.lines.fold<double>(
+      0.0,
+      (bottom, line) => math.max(bottom, line.bottom),
+    );
+    final visualHeight =
+        widget.style.paddingTop + contentBottom + widget.style.paddingBottom;
+    final minHeight = math.min(
+      fullHeight,
+      math.max(120.0, _viewportHeight() * 0.3),
+    );
+    return visualHeight.clamp(minHeight, fullHeight).toDouble();
+  }
+
+  double _forwardWindowExtent() {
+    return _viewportHeight() + _anchorOffsetInViewport();
+  }
+
+  double _backwardWindowExtent() {
+    return _viewportHeight();
+  }
+
   int _safeChapterIndex(int chapterIndex) {
     final chapterCount = widget.runtime.chapterCount;
     if (chapterCount <= 0) return 0;
@@ -245,31 +283,11 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
   }
 
   List<int> _windowChapterIndexes() {
-    final chapterCount = widget.runtime.chapterCount;
-    if (chapterCount <= 0) return const <int>[];
-    final center = _safeChapterIndex(
-      _currentChapterIndex ?? widget.runtime.state.visibleLocation.chapterIndex,
-    );
-    return <int>[
-      if (center > 0) center - 1,
-      center,
-      if (center + 1 < chapterCount) center + 1,
-    ];
+    final indexes = _loadedChapters.keys.toList(growable: false)..sort();
+    return indexes;
   }
 
-  Set<int> _windowChapterIndexSetFor(int centerChapterIndex) {
-    final chapterCount = widget.runtime.chapterCount;
-    if (chapterCount <= 0) return const <int>{};
-    final center = _safeChapterIndex(centerChapterIndex);
-    return <int>{
-      if (center > 0) center - 1,
-      center,
-      if (center + 1 < chapterCount) center + 1,
-    };
-  }
-
-  void _evictOutsideWindow(int centerChapterIndex) {
-    final retained = _windowChapterIndexSetFor(centerChapterIndex);
+  void _evictOutsideWindow(Set<int> retained) {
     _loadedChapters.removeWhere(
       (chapterIndex, _) => !retained.contains(chapterIndex),
     );
@@ -293,7 +311,14 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
           retryOnStale: false,
         );
         final pages = layout.pageCaches;
-        return _LoadedChapter(layout: layout, pages: pages);
+        final pageExtents = pages
+            .map(_scrollPageExtent)
+            .toList(growable: false);
+        return _LoadedChapter(
+          layout: layout,
+          pages: pages,
+          pageExtents: pageExtents,
+        );
       } finally {
         _inFlightLoads.remove(safeChapterIndex);
       }
@@ -344,9 +369,14 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     final centerTop = _chapterVirtualTops[center]!;
     final centerExtent =
         _chapterExtents[center] ?? _loadedChapters[center]?.extent ?? 1.0;
+    final retained = <int>{center};
 
-    final previous = center - 1;
-    if (previous >= 0) {
+    var backwardTop = centerTop;
+    var previous = center - 1;
+    var loadedPreviousCount = 0;
+    while (previous >= 0 &&
+        (loadedPreviousCount == 0 ||
+            centerTop + centerExtent - backwardTop < _backwardWindowExtent())) {
       final previousReady = await _tryEnsureChapterLoaded(
         previous,
         isCurrent: stillCurrent,
@@ -357,28 +387,39 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
             _chapterExtents[previous] ??
             _loadedChapters[previous]?.extent ??
             1.0;
-        _chapterVirtualTops.putIfAbsent(
-          previous,
-          () => centerTop - previousExtent,
-        );
+        backwardTop -= previousExtent;
+        _chapterVirtualTops[previous] = backwardTop;
+        retained.add(previous);
       }
+      loadedPreviousCount += 1;
+      previous -= 1;
     }
 
-    final next = center + 1;
-    if (next < widget.runtime.chapterCount) {
+    var forwardTop = centerTop + centerExtent;
+    var next = center + 1;
+    var loadedNextCount = 0;
+    while (next < widget.runtime.chapterCount &&
+        (loadedNextCount == 0 ||
+            forwardTop - centerTop < _forwardWindowExtent())) {
       final nextReady = await _tryEnsureChapterLoaded(
         next,
         isCurrent: stillCurrent,
       );
       if (!stillCurrent()) return;
       if (nextReady) {
-        _chapterVirtualTops.putIfAbsent(next, () => centerTop + centerExtent);
+        _chapterVirtualTops[next] = forwardTop;
+        retained.add(next);
+        final nextExtent =
+            _chapterExtents[next] ?? _loadedChapters[next]?.extent ?? 1.0;
+        forwardTop += nextExtent;
       }
+      loadedNextCount += 1;
+      next += 1;
     }
 
     if (stillCurrent()) {
       _currentChapterIndex = center;
-      _evictOutsideWindow(center);
+      _evictOutsideWindow(retained);
       setState(() {});
     }
   }
@@ -447,7 +488,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     if (page == null) return null;
     final pageVirtualTop = _pageVirtualTop(
       chapterTop: chapterTop,
-      pages: loaded.pages,
+      loaded: loaded,
       pageIndex: item.pageIndex,
     );
     if (pageVirtualTop == null) return null;
@@ -466,7 +507,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     if (page == null) return null;
     final pageVirtualTop = _pageVirtualTop(
       chapterTop: chapterTop,
-      pages: loaded.pages,
+      loaded: loaded,
       pageIndex: item.pageIndex,
     );
     if (pageVirtualTop == null) return null;
@@ -478,13 +519,13 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
 
   double? _pageVirtualTop({
     required double chapterTop,
-    required List<PageCache> pages,
+    required _LoadedChapter loaded,
     required int pageIndex,
   }) {
-    if (pageIndex < 0 || pageIndex >= pages.length) return null;
+    if (pageIndex < 0 || pageIndex >= loaded.pages.length) return null;
     var top = chapterTop;
     for (var index = 0; index < pageIndex; index++) {
-      top += _LoadedChapter._safePageHeight(pages[index]);
+      top += loaded.pageExtentAt(index);
     }
     return top;
   }
@@ -496,15 +537,18 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
       final chapterTop = _chapterVirtualTops[chapterIndex];
       if (loaded == null || chapterTop == null) continue;
       var pageTop = chapterTop;
-      for (final page in loaded.pages) {
+      for (var pageIndex = 0; pageIndex < loaded.pages.length; pageIndex++) {
+        final page = loaded.pages[pageIndex];
+        final extent = loaded.pageExtentAt(pageIndex);
         placements.add(
           _CanvasPagePlacement(
             layout: loaded.layout,
             page: page,
             virtualTop: pageTop,
+            extent: extent,
           ),
         );
-        pageTop += _LoadedChapter._safePageHeight(page);
+        pageTop += extent;
       }
     }
     placements.sort((a, b) => a.virtualTop.compareTo(b.virtualTop));
@@ -527,7 +571,13 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
         .map((placement) => placement.virtualBottom)
         .reduce(math.max);
     final minScrollY = minTop;
-    final maxScrollY = math.max(minScrollY, maxBottom - _viewportHeight());
+    final maxScrollY = math.max(
+      minScrollY,
+      math.max(
+        maxBottom - _viewportHeight(),
+        maxBottom - _anchorOffsetInViewport(),
+      ),
+    );
     return (min: minScrollY, max: maxScrollY);
   }
 
@@ -927,7 +977,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     final children = <Widget>[];
     for (final placement in _pagePlacements()) {
       final screenY = placement.virtualTop - _virtualScrollY;
-      final pageHeight = _LoadedChapter._safePageHeight(placement.page);
+      final pageHeight = placement.extent;
       if (screenY >= viewportHeight || screenY + pageHeight <= 0) continue;
       children.add(
         Positioned(
@@ -945,6 +995,7 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
                 backgroundColor: widget.backgroundColor,
                 textColor: widget.textColor,
                 expand: true,
+                paintBackground: false,
               ),
               TtsHighlightOverlayLayer(
                 tile: placement.page,

@@ -291,6 +291,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
             backgroundColor: widget.backgroundColor,
             textColor: widget.textColor,
             expand: true,
+            paintBackground: false,
           ),
           TtsHighlightOverlayLayer(
             tile: pageCache,
@@ -553,43 +554,50 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
           onHorizontalDragUpdate: _handleDragUpdate,
           onHorizontalDragEnd: (details) => _handleDragEnd(details, width),
           onHorizontalDragCancel: _resetViewport,
-          child: ClipRect(
-            child: Stack(
-              children: [
-                Transform.translate(
-                  offset: Offset(
-                    _screenXFor(
-                      pageSlot: -1,
-                      width: width,
-                      placement: prevPlacement,
+          child: ColoredBox(
+            color: widget.backgroundColor,
+            child: ClipRect(
+              child: Stack(
+                children: [
+                  Transform.translate(
+                    offset: Offset(
+                      _screenXFor(
+                        pageSlot: -1,
+                        width: width,
+                        placement: prevPlacement,
+                      ),
+                      0,
                     ),
-                    0,
+                    child: SizedBox(width: width, height: height, child: prev),
                   ),
-                  child: SizedBox(width: width, height: height, child: prev),
-                ),
-                Transform.translate(
-                  offset: Offset(
-                    _screenXFor(
-                      pageSlot: 0,
-                      width: width,
-                      placement: currentPlacement,
+                  Transform.translate(
+                    offset: Offset(
+                      _screenXFor(
+                        pageSlot: 0,
+                        width: width,
+                        placement: currentPlacement,
+                      ),
+                      0,
                     ),
-                    0,
-                  ),
-                  child: SizedBox(width: width, height: height, child: current),
-                ),
-                Transform.translate(
-                  offset: Offset(
-                    _screenXFor(
-                      pageSlot: 1,
+                    child: SizedBox(
                       width: width,
-                      placement: nextPlacement,
+                      height: height,
+                      child: current,
                     ),
-                    0,
                   ),
-                  child: SizedBox(width: width, height: height, child: next),
-                ),
-              ],
+                  Transform.translate(
+                    offset: Offset(
+                      _screenXFor(
+                        pageSlot: 1,
+                        width: width,
+                        placement: nextPlacement,
+                      ),
+                      0,
+                    ),
+                    child: SizedBox(width: width, height: height, child: next),
+                  ),
+                ],
+              ),
             ),
           ),
         );

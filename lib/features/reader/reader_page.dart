@@ -633,29 +633,17 @@ class _ReaderPageState extends State<ReaderPage>
     return widget.initialChapters[index].url;
   }
 
-  int _chapterEndCharOffset(ReaderRuntime runtime, ReaderLocation location) {
-    final cachedLayout = runtime.debugResolver.cachedLayout(
-      location.chapterIndex,
-    );
-    if (cachedLayout != null && cachedLayout.pages.isNotEmpty) {
-      return cachedLayout.pages.last.endCharOffset;
-    }
-    final currentPage = runtime.state.currentSlidePage;
-    if (currentPage != null &&
-        currentPage.chapterIndex == location.chapterIndex &&
-        currentPage.isChapterEnd) {
-      return currentPage.endCharOffset;
-    }
-    return location.charOffset;
-  }
-
   String _displayPageLabel(ReaderRuntime? runtime, TextPage? page) {
     if (runtime == null) return '0/0';
     if (runtime.state.mode == ReaderMode.scroll) {
-      return _displayCoordinator.formatChapterLabel(
-        chapterIndex: runtime.state.visibleLocation.chapterIndex,
-        totalChapters: runtime.chapterCount,
-      );
+      final visiblePage = _visiblePageForScroll(runtime);
+      if (visiblePage != null && visiblePage.pageSize > 0) {
+        return _displayCoordinator.formatPageLabel(
+          visiblePage.pageIndex,
+          visiblePage.pageSize,
+        );
+      }
+      return '0/0';
     }
     if (page == null || page.pageSize <= 0) return '0/0';
     return _displayCoordinator.formatPageLabel(page.pageIndex, page.pageSize);
@@ -664,13 +652,18 @@ class _ReaderPageState extends State<ReaderPage>
   String _displayChapterPercentLabel(ReaderRuntime? runtime, TextPage? page) {
     if (runtime == null) return '0.0%';
     if (runtime.state.mode == ReaderMode.scroll) {
-      final location = runtime.state.visibleLocation;
-      return _displayCoordinator.formatChapterProgress(
-        charOffset: location.charOffset,
-        chapterEndCharOffset: _chapterEndCharOffset(runtime, location),
-      );
+      return _visiblePageForScroll(runtime)?.readProgress ?? '0.0%';
     }
     if (page == null) return '0.0%';
     return page.readProgress;
+  }
+
+  TextPage? _visiblePageForScroll(ReaderRuntime runtime) {
+    final location = runtime.state.visibleLocation.normalized(
+      chapterCount: runtime.chapterCount,
+    );
+    final layout = runtime.debugResolver.cachedLayout(location.chapterIndex);
+    if (layout == null || layout.pages.isEmpty) return null;
+    return layout.pageForCharOffset(location.charOffset);
   }
 }
