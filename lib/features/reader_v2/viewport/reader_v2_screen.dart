@@ -1,18 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:inkpage_reader/features/reader/engine/read_style.dart';
-import 'package:inkpage_reader/features/reader/runtime/models/reader_tts_highlight.dart';
-import 'package:inkpage_reader/features/reader/viewport/reader_gesture_layer.dart';
-import 'package:inkpage_reader/features/reader/viewport/reader_viewport_controller.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_runtime.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_state.dart';
+import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_style.dart';
+import 'package:inkpage_reader/features/reader_v2/features/tts/reader_v2_tts_highlight.dart';
+import 'package:inkpage_reader/features/reader_v2/viewport/reader_v2_gesture_layer.dart';
+import 'package:inkpage_reader/features/reader_v2/viewport/reader_v2_viewport_controller.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_runtime.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_state.dart';
 
 import 'scroll_reader_v2_viewport.dart';
 import 'slide_reader_v2_viewport.dart';
-
-typedef ReaderRuntime = ReaderV2Runtime;
-typedef ReaderMode = ReaderV2Mode;
 
 class EngineReaderV2Screen extends StatefulWidget {
   const EngineReaderV2Screen({
@@ -26,13 +23,13 @@ class EngineReaderV2Screen extends StatefulWidget {
     this.ttsHighlight,
   });
 
-  final ReaderRuntime runtime;
+  final ReaderV2Runtime runtime;
   final Color backgroundColor;
   final Color textColor;
-  final ReadStyle style;
+  final ReaderV2Style style;
   final GestureTapUpCallback? onContentTapUp;
-  final ReaderViewportController? viewportController;
-  final ReaderTtsHighlight? ttsHighlight;
+  final ReaderV2ViewportController? viewportController;
+  final ReaderV2TtsHighlight? ttsHighlight;
 
   @override
   State<EngineReaderV2Screen> createState() => _EngineReaderV2ScreenState();
@@ -40,10 +37,14 @@ class EngineReaderV2Screen extends StatefulWidget {
 
 class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
     with WidgetsBindingObserver {
+  /// Track the last known mode so we only rebuild when scroll ↔ slide changes.
+  late ReaderV2Mode _lastMode;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _lastMode = widget.runtime.state.mode;
     widget.runtime.addListener(_handleRuntimeChanged);
   }
 
@@ -52,6 +53,7 @@ class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.runtime != widget.runtime) {
       oldWidget.runtime.removeListener(_handleRuntimeChanged);
+      _lastMode = widget.runtime.state.mode;
       widget.runtime.addListener(_handleRuntimeChanged);
     }
   }
@@ -73,14 +75,21 @@ class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
   }
 
   void _handleRuntimeChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // Only rebuild this widget when mode changes (scroll ↔ slide).
+    // The child viewports already listen to runtime for content updates.
+    final currentMode = widget.runtime.state.mode;
+    if (currentMode != _lastMode) {
+      _lastMode = currentMode;
+      setState(() {});
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = widget.runtime.state;
     final viewport =
-        state.mode == ReaderMode.scroll
+        state.mode == ReaderV2Mode.scroll
             ? ScrollReaderV2Viewport(
               runtime: widget.runtime,
               backgroundColor: widget.backgroundColor,
@@ -97,7 +106,7 @@ class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
               controller: widget.viewportController,
               ttsHighlight: widget.ttsHighlight,
             );
-    return ReaderGestureLayer(
+    return ReaderV2GestureLayer(
       onTapUp: widget.onContentTapUp,
       gesturesEnabled: widget.onContentTapUp != null,
       child: viewport,

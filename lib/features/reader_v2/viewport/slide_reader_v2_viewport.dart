@@ -1,22 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
-import 'package:inkpage_reader/features/reader/engine/read_style.dart';
-import 'package:inkpage_reader/features/reader/engine/text_page.dart';
-import 'package:inkpage_reader/features/reader/runtime/models/reader_tts_highlight.dart';
-import 'package:inkpage_reader/features/reader/runtime/tile_key.dart';
-import 'package:inkpage_reader/features/reader/viewport/reader_tile_layer.dart';
-import 'package:inkpage_reader/features/reader/viewport/reader_viewport_controller.dart';
-import 'package:inkpage_reader/features/reader/viewport/tts_highlight_overlay_layer.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_location.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_page_window.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_runtime.dart';
-import 'package:inkpage_reader/features/reader_v2/engine/reader_v2_state.dart';
-
-typedef ReaderLocation = ReaderV2Location;
-typedef PageWindow = ReaderV2PageWindow;
-typedef ReaderRuntime = ReaderV2Runtime;
-typedef ReaderMode = ReaderV2Mode;
-typedef ReaderPhase = ReaderV2Phase;
+import 'package:inkpage_reader/features/reader_v2/render/reader_v2_page_cache.dart';
+import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_style.dart';
+import 'package:inkpage_reader/features/reader_v2/render/reader_v2_render_page.dart';
+import 'package:inkpage_reader/features/reader_v2/features/tts/reader_v2_tts_highlight.dart';
+import 'package:inkpage_reader/features/reader_v2/render/reader_v2_tile_key.dart';
+import 'package:inkpage_reader/features/reader_v2/render/reader_v2_tile_layer.dart';
+import 'package:inkpage_reader/features/reader_v2/viewport/reader_v2_viewport_controller.dart';
+import 'package:inkpage_reader/features/reader_v2/render/reader_v2_tts_highlight_overlay_layer.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_location.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_page_window.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_runtime.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_state.dart';
 
 class SlideReaderV2Viewport extends StatefulWidget {
   const SlideReaderV2Viewport({
@@ -30,13 +24,13 @@ class SlideReaderV2Viewport extends StatefulWidget {
     this.ttsHighlight,
   });
 
-  final ReaderRuntime runtime;
+  final ReaderV2Runtime runtime;
   final Color backgroundColor;
   final Color textColor;
-  final ReadStyle style;
+  final ReaderV2Style style;
   final GestureTapUpCallback? onTapUp;
-  final ReaderViewportController? controller;
-  final ReaderTtsHighlight? ttsHighlight;
+  final ReaderV2ViewportController? controller;
+  final ReaderV2TtsHighlight? ttsHighlight;
 
   @override
   State<SlideReaderV2Viewport> createState() => _SlideReaderV2ViewportState();
@@ -110,7 +104,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
       ..ensureCharRangeVisible = _ensureCharRangeVisible;
   }
 
-  void _detachController(ReaderViewportController? controller) {
+  void _detachController(ReaderV2ViewportController? controller) {
     controller
       ?..moveToNextPage = null
       ..moveToPrevPage = null
@@ -125,7 +119,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
       _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
       _resetViewport();
     }
-    if (widget.runtime.state.phase == ReaderPhase.ready) {
+    if (widget.runtime.state.phase == ReaderV2Phase.ready) {
       _schedulePostFrameVisibleLocationCapture();
     }
     setState(() {});
@@ -161,15 +155,15 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     _rawDragDx = 0;
   }
 
-  bool _canMoveBackward(PageWindow window) {
+  bool _canMoveBackward(ReaderV2PageWindow window) {
     return window.prev != null && !window.prev!.isPlaceholder;
   }
 
-  bool _canMoveForward(PageWindow window) {
+  bool _canMoveForward(ReaderV2PageWindow window) {
     return window.next != null && !window.next!.isPlaceholder;
   }
 
-  double _boundaryAdjustedDx(double nextDx, PageWindow window) {
+  double _boundaryAdjustedDx(double nextDx, ReaderV2PageWindow window) {
     if (nextDx > 0 && !_canMoveBackward(window)) {
       return nextDx * 0.35;
     }
@@ -209,7 +203,8 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
       return widget.runtime.moveSlidePageAndSettle(forward: forward);
     }
     final window = widget.runtime.state.pageWindow;
-    final neighbor = window == null ? null : (forward ? window.next : window.prev);
+    final neighbor =
+        window == null ? null : (forward ? window.next : window.prev);
     if (neighbor == null) return false;
     if (neighbor.isPlaceholder) {
       return widget.runtime.moveSlidePageAndSettle(forward: forward);
@@ -286,35 +281,35 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     _animateTo(target);
   }
 
-  TileKey _tileKey(PageCache tile) {
-    return TileKey.fromPageCache(
+  ReaderV2TileKey _tileKey(ReaderV2PageCache tile) {
+    return ReaderV2TileKey.fromPageCache(
       tile,
       layoutRevision: widget.runtime.state.layoutGeneration,
     );
   }
 
-  SlidePagePlacement _placementForPage({
-    required TextPage page,
+  ReaderV2SlidePagePlacement _placementForPage({
+    required ReaderV2RenderPage page,
     required int pageSlot,
     required double width,
   }) {
-    return SlidePagePlacement(
-      page: widget.runtime.pageCacheFor(page),
+    return ReaderV2SlidePagePlacement(
+      page: ReaderV2PageCacheFactory.fromRenderPage(page),
       virtualLeft: width * pageSlot,
       pageSlot: pageSlot,
     );
   }
 
-  Widget _buildTile(SlidePagePlacement placement) {
+  Widget _buildTile(ReaderV2SlidePagePlacement placement) {
     final pageCache = placement.page;
     return GestureDetector(
-      key: ValueKey<TileKey>(_tileKey(pageCache)),
+      key: ValueKey<ReaderV2TileKey>(_tileKey(pageCache)),
       behavior: HitTestBehavior.opaque,
       onTapUp: widget.onTapUp,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ReaderTileLayer(
+          ReaderV2TileLayer(
             tile: pageCache,
             tileKey: _tileKey(pageCache),
             style: widget.style,
@@ -323,7 +318,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
             expand: true,
             paintBackground: false,
           ),
-          TtsHighlightOverlayLayer(
+          ReaderV2TtsHighlightOverlayLayer(
             tile: pageCache,
             style: widget.style,
             textColor: widget.textColor,
@@ -334,22 +329,22 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     );
   }
 
-  ReaderLocation? _captureVisibleLocation() {
+  ReaderV2Location? _captureVisibleLocation() {
     if (_dragDx.abs() > 0.5 ||
         _slideController.isAnimating ||
-        widget.runtime.state.phase != ReaderPhase.ready) {
+        widget.runtime.state.phase != ReaderV2Phase.ready) {
       return null;
     }
     final current = widget.runtime.state.pageWindow?.current;
     if (current == null || current.isPlaceholder) return null;
-    final page = widget.runtime.pageCacheFor(current);
+    final page = ReaderV2PageCacheFactory.fromRenderPage(current);
     if (page.lines.isEmpty) return null;
     final anchorLineY = _anchorOffsetInViewport();
     final anchorContentY = anchorLineY - widget.style.paddingTop;
     final contentY = anchorContentY.clamp(0.0, page.contentHeight).toDouble();
     final nearest = page.lineAtOrNearLocalY(page.localStartY + contentY);
     if (nearest == null) return null;
-    return ReaderLocation(
+    return ReaderV2Location(
       chapterIndex: page.chapterIndex,
       charOffset: nearest.startCharOffset,
       visualOffsetPx: anchorContentY - nearest.top,
@@ -368,7 +363,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
         (startCharOffset <= endCharOffset ? startCharOffset : endCharOffset);
     final safeTargetOffset = targetOffset < 0 ? 0 : targetOffset;
     final state = widget.runtime.state;
-    if (state.phase != ReaderPhase.ready) return false;
+    if (state.phase != ReaderV2Phase.ready) return false;
     final window = state.pageWindow;
     if (window == null) return false;
     if (_pageContainsChar(
@@ -407,7 +402,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
   }
 
   bool _pageContainsChar(
-    TextPage? page, {
+    ReaderV2RenderPage? page, {
     required int chapterIndex,
     required int charOffset,
   }) {
@@ -424,7 +419,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     _resetViewport();
     final moved = widget.runtime.moveSlidePageAndSettle(
       forward: forward,
-      settledLocation: ReaderLocation(
+      settledLocation: ReaderV2Location(
         chapterIndex: chapterIndex,
         charOffset: charOffset,
       ),
@@ -445,12 +440,12 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     final layoutGeneration = widget.runtime.state.layoutGeneration;
     _resetViewport();
     await widget.runtime.jumpToLocation(
-      ReaderLocation(chapterIndex: chapterIndex, charOffset: charOffset),
+      ReaderV2Location(chapterIndex: chapterIndex, charOffset: charOffset),
       immediateSave: false,
     );
     if (!mounted ||
         widget.runtime.state.layoutGeneration != layoutGeneration ||
-        widget.runtime.state.phase != ReaderPhase.ready) {
+        widget.runtime.state.phase != ReaderV2Phase.ready) {
       return false;
     }
     final current = widget.runtime.state.pageWindow?.current;
@@ -462,7 +457,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
       return false;
     }
     widget.runtime.settleCurrentSlidePage(
-      settledLocation: ReaderLocation(
+      settledLocation: ReaderV2Location(
         chapterIndex: chapterIndex,
         charOffset: charOffset,
       ),
@@ -470,8 +465,8 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     return true;
   }
 
-  Future<bool> _restoreToLocation(ReaderLocation location) async {
-    if (!mounted || widget.runtime.state.phase != ReaderPhase.ready) {
+  Future<bool> _restoreToLocation(ReaderV2Location location) async {
+    if (!mounted || widget.runtime.state.phase != ReaderV2Phase.ready) {
       return false;
     }
     _resetViewport();
@@ -482,16 +477,14 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
   double _screenXFor({
     required int pageSlot,
     required double width,
-    SlidePagePlacement? placement,
+    ReaderV2SlidePagePlacement? placement,
   }) {
     final pageOffsetX = -_dragDx;
     return placement?.screenX(pageOffsetX) ?? width * pageSlot - pageOffsetX;
   }
 
-  double _anchorOffsetInViewport() {
-    final viewportHeight = widget.runtime.state.layoutSpec.viewportSize.height;
-    return (viewportHeight * 0.2).clamp(24.0, 120.0).toDouble();
-  }
+  double _anchorOffsetInViewport() =>
+      widget.runtime.state.layoutSpec.anchorOffsetInViewport;
 
   Widget _buildEdgePlaceholder({required String message}) {
     return GestureDetector(
@@ -516,7 +509,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
   Widget build(BuildContext context) {
     final state = widget.runtime.state;
     final window = state.pageWindow;
-    if (state.phase != ReaderPhase.ready || window == null) {
+    if (state.phase != ReaderV2Phase.ready || window == null) {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapUp: widget.onTapUp,
