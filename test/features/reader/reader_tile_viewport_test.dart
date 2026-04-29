@@ -194,8 +194,12 @@ void main() {
       final viewport = find.byType(SlideReaderViewport);
       final viewportWidth = tester.getSize(viewport).width;
       final gesture = await tester.startGesture(tester.getCenter(viewport));
-      await gesture.moveBy(Offset(-viewportWidth, 0));
-      await tester.pump();
+      const steps = 16;
+      final delta = Offset(-viewportWidth * 0.5 / steps, 0);
+      for (var i = 0; i < steps; i += 1) {
+        await gesture.moveBy(delta);
+        await tester.pump(const Duration(milliseconds: 50));
+      }
 
       expect(env.runtime.state.pageWindow!.next!.isLoading, isTrue);
       final transforms = tester

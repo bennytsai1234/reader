@@ -39,6 +39,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
   late final AnimationController _slideController;
   late int _lastLayoutGeneration;
   double _dragDx = 0;
+  double _rawDragDx = 0;
   double _lastAnimationValue = 0;
   int _pendingDirection = 0;
 
@@ -103,6 +104,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     if (delta == 0) return;
     setState(() {
       _dragDx += delta;
+      _rawDragDx = _dragDx;
     });
   }
 
@@ -112,6 +114,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     _lastAnimationValue = 0;
     _pendingDirection = 0;
     _dragDx = 0;
+    _rawDragDx = 0;
   }
 
   bool _canMoveBackward(PageWindow window) {
@@ -159,6 +162,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       _slideController.value = 0;
       _lastAnimationValue = 0;
       _dragDx = 0;
+      _rawDragDx = 0;
       _pendingDirection = 0;
     });
     if (target != 0 && moved) {
@@ -173,13 +177,15 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     _slideController.value = 0;
     _lastAnimationValue = 0;
     _pendingDirection = 0;
+    _rawDragDx = _dragDx;
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
     final window = widget.runtime.state.pageWindow;
     if (window == null) return;
     setState(() {
-      _dragDx = _boundaryAdjustedDx(_dragDx + details.delta.dx, window);
+      _rawDragDx += details.delta.dx;
+      _dragDx = _boundaryAdjustedDx(_rawDragDx, window);
     });
   }
 
@@ -189,8 +195,8 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       return;
     }
     final velocity = details.primaryVelocity ?? 0;
-    final forward = _dragDx < 0;
-    final distancePassed = _dragDx.abs() > width * 0.25;
+    final forward = _rawDragDx < 0;
+    final distancePassed = _rawDragDx.abs() > width * 0.25;
     final velocityPassed = velocity.abs() > 700;
     final window = widget.runtime.state.pageWindow;
     final neighbor =
