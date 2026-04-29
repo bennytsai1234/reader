@@ -163,6 +163,60 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     });
 
+    testWidgets('slide screen controller follows TTS range onto next tile', (
+      tester,
+    ) async {
+      final env = _RuntimeEnv(mode: ReaderMode.slide);
+      final controller = ReaderViewportController();
+      await env.runtime.openBook();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 360,
+            child: EngineReaderScreen(
+              runtime: env.runtime,
+              backgroundColor: Colors.white,
+              textColor: Colors.black,
+              style: _style(ReaderPageMode.slide),
+              viewportController: controller,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.ensureCharRangeVisible, isNotNull);
+      final targetPage = env.runtime.state.pageWindow!.next!;
+      final followed = await controller.ensureCharRangeVisible!(
+        chapterIndex: targetPage.chapterIndex,
+        startCharOffset: targetPage.startCharOffset,
+        endCharOffset: targetPage.endCharOffset,
+      );
+      await tester.pump();
+
+      final current = env.runtime.state.pageWindow!.current;
+      expect(followed, isTrue);
+      expect(current.chapterIndex, targetPage.chapterIndex);
+      expect(current.pageIndex, targetPage.pageIndex);
+      expect(
+        env.runtime.state.committedLocation.chapterIndex,
+        targetPage.chapterIndex,
+      );
+      expect(
+        current.containsCharOffset(
+          env.runtime.state.committedLocation.charOffset,
+        ),
+        isTrue,
+      );
+      expect(env.bookDao.writes, greaterThan(0));
+
+      env.runtime.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+
     testWidgets('slide drag into placeholder schedules neighbor refresh', (
       tester,
     ) async {

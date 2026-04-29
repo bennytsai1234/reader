@@ -91,6 +91,7 @@ class _EngineReaderScreenState extends State<EngineReaderScreen>
               backgroundColor: widget.backgroundColor,
               textColor: widget.textColor,
               style: widget.style,
+              controller: widget.viewportController,
               ttsHighlight: widget.ttsHighlight,
             );
     return ReaderGestureLayer(

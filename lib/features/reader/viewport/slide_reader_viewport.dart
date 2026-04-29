@@ -10,6 +10,7 @@ import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
 import 'package:inkpage_reader/features/reader/runtime/tile_key.dart';
 
 import 'reader_tile_layer.dart';
+import 'reader_viewport_controller.dart';
 import 'tts_highlight_overlay_layer.dart';
 
 class SlideReaderViewport extends StatefulWidget {
@@ -20,6 +21,7 @@ class SlideReaderViewport extends StatefulWidget {
     required this.textColor,
     required this.style,
     this.onTapUp,
+    this.controller,
     this.ttsHighlight,
   });
 
@@ -28,6 +30,7 @@ class SlideReaderViewport extends StatefulWidget {
   final Color textColor;
   final ReadStyle style;
   final GestureTapUpCallback? onTapUp;
+  final ReaderViewportController? controller;
   final ReaderTtsHighlight? ttsHighlight;
 
   @override
@@ -56,6 +59,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       _captureVisibleLocation,
     );
     widget.runtime.registerViewportRestore(this, _restoreToLocation);
+    _attachController();
     _schedulePostFrameVisibleLocationCapture();
   }
 
@@ -78,6 +82,10 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     } else if (oldWidget.style.pageMode != widget.style.pageMode) {
       _resetViewport();
     }
+    if (oldWidget.controller != widget.controller) {
+      _detachController(oldWidget.controller);
+      _attachController();
+    }
   }
 
   @override
@@ -85,8 +93,17 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     widget.runtime.removeListener(_onRuntimeChanged);
     widget.runtime.unregisterVisibleLocationCapture(this);
     widget.runtime.unregisterViewportRestore(this);
+    _detachController(widget.controller);
     _slideController.dispose();
     super.dispose();
+  }
+
+  void _attachController() {
+    widget.controller?.ensureCharRangeVisible = _ensureCharRangeVisible;
+  }
+
+  void _detachController(ReaderViewportController? controller) {
+    controller?.ensureCharRangeVisible = null;
   }
 
   void _onRuntimeChanged() {
@@ -306,6 +323,115 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       charOffset: nearest.startCharOffset,
       visualOffsetPx: anchorContentY - nearest.top,
     );
+  }
+
+  Future<bool> _ensureCharRangeVisible({
+    required int chapterIndex,
+    required int startCharOffset,
+    required int endCharOffset,
+  }) async {
+    if (!mounted || widget.runtime.chapterCount <= 0) return false;
+    final safeChapterIndex =
+        chapterIndex.clamp(0, widget.runtime.chapterCount - 1).toInt();
+    final targetOffset =
+        (startCharOffset <= endCharOffset ? startCharOffset : endCharOffset);
+    final safeTargetOffset = targetOffset < 0 ? 0 : targetOffset;
+    final state = widget.runtime.state;
+    if (state.phase != ReaderPhase.ready) return false;
+    final window = state.pageWindow;
+    if (window == null) return false;
+    if (_pageContainsChar(
+      window.current,
+      chapterIndex: safeChapterIndex,
+      charOffset: safeTargetOffset,
+    )) {
+      return true;
+    }
+    if (_pageContainsChar(
+      window.next,
+      chapterIndex: safeChapterIndex,
+      charOffset: safeTargetOffset,
+    )) {
+      return _moveToAdjacentTtsPage(
+        forward: true,
+        chapterIndex: safeChapterIndex,
+        charOffset: safeTargetOffset,
+      );
+    }
+    if (_pageContainsChar(
+      window.prev,
+      chapterIndex: safeChapterIndex,
+      charOffset: safeTargetOffset,
+    )) {
+      return _moveToAdjacentTtsPage(
+        forward: false,
+        chapterIndex: safeChapterIndex,
+        charOffset: safeTargetOffset,
+      );
+    }
+    return _jumpToTtsPage(
+      chapterIndex: safeChapterIndex,
+      charOffset: safeTargetOffset,
+    );
+  }
+
+  bool _pageContainsChar(
+    TextPage? page, {
+    required int chapterIndex,
+    required int charOffset,
+  }) {
+    if (page == null || page.isPlaceholder) return false;
+    return page.chapterIndex == chapterIndex &&
+        page.containsCharOffset(charOffset);
+  }
+
+  Future<bool> _moveToAdjacentTtsPage({
+    required bool forward,
+    required int chapterIndex,
+    required int charOffset,
+  }) async {
+    _resetViewport();
+    final moved =
+        forward
+            ? widget.runtime.moveToNextTile()
+            : widget.runtime.moveToPrevTile();
+    if (!moved || !mounted) return false;
+    final current = widget.runtime.state.pageWindow?.current;
+    if (!_pageContainsChar(
+      current,
+      chapterIndex: chapterIndex,
+      charOffset: charOffset,
+    )) {
+      return false;
+    }
+    widget.runtime.handleSlidePageSettled(current!);
+    return true;
+  }
+
+  Future<bool> _jumpToTtsPage({
+    required int chapterIndex,
+    required int charOffset,
+  }) async {
+    final layoutGeneration = widget.runtime.state.layoutGeneration;
+    _resetViewport();
+    await widget.runtime.jumpToLocation(
+      ReaderLocation(chapterIndex: chapterIndex, charOffset: charOffset),
+    );
+    if (!mounted ||
+        widget.runtime.state.layoutGeneration != layoutGeneration ||
+        widget.runtime.state.phase != ReaderPhase.ready) {
+      return false;
+    }
+    final current = widget.runtime.state.pageWindow?.current;
+    if (!_pageContainsChar(
+      current,
+      chapterIndex: chapterIndex,
+      charOffset: charOffset,
+    )) {
+      return false;
+    }
+    widget.runtime.handleSlidePageSettled(current!);
+    return true;
   }
 
   Future<bool> _restoreToLocation(ReaderLocation location) async {
