@@ -19,30 +19,30 @@ class _MainPageState extends State<MainPage> {
   DateTime? _lastBackPressedAt;
 
   static const _exitBackInterval = Duration(seconds: 2);
+  static const _destinations = <_MainDestination>[
+    _MainDestination(
+      icon: Icons.book_outlined,
+      selectedIcon: Icons.book,
+      label: '書架',
+      page: BookshelfPage(),
+    ),
+    _MainDestination(
+      icon: Icons.explore_outlined,
+      selectedIcon: Icons.explore,
+      label: '發現',
+      page: ExplorePage(),
+    ),
+    _MainDestination(
+      icon: Icons.person_outline,
+      selectedIcon: Icons.person,
+      label: '我的',
+      page: SettingsPage(),
+    ),
+  ];
+  final List<Widget?> _pages = List<Widget?>.filled(_destinations.length, null);
 
   @override
   Widget build(BuildContext context) {
-    final items = <Map<String, dynamic>>[
-      {
-        'icon': Icons.book_outlined,
-        'selectedIcon': Icons.book,
-        'label': '書架',
-        'page': const BookshelfPage(),
-      },
-      {
-        'icon': Icons.explore_outlined,
-        'selectedIcon': Icons.explore,
-        'label': '發現',
-        'page': const ExplorePage(),
-      },
-      {
-        'icon': Icons.person_outline,
-        'selectedIcon': Icons.person,
-        'label': '我的',
-        'page': const SettingsPage(),
-      },
-    ];
-
     return PopScope<void>(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -52,7 +52,13 @@ class _MainPageState extends State<MainPage> {
       child: Scaffold(
         body: IndexedStack(
           index: _currentIndex,
-          children: items.map((i) => i['page'] as Widget).toList(),
+          children: List.generate(
+            _destinations.length,
+            (index) =>
+                _pages[index] != null || index == _currentIndex
+                    ? _pageAt(index)
+                    : const SizedBox.shrink(),
+          ),
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
@@ -60,7 +66,7 @@ class _MainPageState extends State<MainPage> {
             if (_currentIndex == index) {
               if (DateTime.now().difference(_lastTapTime).inMilliseconds <
                   300) {
-                final label = items[index]['label'];
+                final label = _destinations[index].label;
                 if (label == '書架') {
                   context.read<BookshelfProvider>().loadBooks();
                 }
@@ -70,24 +76,22 @@ class _MainPageState extends State<MainPage> {
             setState(() => _currentIndex = index);
           },
           destinations:
-              items
+              _destinations
                   .map(
-                    (i) => NavigationDestination(
-                      icon:
-                          i['icon'] is Widget
-                              ? i['icon']
-                              : Icon(i['icon'] as IconData),
-                      selectedIcon:
-                          i['selectedIcon'] is Widget
-                              ? i['selectedIcon']
-                              : Icon(i['selectedIcon'] as IconData),
-                      label: i['label'],
+                    (destination) => NavigationDestination(
+                      icon: Icon(destination.icon),
+                      selectedIcon: Icon(destination.selectedIcon),
+                      label: destination.label,
                     ),
                   )
                   .toList(),
         ),
       ),
     );
+  }
+
+  Widget _pageAt(int index) {
+    return _pages[index] ??= _destinations[index].page;
   }
 
   Future<void> _handleBackIntent() async {
@@ -108,4 +112,18 @@ class _MainPageState extends State<MainPage> {
 
     await SystemNavigator.pop();
   }
+}
+
+class _MainDestination {
+  const _MainDestination({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.page,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final Widget page;
 }

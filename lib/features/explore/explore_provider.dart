@@ -58,7 +58,7 @@ class ExploreProvider extends ChangeNotifier {
   }
 
   void _bindSources() {
-    _sourceSubscription = _sourceDao.watchAll().listen((sources) {
+    _sourceSubscription = _sourceDao.watchAllPart().listen((sources) {
       _reloadFromSnapshot(sources);
     });
     _loadSources();
@@ -66,8 +66,12 @@ class ExploreProvider extends ChangeNotifier {
 
   /// 載入所有啟用探索的書源
   Future<void> _loadSources() async {
-    final allSources = await _sourceDao.getAll();
+    final allSources = await _sourceDao.getAllPart();
     _reloadFromSnapshot(allSources);
+  }
+
+  Future<BookSource?> getFullSource(String url) {
+    return _sourceDao.getByUrl(url);
   }
 
   void _reloadFromSnapshot(List<BookSource> sources) {
@@ -233,8 +237,7 @@ class ExploreProvider extends ChangeNotifier {
             : _allSources
                 .map((s) => s.customOrder)
                 .reduce((a, b) => a < b ? a : b);
-    source.customOrder = minOrder - 1;
-    await _sourceDao.upsert(source);
+    await _sourceDao.updateCustomOrderByUrl(source.bookSourceUrl, minOrder - 1);
     await _loadSources();
   }
 

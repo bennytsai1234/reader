@@ -514,10 +514,13 @@ class _ExplorePageContentState extends State<_ExplorePageContent> {
 
     switch (action) {
       case 'edit':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => SourceEditorPage(source: source)),
-        );
+        final full = await provider.getFullSource(source.bookSourceUrl);
+        if (full != null && context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => SourceEditorPage(source: full)),
+          );
+        }
         return;
       case 'top':
         await provider.topSource(source);
@@ -526,9 +529,11 @@ class _ExplorePageContentState extends State<_ExplorePageContent> {
         await _openLoginUrl(source);
         return;
       case 'search':
+        final full = await provider.getFullSource(source.bookSourceUrl);
+        if (full == null || !context.mounted) return;
         await Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => SearchPage(initialSource: source)),
+          MaterialPageRoute(builder: (_) => SearchPage(initialSource: full)),
         );
         return;
       case 'refresh':

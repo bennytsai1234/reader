@@ -438,6 +438,7 @@ void main() {
         storedIndices: <int>{1, 3},
       );
 
+      await provider.refreshCacheStatus();
       expect(provider.cacheStatus.storedChapterCount, 2);
       expect(provider.cacheStatus.totalChapterCount, 5);
 

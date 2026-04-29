@@ -38,13 +38,17 @@ class SlideReaderV2Viewport extends StatefulWidget {
 
 class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     with SingleTickerProviderStateMixin {
+  static const double _dragWarmupDistance = 12;
+
   late final AnimationController _slideController;
   late int _lastLayoutGeneration;
   double _dragDx = 0;
   double _rawDragDx = 0;
   double _lastAnimationValue = 0;
   int _pendingDirection = 0;
+  int _warmedDragDirection = 0;
   bool _postFrameCapturePending = false;
+  bool _pageTurnInProgress = false;
 
   @override
   void initState() {
@@ -151,6 +155,8 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     _slideController.value = 0;
     _lastAnimationValue = 0;
     _pendingDirection = 0;
+    _warmedDragDirection = 0;
+    _pageTurnInProgress = false;
     _dragDx = 0;
     _rawDragDx = 0;
   }
@@ -173,19 +179,27 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     return nextDx;
   }
 
-  Future<void> _animateTo(
+  Future<bool> _animateTo(
     double target, {
     Curve curve = Curves.easeOutCubic,
   }) async {
     _slideController.stop();
     _lastAnimationValue = 0;
     _slideController.value = 0;
-    await _slideController.animateTo(
-      target - _dragDx,
-      duration: const Duration(milliseconds: 220),
-      curve: curve,
-    );
+    try {
+      await _slideController
+          .animateTo(
+            target - _dragDx,
+            duration: const Duration(milliseconds: 220),
+            curve: curve,
+          )
+          .orCancel;
+    } on TickerCanceled {
+      return false;
+    }
+    if (!mounted) return false;
     _finalizeAnimation(target);
+    return true;
   }
 
   Future<bool> _moveToNextPage() {
@@ -198,6 +212,8 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
 
   Future<bool> _animateToAdjacentPage({required bool forward}) async {
     if (!mounted) return false;
+    if (_pageTurnInProgress || _slideController.isAnimating) return false;
+    widget.runtime.preloadSlideNeighbor(forward: forward);
     final width = context.size?.width ?? 0.0;
     if (!width.isFinite || width <= 0) {
       return widget.runtime.moveSlidePageAndSettle(forward: forward);
@@ -209,12 +225,19 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     if (neighbor.isPlaceholder) {
       return widget.runtime.moveSlidePageAndSettle(forward: forward);
     }
-    _pendingDirection = forward ? 1 : -1;
-    await _animateTo(forward ? -width : width);
-    return mounted;
+    _pageTurnInProgress = true;
+    try {
+      _pendingDirection = forward ? 1 : -1;
+      return await _animateTo(forward ? -width : width);
+    } finally {
+      if (mounted) {
+        _pageTurnInProgress = false;
+      }
+    }
   }
 
   void _finalizeAnimation(double target) {
+    if (!mounted) return;
     final direction = _pendingDirection;
     final moved =
         direction == 0
@@ -231,23 +254,38 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
   }
 
   void _handleDragStart(DragStartDetails details) {
+    if (_pageTurnInProgress) return;
     _slideController.stop();
     _slideController.value = 0;
     _lastAnimationValue = 0;
     _pendingDirection = 0;
+    _warmedDragDirection = 0;
     _rawDragDx = _dragDx;
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
+    if (_pageTurnInProgress) return;
     final window = widget.runtime.state.pageWindow;
     if (window == null) return;
+    final nextRawDx = _rawDragDx + details.delta.dx;
+    if (nextRawDx.abs() >= _dragWarmupDistance) {
+      _warmSlideNeighbor(forward: nextRawDx < 0);
+    }
     setState(() {
-      _rawDragDx += details.delta.dx;
+      _rawDragDx = nextRawDx;
       _dragDx = _boundaryAdjustedDx(_rawDragDx, window);
     });
   }
 
+  void _warmSlideNeighbor({required bool forward}) {
+    final direction = forward ? 1 : -1;
+    if (_warmedDragDirection == direction) return;
+    _warmedDragDirection = direction;
+    widget.runtime.preloadSlideNeighbor(forward: forward);
+  }
+
   void _handleDragEnd(DragEndDetails details, double width) {
+    if (_pageTurnInProgress) return;
     if (width <= 0) {
       _resetViewport();
       return;
@@ -269,7 +307,12 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
       } else {
         widget.runtime.moveToPrevTile();
       }
-      _animateTo(0.0);
+      _pageTurnInProgress = true;
+      _animateTo(0.0).whenComplete(() {
+        if (mounted) {
+          _pageTurnInProgress = false;
+        }
+      });
       return;
     }
     final shouldAdvance =
@@ -278,7 +321,12 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
         (forward ? _canMoveForward(window) : _canMoveBackward(window));
     _pendingDirection = shouldAdvance ? (forward ? 1 : -1) : 0;
     final target = shouldAdvance ? (forward ? -width : width) : 0.0;
-    _animateTo(target);
+    _pageTurnInProgress = true;
+    _animateTo(target).whenComplete(() {
+      if (mounted) {
+        _pageTurnInProgress = false;
+      }
+    });
   }
 
   ReaderV2TileKey _tileKey(ReaderV2PageCache tile) {

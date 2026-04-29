@@ -7,6 +7,7 @@ import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/book_source.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/features/reader_v2/content/reader_v2_chapter_repository.dart';
+import 'package:inkpage_reader/features/reader_v2/content/reader_v2_content.dart';
 import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_layout_engine.dart';
 import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_layout_spec.dart';
 import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_style.dart';
@@ -233,6 +234,60 @@ void main() {
 
     runtime.dispose();
   });
+
+  testWidgets('slide jump keeps current page when neighbor chapter fails', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.slide,
+      chapterCount: 2,
+      paragraphsPerChapter: 1,
+      failingChapters: <int>{1},
+    );
+
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+
+    expect(runtime.state.phase, ReaderV2Phase.ready);
+    expect(runtime.state.pageWindow?.current.chapterIndex, 0);
+    expect(runtime.state.pageWindow?.next?.chapterIndex, 1);
+    expect(runtime.state.pageWindow?.next?.isPlaceholder, isTrue);
+
+    runtime.dispose();
+  });
+
+  testWidgets('slide neighbor warmup refreshes chapter boundary placeholder', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.slide,
+      chapterCount: 2,
+      paragraphsPerChapter: 20,
+    );
+    final firstLayout = await runtime.debugResolver.ensureLayout(0);
+    final lastPage = firstLayout.pages.last;
+
+    await runtime.jumpToLocation(
+      ReaderV2Location(chapterIndex: 0, charOffset: lastPage.startCharOffset),
+      immediateSave: false,
+    );
+
+    expect(runtime.state.pageWindow?.current.isChapterEnd, isTrue);
+    expect(runtime.state.pageWindow?.next?.isPlaceholder, isTrue);
+
+    runtime.preloadSlideNeighbor(forward: true);
+    for (var i = 0; i < 10; i++) {
+      if (runtime.state.pageWindow?.next?.isPlaceholder == false) break;
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    expect(runtime.state.pageWindow?.next?.chapterIndex, 1);
+    expect(runtime.state.pageWindow?.next?.isPlaceholder, isFalse);
+
+    runtime.dispose();
+  });
 }
 
 Future<void> _pumpViewport(WidgetTester tester) async {
@@ -245,6 +300,7 @@ ReaderV2Runtime _runtime({
   required ReaderV2Mode initialMode,
   required int chapterCount,
   required int paragraphsPerChapter,
+  Set<int> failingChapters = const <int>{},
 }) {
   final book = Book(
     bookUrl: 'test://viewport',
@@ -257,14 +313,27 @@ ReaderV2Runtime _runtime({
     count: chapterCount,
     paragraphsPerChapter: paragraphsPerChapter,
   );
-  final repository = ReaderV2ChapterRepository(
-    book: book,
-    initialChapters: chapters,
-    bookDao: _FakeBookDao(),
-    chapterDao: _FakeChapterDao(chapters),
-    sourceDao: _FakeSourceDao(),
-    contentDao: null,
-  );
+  final bookDao = _FakeBookDao();
+  final chapterDao = _FakeChapterDao(chapters);
+  final sourceDao = _FakeSourceDao();
+  final repository =
+      failingChapters.isEmpty
+          ? ReaderV2ChapterRepository(
+            book: book,
+            initialChapters: chapters,
+            bookDao: bookDao,
+            chapterDao: chapterDao,
+            sourceDao: sourceDao,
+            contentDao: null,
+          )
+          : _FailingChapterRepository(
+            book: book,
+            initialChapters: chapters,
+            bookDao: bookDao,
+            chapterDao: chapterDao,
+            sourceDao: sourceDao,
+            failingChapters: failingChapters,
+          );
   return ReaderV2Runtime(
     book: book,
     repository: repository,
@@ -272,7 +341,7 @@ ReaderV2Runtime _runtime({
     progressController: ReaderV2ProgressController(
       book: book,
       repository: repository,
-      bookDao: _FakeBookDao(),
+      bookDao: bookDao,
     ),
     initialLayoutSpec: _spec(),
     initialMode: initialMode,
@@ -354,4 +423,32 @@ class _FakeChapterDao extends Fake implements ChapterDao {
 class _FakeSourceDao extends Fake implements BookSourceDao {
   @override
   Future<BookSource?> getByUrl(String url) async => null;
+}
+
+class _FailingChapterRepository extends ReaderV2ChapterRepository {
+  _FailingChapterRepository({
+    required Book book,
+    required List<BookChapter> initialChapters,
+    required BookDao bookDao,
+    required ChapterDao chapterDao,
+    required BookSourceDao sourceDao,
+    required this.failingChapters,
+  }) : super(
+         book: book,
+         initialChapters: initialChapters,
+         bookDao: bookDao,
+         chapterDao: chapterDao,
+         sourceDao: sourceDao,
+         contentDao: null,
+       );
+
+  final Set<int> failingChapters;
+
+  @override
+  Future<ReaderV2Content> loadContent(int chapterIndex) {
+    if (failingChapters.contains(chapterIndex)) {
+      throw const ReaderV2ChapterRepositoryException('fixture load failed');
+    }
+    return super.loadContent(chapterIndex);
+  }
 }

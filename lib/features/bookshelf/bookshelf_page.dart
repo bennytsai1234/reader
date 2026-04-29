@@ -25,14 +25,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
   final Set<String> _selectedUrls = {};
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<BookshelfProvider>().refreshBookshelf();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final provider = context.watch<BookshelfProvider>();
     return PopScope<void>(

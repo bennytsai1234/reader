@@ -10,7 +10,6 @@ import 'package:inkpage_reader/core/models/search_book.dart';
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
 import 'package:inkpage_reader/core/services/export_book_service.dart';
-import 'package:inkpage_reader/core/storage/storage_metrics.dart';
 import 'package:inkpage_reader/features/source_manager/source_editor_page.dart';
 import 'package:inkpage_reader/features/source_manager/source_debug_page.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_open_target.dart';
@@ -111,9 +110,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
                         SliverToBoxAdapter(
                           child: BookInfoIntro(book: currentBook),
                         ),
-                        SliverToBoxAdapter(
-                          child: _buildCacheStatusPanel(context, provider),
-                        ),
                         BookInfoTocBar(
                           provider: provider,
                           onSearch:
@@ -186,13 +182,8 @@ class _BookDetailPageState extends State<BookDetailPage> {
               (ctx) => [
                 const PopupMenuItem(value: 'check_update', child: Text('檢查更新')),
                 const PopupMenuItem(value: 'download', child: Text('預下載章節')),
-                const PopupMenuItem(value: 'cache', child: Text('快取狀態 / 清理')),
                 const PopupMenuItem(value: 'change_cover', child: Text('換封面')),
                 const PopupMenuItem(value: 'export', child: Text('匯出全書')),
-                const PopupMenuItem(
-                  value: 'clear_content',
-                  child: Text('移除本書正文'),
-                ),
                 const PopupMenuItem(value: 'edit', child: Text('編輯資訊')),
               ],
         ),
@@ -209,122 +200,13 @@ class _BookDetailPageState extends State<BookDetailPage> {
       await _handleCheckUpdate(context, provider);
     } else if (val == 'download') {
       _showDownloadSheet(context, provider);
-    } else if (val == 'cache') {
-      _showCacheDialog(context, provider);
     } else if (val == 'export') {
       await _handleExport(context, provider);
-    } else if (val == 'clear_content') {
-      await _clearBookCache(
-        context,
-        provider,
-        BookDetailCacheClearTarget.content,
-      );
     } else if (val == 'edit') {
       _showEditBookInfoDialog(context, provider);
     } else if (val == 'change_cover') {
       _showChangeCoverSheet(context, provider);
     }
-  }
-
-  Widget _buildCacheStatusPanel(
-    BuildContext context,
-    BookDetailProvider provider,
-  ) {
-    final status = provider.cacheStatus;
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withValues(
-            alpha: 0.35,
-          ),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.4)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.storage_rounded, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    '本書快取',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon:
-                        provider.isCacheStatusLoading
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Icon(Icons.refresh, size: 18),
-                    tooltip: '重新整理快取狀態',
-                    onPressed:
-                        provider.isCacheStatusLoading
-                            ? null
-                            : provider.refreshCacheStatus,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.cleaning_services_rounded, size: 18),
-                    tooltip: '清理快取',
-                    onPressed: () => _showCacheDialog(context, provider),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _statusPill(
-                    context,
-                    '正文',
-                    '${status.storedChapterCount}/${status.totalChapterCount} 章',
-                  ),
-                  _statusPill(
-                    context,
-                    '正文大小',
-                    StorageMetrics.formatBytes(status.contentBytes),
-                  ),
-                  _statusPill(
-                    context,
-                    '封面',
-                    StorageMetrics.formatBytes(status.coverBytes),
-                  ),
-                  _statusPill(
-                    context,
-                    '最近快取',
-                    _formatTimestamp(status.latestContentUpdatedAt),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _statusPill(BuildContext context, String label, String value) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.35)),
-      ),
-      child: Text('$label：$value', style: theme.textTheme.labelMedium),
-    );
   }
 
   Future<void> _handleBookshelfToggle(
@@ -446,30 +328,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
   }
 
-  Future<void> _clearBookCache(
-    BuildContext context,
-    BookDetailProvider provider,
-    BookDetailCacheClearTarget target,
-  ) async {
-    final label = switch (target) {
-      BookDetailCacheClearTarget.content => '正文快取',
-      BookDetailCacheClearTarget.cover => '封面快取',
-      BookDetailCacheClearTarget.all => '全部快取',
-    };
-    final confirmed = await _confirmAction(
-      context,
-      title: '清除$label',
-      message: '此操作會刪除本書的$label，需要時可重新下載。',
-      confirmText: '清除',
-    );
-    if (!confirmed || !context.mounted) return;
-    final result = await provider.clearBookCache(target);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(result.message)));
-  }
-
   Future<bool> _confirmAction(
     BuildContext context, {
     required String title,
@@ -495,126 +353,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
           ),
     );
     return confirmed ?? false;
-  }
-
-  void _showCacheDialog(BuildContext context, BookDetailProvider provider) {
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('本書快取'),
-            content: Consumer<BookDetailProvider>(
-              builder: (context, p, _) {
-                final status = p.cacheStatus;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _dialogInfoRow(
-                      context,
-                      '已快取章節',
-                      '${status.storedChapterCount}/${status.totalChapterCount}',
-                    ),
-                    _dialogInfoRow(
-                      context,
-                      '正文大小',
-                      StorageMetrics.formatBytes(status.contentBytes),
-                    ),
-                    _dialogInfoRow(
-                      context,
-                      '封面快取',
-                      StorageMetrics.formatBytes(status.coverBytes),
-                    ),
-                    _dialogInfoRow(
-                      context,
-                      '總大小',
-                      StorageMetrics.formatBytes(status.totalBytes),
-                    ),
-                    _dialogInfoRow(
-                      context,
-                      '最近快取',
-                      _formatTimestamp(status.latestContentUpdatedAt),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.article_outlined),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _clearBookCache(
-                            context,
-                            provider,
-                            BookDetailCacheClearTarget.content,
-                          );
-                        },
-                        label: const Text('清除正文快取'),
-                      ),
-                    ),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.image_outlined),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _clearBookCache(
-                            context,
-                            provider,
-                            BookDetailCacheClearTarget.cover,
-                          );
-                        },
-                        label: const Text('清除封面快取'),
-                      ),
-                    ),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.delete_sweep_outlined),
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _clearBookCache(
-                            context,
-                            provider,
-                            BookDetailCacheClearTarget.all,
-                          );
-                        },
-                        label: const Text('清除全部快取'),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            actions: [
-              TextButton(
-                onPressed: provider.refreshCacheStatus,
-                child: const Text('重新整理'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('關閉'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  Widget _dialogInfoRow(BuildContext context, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          SizedBox(width: 88, child: Text(label)),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showDownloadSheet(BuildContext context, BookDetailProvider provider) {
@@ -778,14 +516,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
         curve: Curves.easeOutCubic,
       );
     });
-  }
-
-  String _formatTimestamp(int timestamp) {
-    if (timestamp <= 0) return '尚未快取';
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    String two(int value) => value.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-        '${two(dt.hour)}:${two(dt.minute)}';
   }
 
   void _showPhotoView(BuildContext context, String url) {

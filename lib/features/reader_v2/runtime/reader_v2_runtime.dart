@@ -504,6 +504,37 @@ class ReaderV2Runtime extends ChangeNotifier {
     return true;
   }
 
+  void preloadSlideNeighbor({required bool forward}) {
+    if (state.mode != ReaderV2Mode.slide) return;
+    final window = state.pageWindow;
+    if (window == null) return;
+    final current = window.current;
+    if (current.isPlaceholder) return;
+    final neighbor = forward ? window.next : window.prev;
+    if (neighbor == null) return;
+    if (neighbor.isPlaceholder) {
+      _scheduleNeighborPreloadFrom(
+        chapterIndex: current.chapterIndex,
+        forward: forward,
+        refreshAfter: true,
+      );
+      return;
+    }
+    final nearCurrentBoundary = _isNearChapterBoundary(
+      current,
+      forward: forward,
+    );
+    final nearNeighborBoundary = _isNearChapterBoundary(
+      neighbor,
+      forward: forward,
+    );
+    if (!nearCurrentBoundary && !nearNeighborBoundary) return;
+    _scheduleNeighborPreloadFrom(
+      chapterIndex: current.chapterIndex,
+      forward: forward,
+    );
+  }
+
   void settleCurrentSlidePage({ReaderV2Location? settledLocation}) {
     if (state.mode != ReaderV2Mode.slide) return;
     final current = state.pageWindow?.current;
@@ -561,11 +592,11 @@ class ReaderV2Runtime extends ChangeNotifier {
 
   ReaderV2Location? captureVisibleLocation() => _captureVisibleLocation();
 
-  Future<ReaderV2Location?> saveProgress() async {
+  Future<ReaderV2Location?> saveProgress({bool immediate = true}) async {
     if (_restoreInProgress) return null;
     final location = captureVisibleLocation();
     if (location == null) return null;
-    return _saveProgressLocation(location);
+    return _saveProgressLocation(location, immediate: immediate);
   }
 
   Future<ReaderV2Location?> flushProgress() {
@@ -596,6 +627,7 @@ class ReaderV2Runtime extends ChangeNotifier {
     required ReaderV2Location fallbackLocation,
     ReaderV2Location? restoreLocation,
     bool Function()? isCurrent,
+    bool immediateSave = true,
   }) async {
     await Future<void>.delayed(Duration.zero);
     if (WidgetsBinding.instance.hasScheduledFrame) {
@@ -610,11 +642,11 @@ class ReaderV2Runtime extends ChangeNotifier {
       if (isCurrent != null && !isCurrent()) return null;
       if (!restored) return null;
     }
-    final saved = await saveProgress();
+    final saved = await saveProgress(immediate: immediateSave);
     if (saved != null) return saved;
     if (_disposed || _restoreInProgress) return null;
     if (isCurrent != null && !isCurrent()) return null;
-    return _saveProgressLocation(fallbackLocation);
+    return _saveProgressLocation(fallbackLocation, immediate: immediateSave);
   }
 
   Future<ReaderV2Location> _normalizeRestoreLocation(
@@ -706,8 +738,8 @@ class ReaderV2Runtime extends ChangeNotifier {
   }
 
   Future<ReaderV2PageWindow> _windowAroundPage(ReaderV2RenderPage page) async {
-    final prev = await _resolver.prevPage(page, allowAsyncLoad: true);
-    final next = await _resolver.nextPage(page, allowAsyncLoad: true);
+    final prev = _resolver.prevPageOrPlaceholder(page);
+    final next = _resolver.nextPageOrPlaceholder(page);
     return ReaderV2PageWindow(
       prev: prev,
       current: page,
@@ -730,8 +762,7 @@ class ReaderV2Runtime extends ChangeNotifier {
     );
   }
 
-  double _anchorOffsetInViewport() =>
-      state.layoutSpec.anchorOffsetInViewport;
+  double _anchorOffsetInViewport() => state.layoutSpec.anchorOffsetInViewport;
 
   bool _samePageAddress(ReaderV2PageAddress a, ReaderV2PageAddress b) {
     return a.chapterIndex == b.chapterIndex && a.pageIndex == b.pageIndex;
@@ -758,8 +789,9 @@ class ReaderV2Runtime extends ChangeNotifier {
   }
 
   Future<ReaderV2Location?> _saveProgressLocation(
-    ReaderV2Location location,
-  ) async {
+    ReaderV2Location location, {
+    bool immediate = true,
+  }) async {
     if (_disposed || _restoreInProgress) return null;
     final normalized = location.normalized(
       chapterCount: _repository.chapterCount,
@@ -767,6 +799,9 @@ class ReaderV2Runtime extends ChangeNotifier {
     if (normalized == state.committedLocation) {
       if (normalized != state.visibleLocation) {
         _setState(state.copyWith(visibleLocation: normalized));
+      }
+      if (immediate) {
+        await _progressController.flush();
       }
       return normalized;
     }
@@ -776,7 +811,11 @@ class ReaderV2Runtime extends ChangeNotifier {
         committedLocation: normalized,
       ),
     );
-    await _progressController.saveImmediately(normalized);
+    if (immediate) {
+      await _progressController.saveImmediately(normalized);
+    } else {
+      _progressController.schedule(normalized);
+    }
     return normalized;
   }
 
@@ -792,6 +831,7 @@ class ReaderV2Runtime extends ChangeNotifier {
       _saveVisibleAnchorAfterViewportSettled(
         fallbackLocation: location,
         isCurrent: () => _isCurrentSlidePage(pageAddress),
+        immediateSave: false,
       ),
     );
   }
@@ -810,13 +850,43 @@ class ReaderV2Runtime extends ChangeNotifier {
   void _scheduleMissingNeighborPreload({required bool forward}) {
     final window = state.pageWindow;
     if (window == null) return;
-    final target = window.current.chapterIndex + (forward ? 1 : -1);
+    _scheduleNeighborPreloadFrom(
+      chapterIndex: window.current.chapterIndex,
+      forward: forward,
+      refreshAfter: true,
+    );
+  }
+
+  void _scheduleNeighborPreloadFrom({
+    required int chapterIndex,
+    required bool forward,
+    bool refreshAfter = false,
+  }) {
+    final target = chapterIndex + (forward ? 1 : -1);
     if (target < 0 || target >= _repository.chapterCount) return;
+    final preload = _preloadScheduler.scheduleLayout(target, priority: true);
+    if (!refreshAfter) {
+      unawaited(preload);
+      return;
+    }
     unawaited(
-      _preloadScheduler.scheduleLayout(target, priority: true).whenComplete(() {
+      preload.whenComplete(() {
         if (!_disposed) unawaited(refreshNeighbors());
       }),
     );
+  }
+
+  bool _isNearChapterBoundary(
+    ReaderV2RenderPage page, {
+    required bool forward,
+  }) {
+    if (page.isPlaceholder || page.pageSize <= 0) return false;
+    if (forward) {
+      return page.pageIndex >=
+          page.pageSize - ReaderV2PreloadScheduler.boundaryPreloadPageDistance;
+    }
+    return page.pageIndex <
+        ReaderV2PreloadScheduler.boundaryPreloadPageDistance;
   }
 
   void _rememberPendingNeighborAdvance({

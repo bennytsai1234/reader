@@ -47,6 +47,8 @@ class ReaderV2PreloadScheduler {
   int _generation = 0;
   bool _disposed = false;
 
+  static const int boundaryPreloadPageDistance = 4;
+
   int bumpGeneration() {
     _generation += 1;
     _clearQueued(layout: true, content: false);
@@ -70,17 +72,22 @@ class ReaderV2PreloadScheduler {
 
   Future<void> scheduleScrollSettled(ReaderV2RenderPage page) {
     if (page.isPlaceholder) return Future<void>.value();
-    if (page.pageIndex >= page.pageSize - 2) {
-      return scheduleDirectional(
-        fromChapterIndex: page.chapterIndex,
-        forward: true,
+    final futures = <Future<void>>[];
+    if (page.pageIndex >= page.pageSize - boundaryPreloadPageDistance) {
+      futures.add(
+        scheduleDirectional(fromChapterIndex: page.chapterIndex, forward: true),
       );
     }
-    if (page.pageIndex <= 1) {
-      return scheduleDirectional(
-        fromChapterIndex: page.chapterIndex,
-        forward: false,
+    if (page.pageIndex < boundaryPreloadPageDistance) {
+      futures.add(
+        scheduleDirectional(
+          fromChapterIndex: page.chapterIndex,
+          forward: false,
+        ),
       );
+    }
+    if (futures.isNotEmpty) {
+      return Future.wait(futures).then((_) {});
     }
     return scheduleContent(page.chapterIndex);
   }

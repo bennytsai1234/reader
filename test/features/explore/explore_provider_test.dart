@@ -21,6 +21,22 @@ class _FakeSourceDao extends Fake implements BookSourceDao {
   @override
   Stream<List<BookSource>> watchAll() => _controller.stream;
 
+  @override
+  Future<List<BookSource>> getAllPart() async => List<BookSource>.from(sources);
+
+  @override
+  Stream<List<BookSource>> watchAllPart() => _controller.stream;
+
+  @override
+  Future<BookSource?> getByUrl(String url) async =>
+      sources.where((source) => source.bookSourceUrl == url).firstOrNull;
+
+  @override
+  Future<void> updateCustomOrderByUrl(String url, int customOrder) async {
+    final source = await getByUrl(url);
+    if (source != null) source.customOrder = customOrder;
+  }
+
   void pushSources(List<BookSource> nextSources) {
     sources = List<BookSource>.from(nextSources);
     _controller.add(List<BookSource>.from(sources));

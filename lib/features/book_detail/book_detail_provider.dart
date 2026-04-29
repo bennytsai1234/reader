@@ -223,7 +223,6 @@ class BookDetailProvider extends ChangeNotifier {
     await _loadSource();
     await _loadBookInfo();
     await _loadChapters();
-    await _refreshCacheStatus(notify: false);
     unawaited(_storeDisplayCover());
     _isLoading = false;
     notifyListeners();

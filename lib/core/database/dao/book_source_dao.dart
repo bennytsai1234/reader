@@ -6,25 +6,42 @@ import '../app_database.dart';
 part 'book_source_dao.g.dart';
 
 @DriftAccessor(tables: [BookSources])
-class BookSourceDao extends DatabaseAccessor<AppDatabase> with _$BookSourceDaoMixin {
+class BookSourceDao extends DatabaseAccessor<AppDatabase>
+    with _$BookSourceDaoMixin {
   BookSourceDao(super.db);
 
   Future<List<BookSource>> getAll() => select(bookSources).get();
 
   Stream<List<BookSource>> watchAll() => select(bookSources).watch();
 
+  Future<List<BookSource>> getAllPart() {
+    return _partQuery().map(_readPartSource).get();
+  }
+
+  Stream<List<BookSource>> watchAllPart() {
+    return _partQuery().map(_readPartSource).watch();
+  }
+
   Future<List<BookSource>> getEnabled() {
     return (select(bookSources)..where((t) => t.enabled.equals(true))).get();
   }
 
   Future<BookSource?> getByUrl(String url) {
-    return (select(bookSources)..where((t) => t.bookSourceUrl.equals(url))).getSingleOrNull();
+    return (select(bookSources)
+      ..where((t) => t.bookSourceUrl.equals(url))).getSingleOrNull();
   }
 
-  Future<void> upsert(BookSource source) => into(bookSources).insertOnConflictUpdate(BookSourceToInsertable(source).toInsertable());
+  Future<void> upsert(BookSource source) => into(
+    bookSources,
+  ).insertOnConflictUpdate(BookSourceToInsertable(source).toInsertable());
 
   Future<void> upsertAll(List<BookSource> sources) async {
-    await batch((b) => b.insertAllOnConflictUpdate(bookSources, sources.map((e) => BookSourceToInsertable(e).toInsertable()).toList()));
+    await batch(
+      (b) => b.insertAllOnConflictUpdate(
+        bookSources,
+        sources.map((e) => BookSourceToInsertable(e).toInsertable()).toList(),
+      ),
+    );
   }
 
   Future<void> deleteByUrl(String url) =>
@@ -33,27 +50,95 @@ class BookSourceDao extends DatabaseAccessor<AppDatabase> with _$BookSourceDaoMi
   Future<void> deleteByUrls(List<String> urls) =>
       (delete(bookSources)..where((t) => t.bookSourceUrl.isIn(urls))).go();
 
-  Future<List<BookSource>> getAllPart() => getAll();
   Future<List<BookSource>> getAllFull() => getAll();
 
-  Future<void> insertOrUpdateAll(List<BookSource> sources) => upsertAll(sources);
+  Future<void> insertOrUpdateAll(List<BookSource> sources) =>
+      upsertAll(sources);
+
+  Future<void> updateCustomOrderByUrl(String url, int customOrder) {
+    return (update(bookSources)..where(
+      (t) => t.bookSourceUrl.equals(url),
+    )).write(BookSourcesCompanion(customOrder: Value(customOrder)));
+  }
 
   Future<void> updateCustomOrder(List<BookSource> sources) async {
     for (var i = 0; i < sources.length; i++) {
-      await (update(bookSources)..where((t) => t.bookSourceUrl.equals(sources[i].bookSourceUrl)))
-          .write(BookSourcesCompanion(customOrder: Value(i)));
+      await (update(bookSources)..where(
+        (t) => t.bookSourceUrl.equals(sources[i].bookSourceUrl),
+      )).write(BookSourcesCompanion(customOrder: Value(i)));
     }
+  }
+
+  Selectable<QueryRow> _partQuery() {
+    return customSelect(
+      '''
+      SELECT
+        bookSourceUrl,
+        bookSourceName,
+        bookSourceType,
+        bookSourceGroup,
+        bookSourceComment,
+        loginUrl,
+        bookUrlPattern,
+        customOrder,
+        weight,
+        enabled,
+        enabledExplore,
+        enabledCookieJar,
+        lastUpdateTime,
+        respondTime,
+        concurrentRate,
+        exploreUrl,
+        searchUrl
+      FROM book_sources
+      ORDER BY customOrder ASC
+      ''',
+      readsFrom: {bookSources},
+    );
+  }
+
+  BookSource _readPartSource(QueryRow row) {
+    return BookSource(
+      bookSourceUrl: row.read<String>('bookSourceUrl'),
+      bookSourceName: row.read<String>('bookSourceName'),
+      bookSourceType: row.read<int>('bookSourceType'),
+      bookSourceGroup: row.read<String?>('bookSourceGroup'),
+      bookSourceComment: row.read<String?>('bookSourceComment'),
+      loginUrl: row.read<String?>('loginUrl'),
+      bookUrlPattern: row.read<String?>('bookUrlPattern'),
+      customOrder: row.read<int>('customOrder'),
+      weight: row.read<int>('weight'),
+      enabled: _readBool(row, 'enabled'),
+      enabledExplore: _readBool(row, 'enabledExplore'),
+      enabledCookieJar: _readBool(row, 'enabledCookieJar'),
+      lastUpdateTime: row.read<int>('lastUpdateTime'),
+      respondTime: row.read<int>('respondTime'),
+      concurrentRate: row.read<String?>('concurrentRate'),
+      exploreUrl: row.read<String?>('exploreUrl'),
+      searchUrl: row.read<String?>('searchUrl'),
+    );
+  }
+
+  bool _readBool(QueryRow row, String column) {
+    final value = row.data[column];
+    return value == true || value == 1;
   }
 
   Future<void> renameGroup(String oldName, String newName) async {
     final all = await getAll();
     for (final s in all) {
       if (s.bookSourceGroup == null) continue;
-      final groups = s.bookSourceGroup!.split(RegExp(r'[,，]')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      final groups =
+          s.bookSourceGroup!
+              .split(RegExp(r'[,，]'))
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
       if (groups.contains(oldName)) {
         final updated = groups.map((g) => g == oldName ? newName : g).join(',');
-        await (update(bookSources)..where((t) => t.bookSourceUrl.equals(s.bookSourceUrl)))
-            .write(BookSourcesCompanion(bookSourceGroup: Value(updated)));
+        await (update(bookSources)..where(
+          (t) => t.bookSourceUrl.equals(s.bookSourceUrl),
+        )).write(BookSourcesCompanion(bookSourceGroup: Value(updated)));
       }
     }
   }
@@ -62,25 +147,31 @@ class BookSourceDao extends DatabaseAccessor<AppDatabase> with _$BookSourceDaoMi
     final all = await getAll();
     for (final s in all) {
       if (s.bookSourceGroup == null) continue;
-      final groups = s.bookSourceGroup!
-          .split(RegExp(r'[,，]'))
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty && e != name)
-          .toList();
+      final groups =
+          s.bookSourceGroup!
+              .split(RegExp(r'[,，]'))
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty && e != name)
+              .toList();
       final updated = groups.join(',');
-      await (update(bookSources)..where((t) => t.bookSourceUrl.equals(s.bookSourceUrl)))
-          .write(BookSourcesCompanion(bookSourceGroup: Value(updated.isEmpty ? null : updated)));
+      await (update(bookSources)
+        ..where((t) => t.bookSourceUrl.equals(s.bookSourceUrl))).write(
+        BookSourcesCompanion(
+          bookSourceGroup: Value(updated.isEmpty ? null : updated),
+        ),
+      );
     }
   }
 
   Future<void> adjustSortNumbers() async {
-    final all = await (select(bookSources)
-          ..orderBy([(t) => OrderingTerm(expression: t.customOrder)]))
-        .get();
+    final all =
+        await (select(bookSources)
+          ..orderBy([(t) => OrderingTerm(expression: t.customOrder)])).get();
     for (var i = 0; i < all.length; i++) {
       if (all[i].customOrder != i) {
-        await (update(bookSources)..where((t) => t.bookSourceUrl.equals(all[i].bookSourceUrl)))
-            .write(BookSourcesCompanion(customOrder: Value(i)));
+        await (update(bookSources)..where(
+          (t) => t.bookSourceUrl.equals(all[i].bookSourceUrl),
+        )).write(BookSourcesCompanion(customOrder: Value(i)));
       }
     }
   }

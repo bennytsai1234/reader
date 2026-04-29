@@ -14,11 +14,10 @@ class ReaderV2GestureLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!gesturesEnabled) return child;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTapUp: onTapUp,
-      onLongPress: () {},
+      onTapUp: gesturesEnabled ? onTapUp : null,
+      onLongPress: gesturesEnabled ? () {} : null,
       child: child,
     );
   }
