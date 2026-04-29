@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkpage_reader/core/database/dao/book_dao.dart';
@@ -7,6 +9,7 @@ import 'package:inkpage_reader/core/database/dao/reader_chapter_content_dao.dart
 import 'package:inkpage_reader/core/models/book.dart';
 import 'package:inkpage_reader/core/models/book_source.dart';
 import 'package:inkpage_reader/core/models/chapter.dart';
+import 'package:inkpage_reader/features/reader/engine/book_content.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_repository.dart';
 import 'package:inkpage_reader/features/reader/engine/layout_engine.dart';
 import 'package:inkpage_reader/features/reader/engine/layout_spec.dart';
@@ -728,6 +731,69 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     });
 
+    testWidgets(
+      'scroll window ignores stale async shift after anchor moves back',
+      (tester) async {
+        final env = _RuntimeEnv(
+          chapters: _shortChaptersFor('book', 4),
+          initialChapterIndex: 1,
+          delayedContentChapterIndex: 3,
+        );
+        final controller = ReaderViewportController();
+        await env.runtime.openBook();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: SizedBox(
+              width: 320,
+              height: 360,
+              child: ScrollReaderViewport(
+                runtime: env.runtime,
+                backgroundColor: Colors.white,
+                textColor: Colors.black,
+                style: _style(ReaderPageMode.scroll),
+                controller: controller,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final viewport = find.byType(ScrollReaderViewport);
+        final gesture = await tester.startGesture(tester.getCenter(viewport));
+        await gesture.moveBy(const Offset(0, -650));
+        await tester.pump();
+
+        final delayedRepository = env.delayedRepository!;
+        for (
+          var pump = 0;
+          pump < 5 && !delayedRepository.isWaiting(3);
+          pump++
+        ) {
+          await tester.pump();
+        }
+        expect(delayedRepository.isWaiting(3), isTrue);
+
+        await gesture.moveBy(const Offset(0, 96));
+        await tester.pump();
+        await gesture.up();
+        await tester.pump();
+
+        delayedRepository.release(3);
+        await tester.pumpAndSettle();
+
+        final movedBack = await controller.scrollBy!(-650);
+        await tester.pumpAndSettle();
+
+        expect(movedBack, isTrue);
+        expect(env.runtime.state.visibleLocation.chapterIndex, 0);
+
+        env.runtime.dispose();
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 500));
+      },
+    );
+
     testWidgets('app lifecycle pause flushes latest visible location', (
       tester,
     ) async {
@@ -833,6 +899,7 @@ class _RuntimeEnv {
     int initialChapterIndex = 0,
     int initialCharOffset = 0,
     double initialVisualOffsetPx = 0.0,
+    int? delayedContentChapterIndex,
   }) : book = Book(
          bookUrl: 'book',
          origin: 'local',
@@ -843,14 +910,30 @@ class _RuntimeEnv {
        ),
        bookDao = _FakeBookDao() {
     final resolvedChapters = chapters ?? _chaptersFor(book.bookUrl, 4);
-    repository = ChapterRepository(
-      book: book,
-      initialChapters: resolvedChapters,
-      bookDao: bookDao,
-      chapterDao: _FakeChapterDao(resolvedChapters),
-      sourceDao: _FakeSourceDao(),
-      contentDao: _FakeContentDao(),
-    );
+    final delayedIndex = delayedContentChapterIndex;
+    final delayed =
+        delayedIndex == null
+            ? null
+            : _DelayedContentRepository(
+              book: book,
+              initialChapters: resolvedChapters,
+              bookDao: bookDao,
+              chapterDao: _FakeChapterDao(resolvedChapters),
+              sourceDao: _FakeSourceDao(),
+              contentDao: _FakeContentDao(),
+              delayedChapterIndexes: <int>{delayedIndex},
+            );
+    delayedRepository = delayed;
+    repository =
+        delayed ??
+        ChapterRepository(
+          book: book,
+          initialChapters: resolvedChapters,
+          bookDao: bookDao,
+          chapterDao: _FakeChapterDao(resolvedChapters),
+          sourceDao: _FakeSourceDao(),
+          contentDao: _FakeContentDao(),
+        );
     runtime = ReaderRuntime(
       book: book,
       repository: repository,
@@ -867,8 +950,46 @@ class _RuntimeEnv {
 
   final Book book;
   final _FakeBookDao bookDao;
+  _DelayedContentRepository? delayedRepository;
   late final ChapterRepository repository;
   late final ReaderRuntime runtime;
+}
+
+class _DelayedContentRepository extends ChapterRepository {
+  _DelayedContentRepository({
+    required super.book,
+    required super.initialChapters,
+    required super.bookDao,
+    required super.chapterDao,
+    required super.sourceDao,
+    required super.contentDao,
+    required this.delayedChapterIndexes,
+  });
+
+  final Set<int> delayedChapterIndexes;
+  final Map<int, Completer<void>> _gates = <int, Completer<void>>{};
+  final Set<int> _waiting = <int>{};
+
+  bool isWaiting(int chapterIndex) => _waiting.contains(chapterIndex);
+
+  void release(int chapterIndex) {
+    final gate = _gates[chapterIndex];
+    if (gate != null && !gate.isCompleted) gate.complete();
+  }
+
+  @override
+  Future<BookContent> loadContent(int chapterIndex) async {
+    if (delayedChapterIndexes.contains(chapterIndex)) {
+      final gate = _gates.putIfAbsent(chapterIndex, Completer<void>.new);
+      _waiting.add(chapterIndex);
+      try {
+        await gate.future;
+      } finally {
+        _waiting.remove(chapterIndex);
+      }
+    }
+    return super.loadContent(chapterIndex);
+  }
 }
 
 List<BookChapter> _chaptersFor(String bookUrl, int count) {

@@ -314,7 +314,6 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     if (!stillCurrent()) return;
     if (!centerReady) return;
 
-    _currentChapterIndex = center;
     _chapterVirtualTops.putIfAbsent(center, () => 0.0);
     final centerTop = _chapterVirtualTops[center]!;
     final centerExtent =
@@ -351,7 +350,10 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
       }
     }
 
-    if (stillCurrent()) setState(() {});
+    if (stillCurrent()) {
+      _currentChapterIndex = center;
+      setState(() {});
+    }
   }
 
   Future<void> _primeAndSyncToRuntimeLocation({bool force = false}) async {
@@ -638,12 +640,19 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     if (targetChapter == current) return;
     if (!_shouldShiftWindow(current, targetChapter, anchorVirtualY)) return;
     final layoutGeneration = widget.runtime.state.layoutGeneration;
+    bool anchorStillTargetsShift() {
+      if (!mounted ||
+          widget.runtime.state.layoutGeneration != layoutGeneration) {
+        return false;
+      }
+      final latestAnchorVirtualY = _virtualScrollY + _anchorOffsetInViewport();
+      final latestPlacement = _placementAtVirtualY(latestAnchorVirtualY);
+      return latestPlacement?.page.chapterIndex == targetChapter;
+    }
+
     await _ensureWindowAround(
       targetChapter,
-      isCurrent:
-          () =>
-              mounted &&
-              widget.runtime.state.layoutGeneration == layoutGeneration,
+      isCurrent: anchorStillTargetsShift,
     );
   }
 
