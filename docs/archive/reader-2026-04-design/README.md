@@ -18,6 +18,7 @@ docs/reader_mobile_test_plan.md
 - `reader_visible_location_design.md`：visible location / saveProgress 設計。
 - `reader_restore_design.md`：開書恢復設計。
 - `reader_layout_coordinate_design.md`：layout 與座標 mapping 設計。
+- `reader_layout_boundary_repair_plan.md`：收斂 BookContent / LayoutEngine / ChapterLayout / Resolver / Runtime / Viewport / Painter 邊界的修復計劃。
 - `reader_page_cache_render_design.md`：PageCache / RenderTile 設計。
 - `reader_scroll_canvas_window_design.md`：scroll canvas window 設計。
 - `reader_overlay_gesture_design.md`：overlay / gesture / TTS highlight 設計。

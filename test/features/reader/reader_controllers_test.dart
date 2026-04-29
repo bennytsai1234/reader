@@ -312,6 +312,34 @@ void main() {
       expect(timer!.canceled, isTrue);
     });
 
+    test('timer tick uses viewport page command in slide mode', () async {
+      _ManualTimer? timer;
+      final runtime = _FakeRuntime(nextPageResults: const <bool>[true]);
+      runtime.state = runtime.state.copyWith(mode: ReaderMode.slide);
+      final viewportController = ReaderViewportController();
+      var moveCalls = 0;
+      viewportController.moveToNextPage = () async {
+        moveCalls += 1;
+        return true;
+      };
+      final controller = ReaderAutoPageController(
+        runtime: runtime,
+        viewportController: viewportController,
+        timerFactory: (interval, callback) {
+          timer = _ManualTimer(callback);
+          return timer!;
+        },
+      );
+
+      controller.start();
+      timer!.fire();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(moveCalls, 1);
+      expect(runtime.nextPageCalls, 0);
+      expect(controller.isRunning, isTrue);
+    });
+
     test('stops when runtime cannot move forward', () {
       _ManualTimer? timer;
       final runtime = _FakeRuntime(nextPageResults: const <bool>[false]);

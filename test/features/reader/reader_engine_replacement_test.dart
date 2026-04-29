@@ -1092,6 +1092,43 @@ void main() {
     );
 
     test(
+      'jumpToLocation immediateSave writes final captured anchor after viewport restore',
+      () async {
+        final env = _RuntimeEnv();
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final owner = Object();
+        ReaderLocation? captured;
+        ReaderLocation? restoreRequest;
+        runtime.registerVisibleLocationCapture(owner, () => captured);
+        runtime.registerViewportRestore(owner, (location) async {
+          restoreRequest = location;
+          captured = ReaderLocation(
+            chapterIndex: location.chapterIndex,
+            charOffset: location.charOffset + 7,
+            visualOffsetPx: 11,
+          );
+          return true;
+        });
+
+        await runtime.jumpToLocation(
+          const ReaderLocation(chapterIndex: 1, charOffset: 0),
+          immediateSave: true,
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(
+          restoreRequest,
+          const ReaderLocation(chapterIndex: 1, charOffset: 0),
+        );
+        expect(env.bookDao.lastLocation, captured);
+        expect(runtime.state.committedLocation, captured);
+        runtime.unregisterVisibleLocationCapture(owner);
+        runtime.unregisterViewportRestore(owner);
+      },
+    );
+
+    test(
       'missing cross-chapter neighbor auto-advances after loading completes',
       () async {
         final book = Book(bookUrl: 'delayed-book', origin: 'local', name: 'd');
@@ -1287,36 +1324,79 @@ void main() {
       },
     );
 
-    test('slide page moves save settled locations immediately', () async {
-      final env = _RuntimeEnv(mode: ReaderMode.slide);
-      final runtime = env.runtime;
-      await runtime.openBook();
-      final next = runtime.state.pageWindow!.next!;
-      final nextLocation = ReaderLocation(
-        chapterIndex: next.chapterIndex,
-        charOffset: next.startCharOffset,
-      );
+    test(
+      'slide settled page moves save captured locations immediately',
+      () async {
+        final env = _RuntimeEnv(mode: ReaderMode.slide);
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final owner = Object();
+        runtime.registerVisibleLocationCapture(
+          owner,
+          () => runtime.state.visibleLocation,
+        );
+        final next = runtime.state.pageWindow!.next!;
+        final nextLocation = ReaderLocation(
+          chapterIndex: next.chapterIndex,
+          charOffset: next.startCharOffset,
+        );
 
-      expect(runtime.moveToNextPage(), isTrue);
-      await Future<void>.delayed(Duration.zero);
+        expect(runtime.moveSlidePageAndSettle(forward: true), isTrue);
+        await Future<void>.delayed(Duration.zero);
 
-      expect(runtime.state.committedLocation, nextLocation);
-      expect(env.bookDao.writes, 1);
-      expect(env.bookDao.lastLocation, nextLocation);
+        expect(runtime.state.committedLocation, nextLocation);
+        expect(env.bookDao.writes, 1);
+        expect(env.bookDao.lastLocation, nextLocation);
 
-      final prev = runtime.state.pageWindow!.prev!;
-      final prevLocation = ReaderLocation(
-        chapterIndex: prev.chapterIndex,
-        charOffset: prev.startCharOffset,
-      );
+        final prev = runtime.state.pageWindow!.prev!;
+        final prevLocation = ReaderLocation(
+          chapterIndex: prev.chapterIndex,
+          charOffset: prev.startCharOffset,
+        );
 
-      expect(runtime.moveToPrevPage(), isTrue);
-      await Future<void>.delayed(Duration.zero);
+        expect(runtime.moveSlidePageAndSettle(forward: false), isTrue);
+        await Future<void>.delayed(Duration.zero);
 
-      expect(runtime.state.committedLocation, prevLocation);
-      expect(env.bookDao.writes, 2);
-      expect(env.bookDao.lastLocation, prevLocation);
-    });
+        expect(runtime.state.committedLocation, prevLocation);
+        expect(env.bookDao.writes, 2);
+        expect(env.bookDao.lastLocation, prevLocation);
+        runtime.unregisterVisibleLocationCapture(owner);
+      },
+    );
+
+    test(
+      'slide settle saves captured anchor instead of provisional location',
+      () async {
+        final env = _RuntimeEnv(mode: ReaderMode.slide);
+        final runtime = env.runtime;
+        await runtime.openBook();
+        final next = runtime.state.pageWindow!.next!;
+        final provisional = ReaderLocation(
+          chapterIndex: next.chapterIndex,
+          charOffset: next.startCharOffset,
+        );
+        final capturedAnchor = ReaderLocation(
+          chapterIndex: next.chapterIndex,
+          charOffset: next.startCharOffset + 1,
+          visualOffsetPx: 8,
+        );
+        final owner = Object();
+        runtime.registerVisibleLocationCapture(owner, () => capturedAnchor);
+
+        expect(
+          runtime.moveSlidePageAndSettle(
+            forward: true,
+            settledLocation: provisional,
+          ),
+          isTrue,
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(runtime.state.committedLocation, capturedAnchor);
+        expect(env.bookDao.lastLocation, capturedAnchor);
+        runtime.unregisterVisibleLocationCapture(owner);
+      },
+    );
 
     test('slide viewport settle writes progress once per swipe', () async {
       final env = _RuntimeEnv(mode: ReaderMode.slide);
@@ -1348,10 +1428,22 @@ void main() {
         await runtime.openBook();
         runtime.moveToNextPage();
         final owner = Object();
-        final captured = runtime.state.visibleLocation.copyWith(
+        final beforeSwitch = runtime.state.visibleLocation.copyWith(
           visualOffsetPx: 21,
         );
-        runtime.registerVisibleLocationCapture(owner, () => captured);
+        final afterSwitch = beforeSwitch.copyWith(
+          charOffset: beforeSwitch.charOffset + 5,
+          visualOffsetPx: 9,
+        );
+        var captureAfterSwitch = false;
+        runtime.registerVisibleLocationCapture(
+          owner,
+          () => captureAfterSwitch ? afterSwitch : beforeSwitch,
+        );
+        runtime.registerViewportRestore(owner, (location) async {
+          captureAfterSwitch = true;
+          return true;
+        });
 
         await runtime.applyPresentation(
           spec: runtime.state.layoutSpec,
@@ -1360,9 +1452,10 @@ void main() {
 
         expect(runtime.state.mode, ReaderMode.slide);
         expect(env.bookDao.writes, 1);
-        expect(env.bookDao.lastLocation, captured);
-        expect(runtime.state.committedLocation, captured);
+        expect(env.bookDao.lastLocation, afterSwitch);
+        expect(runtime.state.committedLocation, afterSwitch);
         runtime.unregisterVisibleLocationCapture(owner);
+        runtime.unregisterViewportRestore(owner);
       },
     );
 

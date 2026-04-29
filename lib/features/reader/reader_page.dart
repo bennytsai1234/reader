@@ -353,6 +353,11 @@ class _ReaderPageState extends State<ReaderPage>
         if (runtime.state.mode == ReaderMode.scroll &&
             _viewportController.animateBy != null) {
           unawaited(_viewportController.animateBy!(size.height * 0.9));
+        } else if (runtime.state.mode == ReaderMode.slide &&
+            _viewportController.moveToNextPage != null) {
+          unawaited(_viewportController.moveToNextPage!());
+        } else if (runtime.state.mode == ReaderMode.slide) {
+          runtime.moveSlidePageAndSettle(forward: true);
         } else {
           runtime.moveToNextPage();
         }
@@ -361,6 +366,11 @@ class _ReaderPageState extends State<ReaderPage>
         if (runtime.state.mode == ReaderMode.scroll &&
             _viewportController.animateBy != null) {
           unawaited(_viewportController.animateBy!(-size.height * 0.9));
+        } else if (runtime.state.mode == ReaderMode.slide &&
+            _viewportController.moveToPrevPage != null) {
+          unawaited(_viewportController.moveToPrevPage!());
+        } else if (runtime.state.mode == ReaderMode.slide) {
+          runtime.moveSlidePageAndSettle(forward: false);
         } else {
           runtime.moveToPrevPage();
         }

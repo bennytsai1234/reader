@@ -1,4 +1,5 @@
 typedef ReaderViewportDeltaCommand = Future<bool> Function(double delta);
+typedef ReaderViewportPageCommand = Future<bool> Function();
 
 typedef ReaderViewportEnsureRangeCommand =
     Future<bool> Function({
@@ -10,5 +11,7 @@ typedef ReaderViewportEnsureRangeCommand =
 class ReaderViewportController {
   ReaderViewportDeltaCommand? scrollBy;
   ReaderViewportDeltaCommand? animateBy;
+  ReaderViewportPageCommand? moveToNextPage;
+  ReaderViewportPageCommand? moveToPrevPage;
   ReaderViewportEnsureRangeCommand? ensureCharRangeVisible;
 }

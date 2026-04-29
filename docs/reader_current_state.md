@@ -6,11 +6,13 @@
 
 reader 的主要重構主幹已經落地。接下來不是再討論是否要做 scroll canvas window、PageCache 或 layout mapping，而是進入手機實測，根據實際手感、跨章穩定性、TTS 跟隨、恢復保存與效能表現繼續修 bug。
 
+2026-04-29 補充：因為舊 reader 已有多個過渡相容層，後續新架構不再繼續塞回 `lib/features/reader/`。目前可用版本仍保留在 `lib/features/reader/`，只做必要 bug fix；新的乾淨主幹從 `lib/features/reader_v2/` 開始，先建立 layout 核心，尚未接到 `ReaderPage`。
+
 已完成主幹：
 
 - `ReaderLocation(chapterIndex, charOffset, visualOffsetPx)` 作為 durable progress。
 - chapter display text 作為 `charOffset` 真源，標題算進同一套 offset。
-- `ChapterLayout` / `TextLine` / `LineLayout` 提供 layout 與座標查詢。
+- `ChapterLayout` / `TextLine` 提供 production layout 與座標查詢；`LineLayout` 只保留為過渡期相容模型與測試保護。
 - `PageCache` 作為第一版 render tile。
 - scroll 模式使用固定 viewport canvas、signed `_virtualScrollY`、previous/current/next chapter window。
 - slide 模式使用同一份 PageCache / ReaderTileLayer。
@@ -39,7 +41,6 @@ lib/features/reader/controllers/reader_dependencies.dart
 lib/features/reader/engine/chapter_repository.dart
 lib/features/reader/engine/layout_engine.dart
 lib/features/reader/engine/chapter_layout.dart
-lib/features/reader/engine/line_layout.dart
 lib/features/reader/engine/page_cache.dart
 lib/features/reader/engine/reader_location.dart
 lib/features/reader/runtime/reader_runtime.dart
@@ -49,6 +50,38 @@ lib/features/reader/viewport/slide_reader_viewport.dart
 lib/features/reader/viewport/reader_tile_layer.dart
 lib/features/reader/viewport/tts_highlight_overlay_layer.dart
 ```
+
+## Reader V2 Status
+
+`reader_v2` 是同 repo 內的新 reader 主幹，不是另一個 app，也不是舊 reader 的相容層。
+
+目前已建立：
+
+```text
+lib/features/reader_v2/engine/reader_v2_content.dart
+lib/features/reader_v2/engine/reader_v2_layout_spec.dart
+lib/features/reader_v2/engine/reader_v2_layout.dart
+lib/features/reader_v2/engine/reader_v2_layout_engine.dart
+```
+
+目前 v2 資料流：
+
+```text
+ReaderV2Content
+  -> ReaderV2LayoutSpec
+  -> ReaderV2LayoutEngine
+  -> ReaderV2ChapterLayout
+```
+
+已成立的 v2 invariant：
+
+- `ReaderV2Content.displayText` 是唯一文字真相。
+- `ReaderV2ChapterLayout.lines` 是唯一 layout truth。
+- `ReaderV2PageSlice` 只保存 line range 和 page viewport range，不保存另一份 lines。
+- `ReaderV2LayoutEngine` 已處理標題、段落、硬換行、字元 offset、章節內連續 top/bottom/baseline。
+- v2 目前還沒有 resolver、runtime、viewport、painter，也還沒有接到 `ReaderPage`。
+
+詳細計劃見 [reader_v2_plan.md](reader_v2_plan.md)。
 
 ## Reader Folder Ownership
 
@@ -132,9 +165,12 @@ chapter display text
 ```text
 charOffset -> TextLine
 localY -> TextLine
+pageIndex -> TextLine list
 charOffset -> TextPage/PageCache
 range -> TextLine list / full-line rects
 ```
+
+`LineLayout.fromPages()` 已不在 production scroll viewport 主線中使用；後續目標是讓它完全退出 runtime 必要路徑。
 
 ## PageCache / Render
 
@@ -214,6 +250,14 @@ flutter test test/features/reader
 flutter analyze
 ```
 
+v2 核心回歸：
+
+```bash
+flutter test test/features/reader_v2
+```
+
 ## 下一步
 
-進入手機實測與體感 bug 修復。測試流程見 [reader_mobile_test_plan.md](reader_mobile_test_plan.md)。
+舊 reader 進入手機實測與體感 bug 修復。測試流程見 [reader_mobile_test_plan.md](reader_mobile_test_plan.md)。
+
+新 reader_v2 依 [reader_v2_plan.md](reader_v2_plan.md) 繼續補 `PageResolverV2`、`ReaderRuntimeV2`、scroll/slide viewport 與 painter。v2 完整通過後，再切換 `ReaderPage` 入口並刪除舊 reader 過渡模型。

@@ -26,6 +26,20 @@ class ChapterLayout {
     return pages.map((page) => page.toPageCache()).toList(growable: false);
   }
 
+  List<TextLine> linesForPage(int pageIndex) {
+    if (pageIndex < 0 || pageIndex >= pages.length) {
+      return const <TextLine>[];
+    }
+    final range = _pageLocalRange(pageIndex);
+    return _queryLines
+        .where((line) => line.bottom > range.top && line.top < range.bottom)
+        .toList(growable: false);
+  }
+
+  TextPage? pageForLine(TextLine line) {
+    return pageForLocalY(line.top);
+  }
+
   TextPage pageForCharOffset(int charOffset) {
     if (pages.isEmpty) {
       return TextPage(
@@ -169,6 +183,18 @@ class ChapterLayout {
     return pages
         .map((page) => page.localEndY)
         .fold<double>(0, (max, bottom) => bottom > max ? bottom : max);
+  }
+
+  ({double top, double bottom}) _pageLocalRange(int pageIndex) {
+    final page = pages[pageIndex];
+    if (pages.any((page) => page.hasExplicitLocalRange)) {
+      return (top: page.localStartY, bottom: page.localEndY);
+    }
+    var top = 0.0;
+    for (var index = 0; index < pageIndex; index++) {
+      top += pages[index].height;
+    }
+    return (top: top, bottom: top + page.height);
   }
 
   List<TextLine> get _queryLines {

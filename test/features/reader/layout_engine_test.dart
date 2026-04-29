@@ -134,6 +134,47 @@ void main() {
       expect(rects.first.top, greaterThanOrEqualTo(12));
     });
 
+    test('ChapterLayout exposes page lines from chapter-local truth', () {
+      final content = BookContent.fromRaw(
+        chapterIndex: 5,
+        title: '標題也要算進第一頁',
+        rawText: List<String>.generate(
+          12,
+          (index) => '第$index段文字，這段內容用來產生多頁，確認頁面只是一個 line 切片。',
+        ).join('\n\n'),
+      );
+      final layout = LayoutEngine().layout(
+        content,
+        _spec(width: 168, height: 150),
+      );
+
+      expect(layout.pages.length, greaterThan(1));
+      for (final page in layout.pages) {
+        final pageLines = layout.linesForPage(page.pageIndex);
+        expect(
+          pageLines.map((line) => line.startCharOffset),
+          page.lines.map((line) => line.startCharOffset),
+        );
+        expect(
+          pageLines.map((line) => line.endCharOffset),
+          page.lines.map((line) => line.endCharOffset),
+        );
+        for (var index = 0; index < pageLines.length; index++) {
+          final chapterLine = pageLines[index];
+          final pageLocalLine = page.lines[index];
+          expect(layout.pageForLine(chapterLine)?.pageIndex, page.pageIndex);
+          expect(
+            chapterLine.top,
+            closeTo(page.localStartY + pageLocalLine.top, 0.001),
+          );
+          expect(
+            chapterLine.bottom,
+            closeTo(page.localStartY + pageLocalLine.bottom, 0.001),
+          );
+        }
+      }
+    });
+
     test('content hash distinguishes title/body structure', () {
       final withTitle = BookContent.fromRaw(
         chapterIndex: 7,

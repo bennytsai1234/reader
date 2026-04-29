@@ -99,11 +99,17 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
   }
 
   void _attachController() {
-    widget.controller?.ensureCharRangeVisible = _ensureCharRangeVisible;
+    widget.controller
+      ?..moveToNextPage = _moveToNextPage
+      ..moveToPrevPage = _moveToPrevPage
+      ..ensureCharRangeVisible = _ensureCharRangeVisible;
   }
 
   void _detachController(ReaderViewportController? controller) {
-    controller?.ensureCharRangeVisible = null;
+    controller
+      ?..moveToNextPage = null
+      ..moveToPrevPage = null
+      ..ensureCharRangeVisible = null;
   }
 
   void _onRuntimeChanged() {
@@ -183,14 +189,37 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     _finalizeAnimation(target);
   }
 
+  Future<bool> _moveToNextPage() {
+    return _animateToAdjacentPage(forward: true);
+  }
+
+  Future<bool> _moveToPrevPage() {
+    return _animateToAdjacentPage(forward: false);
+  }
+
+  Future<bool> _animateToAdjacentPage({required bool forward}) async {
+    if (!mounted) return false;
+    final width = context.size?.width ?? 0.0;
+    if (!width.isFinite || width <= 0) {
+      return widget.runtime.moveSlidePageAndSettle(forward: forward);
+    }
+    final window = widget.runtime.state.pageWindow;
+    final neighbor = window == null ? null : (forward ? window.next : window.prev);
+    if (neighbor == null) return false;
+    if (neighbor.isPlaceholder) {
+      return widget.runtime.moveSlidePageAndSettle(forward: forward);
+    }
+    _pendingDirection = forward ? 1 : -1;
+    await _animateTo(forward ? -width : width);
+    return mounted;
+  }
+
   void _finalizeAnimation(double target) {
     final direction = _pendingDirection;
     final moved =
         direction == 0
             ? false
-            : (direction > 0
-                ? widget.runtime.moveToNextTile(saveSettledProgress: false)
-                : widget.runtime.moveToPrevTile(saveSettledProgress: false));
+            : widget.runtime.moveSlidePageAndSettle(forward: direction > 0);
     setState(() {
       _slideController.value = 0;
       _lastAnimationValue = 0;
@@ -198,11 +227,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
       _rawDragDx = 0;
       _pendingDirection = 0;
     });
-    if (target != 0 && moved) {
-      widget.runtime.handleSlidePageSettled(
-        widget.runtime.state.pageWindow!.current,
-      );
-    }
+    if (target != 0 && moved) return;
   }
 
   void _handleDragStart(DragStartDetails details) {
@@ -392,27 +417,20 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     required int charOffset,
   }) async {
     _resetViewport();
-    final moved =
-        forward
-            ? widget.runtime.moveToNextTile(saveSettledProgress: false)
-            : widget.runtime.moveToPrevTile(saveSettledProgress: false);
-    if (!moved || !mounted) return false;
-    final current = widget.runtime.state.pageWindow?.current;
-    if (!_pageContainsChar(
-      current,
-      chapterIndex: chapterIndex,
-      charOffset: charOffset,
-    )) {
-      return false;
-    }
-    widget.runtime.handleSlidePageSettled(
-      current!,
+    final moved = widget.runtime.moveSlidePageAndSettle(
+      forward: forward,
       settledLocation: ReaderLocation(
         chapterIndex: chapterIndex,
         charOffset: charOffset,
       ),
     );
-    return true;
+    if (!moved || !mounted) return false;
+    final current = widget.runtime.state.pageWindow?.current;
+    return _pageContainsChar(
+      current,
+      chapterIndex: chapterIndex,
+      charOffset: charOffset,
+    );
   }
 
   Future<bool> _jumpToTtsPage({
@@ -423,6 +441,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     _resetViewport();
     await widget.runtime.jumpToLocation(
       ReaderLocation(chapterIndex: chapterIndex, charOffset: charOffset),
+      immediateSave: false,
     );
     if (!mounted ||
         widget.runtime.state.layoutGeneration != layoutGeneration ||
@@ -437,8 +456,7 @@ class _SlideReaderViewportState extends State<SlideReaderViewport>
     )) {
       return false;
     }
-    widget.runtime.handleSlidePageSettled(
-      current!,
+    widget.runtime.settleCurrentSlidePage(
       settledLocation: ReaderLocation(
         chapterIndex: chapterIndex,
         charOffset: charOffset,

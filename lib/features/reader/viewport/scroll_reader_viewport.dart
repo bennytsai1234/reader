@@ -3,10 +3,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/features/reader/engine/chapter_layout.dart';
-import 'package:inkpage_reader/features/reader/engine/line_layout.dart';
 import 'package:inkpage_reader/features/reader/engine/page_cache.dart';
 import 'package:inkpage_reader/features/reader/engine/read_style.dart';
 import 'package:inkpage_reader/features/reader/engine/reader_location.dart';
+import 'package:inkpage_reader/features/reader/engine/text_page.dart';
 import 'package:inkpage_reader/features/reader/runtime/models/reader_tts_highlight.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_runtime.dart';
 import 'package:inkpage_reader/features/reader/runtime/reader_state.dart';
@@ -179,6 +179,8 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     widget.controller
       ?..scrollBy = _scrollBy
       ..animateBy = _animateBy
+      ..moveToNextPage = null
+      ..moveToPrevPage = null
       ..ensureCharRangeVisible = _ensureCharRangeVisible;
   }
 
@@ -186,6 +188,8 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     controller
       ?..scrollBy = null
       ..animateBy = null
+      ..moveToNextPage = null
+      ..moveToPrevPage = null
       ..ensureCharRangeVisible = null;
   }
 
@@ -464,16 +468,12 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     final chapterTop = _chapterVirtualTops[chapterIndex];
     if (loaded == null || chapterTop == null) return null;
 
-    final layout = LineLayout.fromPages(
-      loaded.layout.pages,
-      chapterIndex: chapterIndex,
-    );
-    final item = _lineItemAtOrNearCharOffset(layout, location.charOffset);
-    if (item == null) return chapterTop - _anchorOffsetInViewport();
+    final line = loaded.layout.lineForCharOffset(location.charOffset);
+    if (line == null) return chapterTop - _anchorOffsetInViewport();
     final lineVirtualTop = _lineVirtualTop(
       loaded: loaded,
       chapterTop: chapterTop,
-      item: item,
+      line: line,
     );
     if (lineVirtualTop == null) return null;
     return lineVirtualTop + location.visualOffsetPx - _anchorOffsetInViewport();
@@ -482,38 +482,38 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
   double? _lineVirtualTop({
     required _LoadedChapter loaded,
     required double chapterTop,
-    required LineItem item,
+    required TextLine line,
   }) {
-    final page = loaded.pageAt(item.pageIndex);
+    final page = loaded.layout.pageForLine(line);
     if (page == null) return null;
     final pageVirtualTop = _pageVirtualTop(
       chapterTop: chapterTop,
       loaded: loaded,
-      pageIndex: item.pageIndex,
+      pageIndex: page.pageIndex,
     );
     if (pageVirtualTop == null) return null;
     return pageVirtualTop +
         widget.style.paddingTop +
-        item.localTop -
+        line.top -
         page.localStartY;
   }
 
   double? _lineVirtualBottom({
     required _LoadedChapter loaded,
     required double chapterTop,
-    required LineItem item,
+    required TextLine line,
   }) {
-    final page = loaded.pageAt(item.pageIndex);
+    final page = loaded.layout.pageForLine(line);
     if (page == null) return null;
     final pageVirtualTop = _pageVirtualTop(
       chapterTop: chapterTop,
       loaded: loaded,
-      pageIndex: item.pageIndex,
+      pageIndex: page.pageIndex,
     );
     if (pageVirtualTop == null) return null;
     return pageVirtualTop +
         widget.style.paddingTop +
-        item.localBottom -
+        line.bottom -
         page.localStartY;
   }
 
@@ -615,26 +615,22 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
             .clamp(0.0, placement.page.contentHeight)
             .toDouble();
     final chapterLocalY = placement.page.localStartY + pageContentY;
-    final layout = LineLayout.fromPages(
-      placement.layout.pages,
-      chapterIndex: placement.page.chapterIndex,
-    );
-    final item = _lineItemAtOrNearLocalY(layout, chapterLocalY);
-    if (item == null) return null;
+    final line = placement.layout.lineAtOrNearLocalY(chapterLocalY);
+    if (line == null) return null;
 
-    final loaded = _loadedChapters[item.chapterIndex];
-    final chapterTop = _chapterVirtualTops[item.chapterIndex];
+    final loaded = _loadedChapters[line.chapterIndex];
+    final chapterTop = _chapterVirtualTops[line.chapterIndex];
     if (loaded == null || chapterTop == null) return null;
     final lineVirtualTop = _lineVirtualTop(
       loaded: loaded,
       chapterTop: chapterTop,
-      item: item,
+      line: line,
     );
     if (lineVirtualTop == null) return null;
     final lineTopOnScreen = lineVirtualTop - _virtualScrollY;
     return ReaderLocation(
-      chapterIndex: item.chapterIndex,
-      charOffset: item.chapterPosition,
+      chapterIndex: line.chapterIndex,
+      charOffset: line.startCharOffset,
       visualOffsetPx: anchorLineY - lineTopOnScreen,
     );
   }
@@ -660,39 +656,6 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     if (mounted) setState(() {});
     await Future<void>.delayed(Duration.zero);
     return mounted && _captureVisibleLocation() != null;
-  }
-
-  LineItem? _lineItemAtOrNearLocalY(LineLayout layout, double localY) {
-    LineItem? nearest;
-    var nearestDistance = double.infinity;
-    for (final item in layout.textItems) {
-      if (localY >= item.localTop && localY <= item.localBottom) {
-        nearest = item;
-        break;
-      }
-      final distance =
-          localY < item.localTop
-              ? item.localTop - localY
-              : localY - item.localBottom;
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearest = item;
-      }
-    }
-    return nearest;
-  }
-
-  LineItem? _lineItemAtOrNearCharOffset(LineLayout layout, int charOffset) {
-    LineItem? previous;
-    for (final item in layout.textItems) {
-      if (charOffset >= item.chapterPosition &&
-          charOffset < item.endChapterPosition) {
-        return item;
-      }
-      if (charOffset < item.chapterPosition) return item;
-      previous = item;
-    }
-    return previous;
   }
 
   void _captureAndReportVisibleLocation() {
@@ -890,35 +853,25 @@ class _ScrollReaderViewportState extends State<ScrollReaderViewport>
     final loaded = _loadedChapters[safeChapterIndex];
     final chapterTop = _chapterVirtualTops[safeChapterIndex];
     if (loaded == null || chapterTop == null) return false;
-    final layout = LineLayout.fromPages(
-      loaded.layout.pages,
-      chapterIndex: safeChapterIndex,
-    );
     final rangeStart =
         startCharOffset <= endCharOffset ? startCharOffset : endCharOffset;
     final rangeEnd =
         startCharOffset <= endCharOffset ? endCharOffset : startCharOffset;
-    final rangeItems = layout.textItems
-        .where(
-          (item) =>
-              item.endChapterPosition > rangeStart &&
-              item.chapterPosition < rangeEnd,
-        )
-        .toList(growable: false);
-    final fallback = layout.itemAtCharOffset(rangeStart);
-    final first = rangeItems.isEmpty ? fallback : rangeItems.first;
-    final last = rangeItems.isEmpty ? fallback : rangeItems.last;
+    final rangeLines = loaded.layout.linesForRange(rangeStart, rangeEnd);
+    final fallback = loaded.layout.lineForCharOffset(rangeStart);
+    final first = rangeLines.isEmpty ? fallback : rangeLines.first;
+    final last = rangeLines.isEmpty ? fallback : rangeLines.last;
     if (first == null || last == null) return false;
 
     final firstTop = _lineVirtualTop(
       loaded: loaded,
       chapterTop: chapterTop,
-      item: first,
+      line: first,
     );
     final lastBottom = _lineVirtualBottom(
       loaded: loaded,
       chapterTop: chapterTop,
-      item: last,
+      line: last,
     );
     if (firstTop == null || lastBottom == null) return false;
 

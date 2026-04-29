@@ -181,20 +181,9 @@ class ReaderRuntime extends ChangeNotifier {
     if (!needLayout && !needMode) return;
 
     final requestId = ++_presentationRequestId;
-    final baseLayoutGeneration = state.layoutGeneration;
-    final baseLayoutSignature = state.layoutSpec.layoutSignature;
+    final previousMode = state.mode;
     _clearPendingNeighborAdvance();
     final location = captureVisibleLocation() ?? state.visibleLocation;
-    if (needMode) {
-      await _saveProgressLocation(location);
-      if (!_isCurrentPresentationRequest(
-        requestId,
-        baseLayoutGeneration,
-        baseLayoutSignature,
-      )) {
-        return;
-      }
-    }
 
     var generation = state.layoutGeneration;
     if (needLayout) {
@@ -214,6 +203,34 @@ class ReaderRuntime extends ChangeNotifier {
       ),
     );
     await jumpToLocation(location, immediateSave: false);
+    bool stillCurrentPresentation() {
+      return !_disposed &&
+          requestId == _presentationRequestId &&
+          state.layoutGeneration == generation &&
+          state.layoutSpec.layoutSignature == spec.layoutSignature &&
+          state.mode == mode;
+    }
+
+    void restoreStaleModeSwitch() {
+      if (!needMode || _disposed || state.mode != mode) return;
+      _setState(state.copyWith(mode: previousMode));
+    }
+
+    if (!stillCurrentPresentation()) {
+      restoreStaleModeSwitch();
+      return;
+    }
+    if (needMode) {
+      await _saveVisibleAnchorAfterViewportSettled(
+        fallbackLocation: location,
+        restoreLocation: location,
+        isCurrent: stillCurrentPresentation,
+      );
+      if (!stillCurrentPresentation()) {
+        restoreStaleModeSwitch();
+        return;
+      }
+    }
     if (!_disposed &&
         requestId == _presentationRequestId &&
         state.layoutGeneration == generation &&
@@ -323,6 +340,15 @@ class ReaderRuntime extends ChangeNotifier {
         ),
       );
       unawaited(_preloadScheduler.scheduleJump(resolvedLocation.chapterIndex));
+      if (immediateSave) {
+        unawaited(
+          _saveJumpLocationAfterViewportSettled(
+            resolvedLocation,
+            requestId: requestId,
+            generation: generation,
+          ),
+        );
+      }
     } catch (e) {
       if (!_isCurrentJump(requestId, generation)) return;
       _setState(
@@ -335,6 +361,43 @@ class ReaderRuntime extends ChangeNotifier {
     return !_disposed &&
         requestId == _jumpRequestId &&
         generation == state.layoutGeneration;
+  }
+
+  Future<ReaderLocation?> _saveJumpLocationAfterViewportSettled(
+    ReaderLocation location, {
+    required int requestId,
+    required int generation,
+  }) async {
+    return _saveVisibleAnchorAfterViewportSettled(
+      fallbackLocation: location,
+      restoreLocation: location,
+      isCurrent: () => _isCurrentJump(requestId, generation),
+    );
+  }
+
+  Future<ReaderLocation?> _saveVisibleAnchorAfterViewportSettled({
+    required ReaderLocation fallbackLocation,
+    ReaderLocation? restoreLocation,
+    bool Function()? isCurrent,
+  }) async {
+    await Future<void>.delayed(Duration.zero);
+    if (WidgetsBinding.instance.hasScheduledFrame) {
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (_disposed || _restoreInProgress) return null;
+    if (isCurrent != null && !isCurrent()) return null;
+    final restore = _viewportRestore;
+    if (restoreLocation != null && restore != null) {
+      final restored = await restore(restoreLocation);
+      if (_disposed || _restoreInProgress) return null;
+      if (isCurrent != null && !isCurrent()) return null;
+      if (!restored) return null;
+    }
+    final saved = await saveProgress();
+    if (saved != null) return saved;
+    if (_disposed || _restoreInProgress) return null;
+    if (isCurrent != null && !isCurrent()) return null;
+    return _saveProgressLocation(fallbackLocation);
   }
 
   Future<bool> restoreFromLocation(ReaderLocation location) async {
@@ -708,6 +771,10 @@ class ReaderRuntime extends ChangeNotifier {
     TextPage page, {
     ReaderLocation? settledLocation,
   }) {
+    final pageAddress = PageAddress(
+      chapterIndex: page.chapterIndex,
+      pageIndex: page.pageIndex,
+    );
     final location =
         settledLocation ??
         ReaderLocation(
@@ -717,12 +784,34 @@ class ReaderRuntime extends ChangeNotifier {
     _setState(
       state.copyWith(currentSlidePage: page, visibleLocation: location),
     );
-    if (settledLocation == null) {
-      unawaited(saveProgress());
-    } else {
-      unawaited(_saveProgressLocation(location));
-    }
+    unawaited(
+      _saveVisibleAnchorAfterViewportSettled(
+        fallbackLocation: location,
+        isCurrent: () => _isCurrentSlidePage(pageAddress),
+      ),
+    );
     unawaited(_preloadScheduler.scheduleSlidePageSettled(page));
+  }
+
+  bool moveSlidePageAndSettle({
+    required bool forward,
+    ReaderLocation? settledLocation,
+  }) {
+    if (state.mode != ReaderMode.slide) return false;
+    final moved =
+        forward
+            ? moveToNextPage(saveSettledProgress: false)
+            : moveToPrevPage(saveSettledProgress: false);
+    if (!moved) return false;
+    settleCurrentSlidePage(settledLocation: settledLocation);
+    return true;
+  }
+
+  void settleCurrentSlidePage({ReaderLocation? settledLocation}) {
+    if (state.mode != ReaderMode.slide) return;
+    final current = state.pageWindow?.current;
+    if (current == null || current.isPlaceholder) return;
+    handleSlidePageSettled(current, settledLocation: settledLocation);
   }
 
   Future<void> refreshNeighbors() async {
@@ -766,15 +855,12 @@ class ReaderRuntime extends ChangeNotifier {
     return a.chapterIndex == b.chapterIndex && a.pageIndex == b.pageIndex;
   }
 
-  bool _isCurrentPresentationRequest(
-    int requestId,
-    int baseLayoutGeneration,
-    String baseLayoutSignature,
-  ) {
-    return !_disposed &&
-        requestId == _presentationRequestId &&
-        state.layoutGeneration == baseLayoutGeneration &&
-        state.layoutSpec.layoutSignature == baseLayoutSignature;
+  bool _isCurrentSlidePage(PageAddress address) {
+    if (_disposed || state.mode != ReaderMode.slide) return false;
+    final current = state.pageWindow?.current;
+    if (current == null || current.isPlaceholder) return false;
+    return current.chapterIndex == address.chapterIndex &&
+        current.pageIndex == address.pageIndex;
   }
 
   ReaderLocation? _captureVisibleLocation({bool allowDuringRestore = false}) {
@@ -819,7 +905,18 @@ class ReaderRuntime extends ChangeNotifier {
 
   void _saveSettledSlideProgress(ReaderLocation location) {
     if (state.mode != ReaderMode.slide) return;
-    unawaited(_saveProgressLocation(location));
+    final current = state.pageWindow?.current;
+    if (current == null || current.isPlaceholder) return;
+    final pageAddress = PageAddress(
+      chapterIndex: current.chapterIndex,
+      pageIndex: current.pageIndex,
+    );
+    unawaited(
+      _saveVisibleAnchorAfterViewportSettled(
+        fallbackLocation: location,
+        isCurrent: () => _isCurrentSlidePage(pageAddress),
+      ),
+    );
   }
 
   Future<ReaderLocation?> flushProgress() {
@@ -926,6 +1023,10 @@ class ReaderRuntime extends ChangeNotifier {
       return;
     }
 
+    if (state.mode == ReaderMode.slide) {
+      moveSlidePageAndSettle(forward: forward);
+      return;
+    }
     if (forward) {
       moveToNextPage();
     } else {

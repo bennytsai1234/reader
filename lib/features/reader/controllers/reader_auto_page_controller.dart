@@ -57,7 +57,10 @@ class ReaderAutoPageController extends ChangeNotifier {
   }
 
   bool step() {
-    final moved = runtime.moveToNextPage();
+    final moved =
+        runtime.state.mode == ReaderMode.slide
+            ? runtime.moveSlidePageAndSettle(forward: true)
+            : runtime.moveToNextPage();
     if (!moved) stop();
     return moved;
   }
@@ -71,8 +74,17 @@ class ReaderAutoPageController extends ChangeNotifier {
         final scrollBy = _viewportController?.scrollBy;
         if (scrollBy != null) return scrollBy(delta);
       }
+      final moveToNextPage = _viewportController?.moveToNextPage;
+      if (moveToNextPage != null) return moveToNextPage();
+      final moved = runtime.moveToNextPage();
+      if (!moved) stop();
+      return Future<bool>.value(moved);
     }
-    return step();
+    final moveToNextPage = _viewportController?.moveToNextPage;
+    if (moveToNextPage != null) return moveToNextPage();
+    final moved = runtime.moveSlidePageAndSettle(forward: true);
+    if (!moved) stop();
+    return Future<bool>.value(moved);
   }
 
   double _scrollStepDelta() {
