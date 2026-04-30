@@ -403,7 +403,7 @@ void main() {
   });
 
   testWidgets(
-    'scroll viewport defers small drag location updates until settle',
+    'scroll viewport reports small drags through the same live path',
     (tester) async {
       final runtime = _runtime(
         initialMode: ReaderV2Mode.scroll,
@@ -452,12 +452,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
 
       expect(tester.getTopLeft(firstTile).dy, closeTo(startTop - 72, 0.001));
-      expect(notifyCount, 0);
+      expect(notifyCount, greaterThan(0));
 
       await gesture.up();
       await _pumpViewportCommand(tester);
 
-      expect(notifyCount, greaterThan(0));
       expect(tester.getTopLeft(firstTile).dy, closeTo(startTop - 72, 0.001));
       expect(tester.takeException(), isNull);
 

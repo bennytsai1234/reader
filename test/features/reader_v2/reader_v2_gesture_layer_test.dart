@@ -31,7 +31,9 @@ void main() {
     expect(disposeCount, 0);
   });
 
-  testWidgets('jittery tap is still reported as content tap', (tester) async {
+  testWidgets('small pointer movement is not reported as content tap', (
+    tester,
+  ) async {
     var tapCalls = 0;
 
     await tester.pumpWidget(
@@ -50,7 +52,7 @@ void main() {
     await gesture.up();
     await tester.pump();
 
-    expect(tapCalls, 1);
+    expect(tapCalls, 0);
   });
 
   testWidgets('stationary tap is reported as content tap', (tester) async {

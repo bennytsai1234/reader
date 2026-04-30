@@ -49,8 +49,6 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   static const double _overscrollMinDistance = 48.0;
   static const double _overscrollMaxDistance = 96.0;
   static const double _overscrollBaseResistance = 0.45;
-  static const double _dragLiveLocationCaptureViewportFactor = 0.5;
-  static const double _dragLiveLocationCaptureLineFactor = 4.0;
 
   late final AnimationController _scrollAnimation;
   late final AnimationController _overscrollAnimation;
@@ -75,8 +73,6 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   bool _shiftWindowFramePending = false;
   bool _shiftWindowAgainRequested = false;
   bool _dragMovedReadingY = false;
-  bool _dragLiveLocationCaptureEnabled = false;
-  double _dragReadingDistanceSinceStart = 0.0;
   int _animationTickCount = 0;
   Future<void>? _shiftWindowTask;
   Future<void> _viewportCommandTail = Future<void>.value();
@@ -193,8 +189,6 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     _animationTickCount = 0;
     _initialJumpCompleted = false;
     _dragMovedReadingY = false;
-    _dragLiveLocationCaptureEnabled = false;
-    _dragReadingDistanceSinceStart = 0.0;
   }
 
   void _onRuntimeChanged() {
@@ -527,12 +521,8 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     }
 
     _setOverscrollY(0.0);
-    final before = _readingY;
-    final moved = _applyReadingDelta(-next, captureVisibleLocation: false);
+    final moved = _applyReadingDelta(-next);
     _dragMovedReadingY = _dragMovedReadingY || moved;
-    if (moved) {
-      _maybeScheduleDragVisibleLocationCapture((_readingY - before).abs());
-    }
   }
 
   Future<void> _settleOverscroll({required bool saveProgress}) async {
@@ -564,29 +554,6 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
       if (!mounted) return;
       _captureAndReportVisibleLocation();
     });
-  }
-
-  double _dragLiveLocationCaptureThreshold() {
-    final lineDistance =
-        widget.style.fontSize *
-        widget.style.effectiveLineHeight *
-        _dragLiveLocationCaptureLineFactor;
-    final viewportDistance =
-        _viewportHeight() * _dragLiveLocationCaptureViewportFactor;
-    return math.max(lineDistance, viewportDistance);
-  }
-
-  void _maybeScheduleDragVisibleLocationCapture(double movedDistance) {
-    if (movedDistance <= 0) return;
-    _dragReadingDistanceSinceStart += movedDistance;
-    if (!_dragLiveLocationCaptureEnabled) {
-      if (_dragReadingDistanceSinceStart <
-          _dragLiveLocationCaptureThreshold()) {
-        return;
-      }
-      _dragLiveLocationCaptureEnabled = true;
-    }
-    _scheduleVisibleLocationCapture();
   }
 
   void _scheduleWindowShiftForAnchor() {
@@ -716,8 +683,6 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     _overscrollAnimation.stop();
     _animationTickCount = 0;
     _dragMovedReadingY = false;
-    _dragLiveLocationCaptureEnabled = false;
-    _dragReadingDistanceSinceStart = 0.0;
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
@@ -730,16 +695,11 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
 
     final readingDelta = -fingerDeltaY;
     final atBookBoundary = _isAtBookBoundaryForDelta(readingDelta);
-    final before = _readingY;
     final moved = _applyReadingDelta(
       readingDelta,
       scheduleShift: !atBookBoundary,
-      captureVisibleLocation: false,
     );
     _dragMovedReadingY = _dragMovedReadingY || moved;
-    if (moved) {
-      _maybeScheduleDragVisibleLocationCapture((_readingY - before).abs());
-    }
     if (!moved && atBookBoundary) {
       _applyOverscrollDragDelta(fingerDeltaY);
     }

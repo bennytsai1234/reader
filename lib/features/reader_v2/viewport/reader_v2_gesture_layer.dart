@@ -17,12 +17,8 @@ class ReaderV2GestureLayer extends StatefulWidget {
 }
 
 class _ReaderV2GestureLayerState extends State<ReaderV2GestureLayer> {
-  static const double _tapSlop = 18.0;
-  static const double _tapSlopSquared = _tapSlop * _tapSlop;
-
   int? _pointer;
-  Offset? _downLocalPosition;
-  bool _movedBeyondTapSlop = false;
+  bool _moved = false;
 
   void _handlePointerDown(PointerDownEvent event) {
     if (!widget.gesturesEnabled || widget.onTapUp == null) return;
@@ -31,21 +27,17 @@ class _ReaderV2GestureLayerState extends State<ReaderV2GestureLayer> {
       return;
     }
     _pointer = event.pointer;
-    _downLocalPosition = event.localPosition;
-    _movedBeyondTapSlop = false;
+    _moved = false;
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
-    if (event.pointer != _pointer || _downLocalPosition == null) return;
-    final delta = event.localPosition - _downLocalPosition!;
-    if (delta.distanceSquared > _tapSlopSquared) {
-      _movedBeyondTapSlop = true;
-    }
+    if (event.pointer != _pointer) return;
+    _moved = true;
   }
 
   void _handlePointerUp(PointerUpEvent event) {
     if (event.pointer != _pointer) return;
-    final shouldTap = !_movedBeyondTapSlop;
+    final shouldTap = !_moved;
     _resetTracking();
     if (!shouldTap || !widget.gesturesEnabled) return;
     widget.onTapUp?.call(
@@ -65,8 +57,7 @@ class _ReaderV2GestureLayerState extends State<ReaderV2GestureLayer> {
 
   void _resetTracking() {
     _pointer = null;
-    _downLocalPosition = null;
-    _movedBeyondTapSlop = false;
+    _moved = false;
   }
 
   @override
