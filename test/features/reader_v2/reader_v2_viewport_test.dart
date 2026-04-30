@@ -241,6 +241,167 @@ void main() {
     runtime.dispose();
   });
 
+  testWidgets('scroll viewport rubber-bands when dragged beyond book start', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.scroll,
+      chapterCount: 2,
+      paragraphsPerChapter: 80,
+    );
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: ScrollReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            controller: ReaderV2ViewportController(),
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    final firstTile = find.byType(ReaderV2TileLayer).first;
+    expect(tester.getTopLeft(firstTile).dy, closeTo(0, 0.001));
+    final locationBeforeDrag = runtime.state.visibleLocation;
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(ScrollReaderV2Viewport)),
+    );
+    await gesture.moveBy(const Offset(0, 160));
+    await tester.pump();
+
+    expect(tester.getTopLeft(firstTile).dy, greaterThan(0));
+
+    await gesture.up();
+    await _pumpViewportCommand(tester);
+
+    expect(tester.getTopLeft(firstTile).dy, closeTo(0, 0.001));
+    expect(runtime.state.visibleLocation, locationBeforeDrag);
+    expect(runtime.captureVisibleLocation()?.chapterIndex, 0);
+    expect(tester.takeException(), isNull);
+
+    runtime.dispose();
+  });
+
+  testWidgets('scroll viewport rubber-bands when dragged beyond book end', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.scroll,
+      chapterCount: 1,
+      paragraphsPerChapter: 80,
+    );
+    final controller = ReaderV2ViewportController();
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: ScrollReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            controller: controller,
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    expect(await controller.scrollBy!(100000), isTrue);
+    await _pumpViewport(tester);
+
+    final firstVisibleTile = find.byType(ReaderV2TileLayer).first;
+    final bottomTileTop = tester.getTopLeft(firstVisibleTile).dy;
+    final locationBeforeDrag = runtime.state.visibleLocation;
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(ScrollReaderV2Viewport)),
+    );
+    await gesture.moveBy(const Offset(0, -160));
+    await tester.pump();
+
+    expect(tester.getTopLeft(firstVisibleTile).dy, lessThan(bottomTileTop));
+
+    await gesture.up();
+    await _pumpViewportCommand(tester);
+
+    expect(
+      tester.getTopLeft(firstVisibleTile).dy,
+      closeTo(bottomTileTop, 0.001),
+    );
+    expect(runtime.state.visibleLocation, locationBeforeDrag);
+    expect(tester.takeException(), isNull);
+
+    runtime.dispose();
+  });
+
+  testWidgets('scroll viewport moves continuously from book start', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.scroll,
+      chapterCount: 2,
+      paragraphsPerChapter: 80,
+    );
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: ScrollReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            controller: ReaderV2ViewportController(),
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    final firstTile = find.byType(ReaderV2TileLayer).first;
+    expect(tester.getTopLeft(firstTile).dy, closeTo(0, 0.001));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(ScrollReaderV2Viewport)),
+    );
+    await gesture.moveBy(const Offset(0, -160));
+    await tester.pump();
+
+    expect(tester.getTopLeft(firstTile).dy, closeTo(-160, 0.001));
+
+    await gesture.up();
+    await _pumpViewportCommand(tester);
+
+    expect(tester.takeException(), isNull);
+
+    runtime.dispose();
+  });
+
   testWidgets('scroll viewport survives a fast multi-page jump', (
     tester,
   ) async {

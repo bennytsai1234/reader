@@ -42,11 +42,16 @@ class ScrollReaderV2Viewport extends StatefulWidget {
 }
 
 class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const double _maxFlingVelocity = 5000.0;
   static const int _animationShiftThrottleEveryTicks = 2;
+  static const double _overscrollMaxViewportFactor = 0.18;
+  static const double _overscrollMinDistance = 48.0;
+  static const double _overscrollMaxDistance = 96.0;
+  static const double _overscrollBaseResistance = 0.45;
 
   late final AnimationController _scrollAnimation;
+  late final AnimationController _overscrollAnimation;
   late ReaderV2ChapterPageCacheManager _cacheManager;
   late ReaderV2VisiblePageCalculator _visiblePages;
   final ReaderV2InfiniteSegmentStrip _strip = ReaderV2InfiniteSegmentStrip();
@@ -67,6 +72,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   bool _visibleLocationCaptureFramePending = false;
   bool _shiftWindowFramePending = false;
   bool _shiftWindowAgainRequested = false;
+  bool _dragMovedReadingY = false;
   int _animationTickCount = 0;
   Future<void>? _shiftWindowTask;
   Future<void> _viewportCommandTail = Future<void>.value();
@@ -77,6 +83,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     _configureViewportModel();
     _scrollAnimation = AnimationController.unbounded(vsync: this)
       ..addListener(_handleScrollAnimationTick);
+    _overscrollAnimation = AnimationController.unbounded(vsync: this);
     _lastLayoutGeneration = widget.runtime.state.layoutGeneration;
     _lastReportedLocation = widget.runtime.state.visibleLocation;
     widget.runtime.addListener(_onRuntimeChanged);
@@ -146,6 +153,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     _scrollAnimation
       ..removeListener(_handleScrollAnimationTick)
       ..dispose();
+    _overscrollAnimation.dispose();
     _scrollOffset.dispose();
     super.dispose();
   }
@@ -176,9 +184,11 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     _lastSyncedLocation = null;
     _currentChapterIndex = null;
     _setReadingY(0.0);
+    _setOverscrollY(0.0);
     _lastAnimationValue = 0.0;
     _animationTickCount = 0;
     _initialJumpCompleted = false;
+    _dragMovedReadingY = false;
   }
 
   void _onRuntimeChanged() {
@@ -218,6 +228,13 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
 
   double _anchorOffsetInViewport() =>
       widget.runtime.state.layoutSpec.anchorOffsetInViewport;
+
+  ({double min, double max})? _scrollBounds() {
+    return _strip.scrollBounds(
+      viewportHeight: _viewportHeight(),
+      anchorOffset: _anchorOffsetInViewport(),
+    );
+  }
 
   // Vertical padding belongs to the viewport/chapter edge in scroll mode, not
   // every paginated tile boundary.
@@ -372,10 +389,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   }
 
   double _clampReadingY(double target) {
-    final bounds = _strip.scrollBounds(
-      viewportHeight: _viewportHeight(),
-      anchorOffset: _anchorOffsetInViewport(),
-    );
+    final bounds = _scrollBounds();
     if (bounds == null) return target;
     return target.clamp(bounds.min, bounds.max).toDouble();
   }
@@ -408,6 +422,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     if (!stillCurrent()) return false;
     final target = _readingYForLocation(location);
     if (target == null) return false;
+    _setOverscrollY(0.0);
     _setReadingY(_clampReadingY(target));
     _initialJumpCompleted = true;
     _lastSyncedLocation = location;
@@ -452,6 +467,83 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     if (_scrollOffset.value != value) {
       _scrollOffset.value = value;
     }
+  }
+
+  double get _overscrollY => _overscrollAnimation.value;
+
+  double _maxOverscrollDistance() {
+    final viewport = _viewportHeight();
+    return (viewport * _overscrollMaxViewportFactor)
+        .clamp(_overscrollMinDistance, _overscrollMaxDistance)
+        .toDouble();
+  }
+
+  double _overscrollResistance() {
+    final maxDistance = _maxOverscrollDistance();
+    final remaining = 1.0 - (_overscrollY.abs() / maxDistance).clamp(0.0, 1.0);
+    return _overscrollBaseResistance * remaining.clamp(0.25, 1.0);
+  }
+
+  void _setOverscrollY(double value) {
+    final maxDistance = _maxOverscrollDistance();
+    final next = value.clamp(-maxDistance, maxDistance).toDouble();
+    if ((_overscrollAnimation.value - next).abs() < 0.01) return;
+    _overscrollAnimation.value = next;
+  }
+
+  bool _isAtBookBoundaryForDelta(double readingDelta) {
+    final bounds = _scrollBounds();
+    if (bounds == null || widget.runtime.chapterCount <= 0) return false;
+    const tolerance = 0.5;
+    if (readingDelta < 0) {
+      return _strip.containsChapter(0) && _readingY <= bounds.min + tolerance;
+    }
+    if (readingDelta > 0) {
+      final lastChapterIndex = widget.runtime.chapterCount - 1;
+      return _strip.containsChapter(lastChapterIndex) &&
+          _readingY >= bounds.max - tolerance;
+    }
+    return false;
+  }
+
+  void _applyOverscrollDragDelta(double fingerDeltaY) {
+    if (fingerDeltaY == 0) return;
+    final current = _overscrollY;
+    if (current == 0 || current.sign == fingerDeltaY.sign) {
+      _setOverscrollY(current + fingerDeltaY * _overscrollResistance());
+      return;
+    }
+
+    final next = current + fingerDeltaY;
+    if (next != 0 && next.sign == current.sign) {
+      _setOverscrollY(next);
+      return;
+    }
+
+    _setOverscrollY(0.0);
+    final moved = _applyReadingDelta(-next);
+    _dragMovedReadingY = _dragMovedReadingY || moved;
+  }
+
+  Future<void> _settleOverscroll({required bool saveProgress}) async {
+    if (_overscrollY.abs() < 0.5) {
+      _setOverscrollY(0.0);
+      if (saveProgress) await _handleScrollSettled();
+      return;
+    }
+    try {
+      await _overscrollAnimation
+          .animateTo(
+            0.0,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+          )
+          .orCancel;
+    } on TickerCanceled {
+      if (!mounted) return;
+    }
+    if (!mounted) return;
+    if (saveProgress) await _handleScrollSettled();
   }
 
   void _scheduleVisibleLocationCapture() {
@@ -584,15 +676,40 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   void _handleDragStart(DragStartDetails details) {
     _isDragging = true;
     _scrollAnimation.stop();
+    _overscrollAnimation.stop();
     _animationTickCount = 0;
+    _dragMovedReadingY = false;
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    _applyReadingDelta(-details.delta.dy);
+    _overscrollAnimation.stop();
+    final fingerDeltaY = details.delta.dy;
+    if (_overscrollY.abs() >= 0.5) {
+      _applyOverscrollDragDelta(fingerDeltaY);
+      return;
+    }
+
+    final readingDelta = -fingerDeltaY;
+    final atBookBoundary = _isAtBookBoundaryForDelta(readingDelta);
+    final moved = _applyReadingDelta(
+      readingDelta,
+      scheduleShift: !atBookBoundary,
+    );
+    _dragMovedReadingY = _dragMovedReadingY || moved;
+    if (!moved && atBookBoundary) {
+      _applyOverscrollDragDelta(fingerDeltaY);
+    }
   }
 
   void _handleDragEnd(DragEndDetails details) {
     _isDragging = false;
+    if (_overscrollY.abs() >= 0.5) {
+      final saveProgress = _dragMovedReadingY;
+      _dragMovedReadingY = false;
+      unawaited(_settleOverscroll(saveProgress: saveProgress));
+      return;
+    }
+    _dragMovedReadingY = false;
     final velocity = -(details.primaryVelocity ?? 0.0);
     if (velocity.abs() < 50) {
       unawaited(_handleScrollSettled());
@@ -603,6 +720,13 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
 
   void _handleDragCancel() {
     _isDragging = false;
+    if (_overscrollY.abs() >= 0.5) {
+      final saveProgress = _dragMovedReadingY;
+      _dragMovedReadingY = false;
+      unawaited(_settleOverscroll(saveProgress: saveProgress));
+      return;
+    }
+    _dragMovedReadingY = false;
     unawaited(_handleScrollSettled());
   }
 
@@ -640,6 +764,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   Future<bool> _scrollByNow(double delta) async {
     if (!mounted || delta == 0 || !_visiblePages.hasPages) return false;
     _scrollAnimation.stop();
+    _setOverscrollY(0.0);
     _isDragging = false;
     final moved = _applyReadingDelta(delta, scheduleShift: false);
     if (!moved) return false;
@@ -755,6 +880,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     final clampedTarget = _clampReadingY(target);
     if ((clampedTarget - start).abs() < 0.01) return false;
     _scrollAnimation.stop();
+    _setOverscrollY(0.0);
     _isDragging = false;
     _scrollAnimation.value = _readingY;
     _lastAnimationValue = _readingY;
@@ -907,9 +1033,15 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
           child: ValueListenableBuilder<double>(
             valueListenable: _scrollOffset,
             builder: (context, readingY, _) {
-              return _buildVisiblePageStack(
-                readingY: readingY,
-                viewportHeight: viewportHeight,
+              return AnimatedBuilder(
+                animation: _overscrollAnimation,
+                builder: (context, _) {
+                  return _buildVisiblePageStack(
+                    readingY: readingY,
+                    viewportHeight: viewportHeight,
+                    overscrollY: _overscrollY,
+                  );
+                },
               );
             },
           ),
@@ -976,6 +1108,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   Widget _buildVisiblePageStack({
     required double readingY,
     required double viewportHeight,
+    required double overscrollY,
   }) {
     final children = <Widget>[];
     final renderStyle = _scrollRenderStyle();
@@ -983,7 +1116,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
       readingY: readingY,
       viewportHeight: viewportHeight,
     )) {
-      final screenY = placement.screenY(readingY);
+      final screenY = placement.screenY(readingY) + overscrollY;
       final pageHeight = placement.extent;
       children.add(
         Positioned(
