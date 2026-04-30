@@ -4,6 +4,7 @@ import 'dart:ui' show FrameTiming;
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_style.dart';
 import 'package:inkpage_reader/features/reader_v2/features/tts/reader_v2_tts_highlight.dart';
+import 'package:inkpage_reader/features/reader_v2/viewport/reader_v2_gesture_layer.dart';
 import 'package:inkpage_reader/features/reader_v2/viewport/reader_v2_viewport_controller.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_runtime.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_state.dart';
@@ -95,25 +96,28 @@ class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
   @override
   Widget build(BuildContext context) {
     final state = widget.runtime.state;
-    if (state.mode == ReaderV2Mode.scroll) {
-      return ScrollReaderV2Viewport(
-        runtime: widget.runtime,
-        backgroundColor: widget.backgroundColor,
-        textColor: widget.textColor,
-        style: widget.style,
-        onTapUp: widget.onContentTapUp,
-        controller: widget.viewportController,
-        ttsHighlight: widget.ttsHighlight,
-      );
-    }
-    return SlideReaderV2Viewport(
-      runtime: widget.runtime,
-      backgroundColor: widget.backgroundColor,
-      textColor: widget.textColor,
-      style: widget.style,
+    final viewport =
+        state.mode == ReaderV2Mode.scroll
+            ? ScrollReaderV2Viewport(
+              runtime: widget.runtime,
+              backgroundColor: widget.backgroundColor,
+              textColor: widget.textColor,
+              style: widget.style,
+              controller: widget.viewportController,
+              ttsHighlight: widget.ttsHighlight,
+            )
+            : SlideReaderV2Viewport(
+              runtime: widget.runtime,
+              backgroundColor: widget.backgroundColor,
+              textColor: widget.textColor,
+              style: widget.style,
+              controller: widget.viewportController,
+              ttsHighlight: widget.ttsHighlight,
+            );
+    return ReaderV2GestureLayer(
       onTapUp: widget.onContentTapUp,
-      controller: widget.viewportController,
-      ttsHighlight: widget.ttsHighlight,
+      gesturesEnabled: widget.onContentTapUp != null,
+      child: viewport,
     );
   }
 }

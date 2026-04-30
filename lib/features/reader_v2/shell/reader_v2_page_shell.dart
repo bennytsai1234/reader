@@ -110,7 +110,11 @@ class ReaderV2PageShell extends StatelessWidget {
                   left: 0,
                   right: 0,
                   height: permanentInfoExtent,
-                  child: IgnorePointer(child: _PermanentInfoBar(shell: this)),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (_) => onToggleControls(),
+                    child: _PermanentInfoBar(shell: this),
+                  ),
                 ),
               if (controlsVisible)
                 Positioned.fill(
