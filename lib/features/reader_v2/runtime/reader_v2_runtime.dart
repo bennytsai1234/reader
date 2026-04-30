@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/widgets.dart';
 import 'package:inkpage_reader/core/models/book.dart';
@@ -11,6 +12,7 @@ import 'package:inkpage_reader/features/reader_v2/render/reader_v2_render_page.d
 
 import 'reader_v2_location.dart';
 import 'reader_v2_page_window.dart';
+import 'reader_v2_performance_metrics.dart';
 import 'reader_v2_preload_scheduler.dart';
 import 'reader_v2_progress_controller.dart';
 import 'reader_v2_resolver.dart';
@@ -71,6 +73,7 @@ class ReaderV2Runtime extends ChangeNotifier {
          layoutGeneration: 0,
        ) {
     _preloadScheduler = ReaderV2PreloadScheduler(resolver: _resolver);
+    _attachPerformanceLayoutObserver();
   }
 
   final ReaderV2ChapterRepository _repository;
@@ -78,10 +81,14 @@ class ReaderV2Runtime extends ChangeNotifier {
   final ReaderV2Location _initialLocation;
   final ReaderV2Resolver _resolver;
   late final ReaderV2PreloadScheduler _preloadScheduler;
+  final ReaderV2PerformanceMetricsRecorder _performanceMetrics =
+      ReaderV2PerformanceMetricsRecorder();
   ReaderV2State state;
 
   bool _disposed = false;
   bool _restoreInProgress = false;
+  ReaderV2LayoutStatsObserver? _previousLayoutStatsObserver;
+  ReaderV2LayoutStatsObserver? _performanceLayoutStatsObserver;
   Object? _visibleLocationCaptureOwner;
   ReaderV2VisibleLocationCapture? _visibleLocationCapture;
   Object? _viewportRestoreOwner;
@@ -93,12 +100,54 @@ class ReaderV2Runtime extends ChangeNotifier {
   String? _pendingUserNotice;
 
   ReaderV2Resolver get debugResolver => _resolver;
+  ReaderV2PerformanceSnapshot get performanceSnapshot =>
+      _performanceMetrics.snapshot();
+  String get performanceProfilingSignal =>
+      performanceSnapshot.toProfilingSignal();
   int get chapterCount => _repository.chapterCount;
   List<BookChapter> get chapters => _repository.chapters;
 
   BookChapter? chapterAt(int index) => _repository.chapterAt(index);
   String titleFor(int index) => _repository.titleFor(index);
   String chapterUrlAt(int index) => chapterAt(index)?.url ?? '';
+
+  void clearPerformanceMetrics() {
+    if (_disposed) return;
+    _performanceMetrics.clear();
+  }
+
+  void recordFrameTimings(List<FrameTiming> timings) {
+    if (_disposed || timings.isEmpty) return;
+    _performanceMetrics.recordFrameTimings(timings);
+  }
+
+  void debugRecordFrameSample({
+    required double totalMs,
+    required double buildMs,
+    required double rasterMs,
+  }) {
+    if (_disposed) return;
+    _performanceMetrics.recordFrameSample(
+      totalMs: totalMs,
+      buildMs: buildMs,
+      rasterMs: rasterMs,
+    );
+  }
+
+  void recordFullScreenLoadingSample() {
+    if (_disposed) return;
+    _performanceMetrics.recordFullScreenLoadingSample();
+  }
+
+  void recordOverlayLoadingSample() {
+    if (_disposed) return;
+    _performanceMetrics.recordOverlayLoadingSample();
+  }
+
+  void recordSlidePlaceholderExposure(int placeholderCount) {
+    if (_disposed || placeholderCount <= 0) return;
+    _performanceMetrics.recordSlidePlaceholderExposure(placeholderCount);
+  }
 
   void registerVisibleLocationCapture(
     Object owner,
@@ -1034,9 +1083,30 @@ class ReaderV2Runtime extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _attachPerformanceLayoutObserver() {
+    _previousLayoutStatsObserver = ReaderV2LayoutEngine.debugOnStats;
+    _performanceLayoutStatsObserver = (stats) {
+      _performanceMetrics.recordLayoutStats(stats);
+      _previousLayoutStatsObserver?.call(stats);
+    };
+    ReaderV2LayoutEngine.debugOnStats = _performanceLayoutStatsObserver;
+  }
+
+  void _detachPerformanceLayoutObserver() {
+    if (identical(
+      ReaderV2LayoutEngine.debugOnStats,
+      _performanceLayoutStatsObserver,
+    )) {
+      ReaderV2LayoutEngine.debugOnStats = _previousLayoutStatsObserver;
+    }
+    _performanceLayoutStatsObserver = null;
+    _previousLayoutStatsObserver = null;
+  }
+
   @override
   void dispose() {
     _disposed = true;
+    _detachPerformanceLayoutObserver();
     _preloadScheduler.dispose();
     _progressController.dispose();
     super.dispose();

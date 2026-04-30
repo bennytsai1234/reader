@@ -669,6 +669,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     final state = widget.runtime.state;
     final window = state.pageWindow;
     if (state.phase != ReaderV2Phase.ready || window == null) {
+      widget.runtime.recordFullScreenLoadingSample();
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapUp: widget.onTapUp,
@@ -683,6 +684,10 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
         ),
       );
     }
+
+    widget.runtime.recordSlidePlaceholderExposure(
+      _placeholderExposureCount(window),
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -797,5 +802,13 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
         );
       },
     );
+  }
+
+  int _placeholderExposureCount(ReaderV2PageWindow window) {
+    var count = 0;
+    if (window.prev?.isPlaceholder == true) count += 1;
+    if (window.current.isPlaceholder) count += 1;
+    if (window.next?.isPlaceholder == true) count += 1;
+    return count;
   }
 }

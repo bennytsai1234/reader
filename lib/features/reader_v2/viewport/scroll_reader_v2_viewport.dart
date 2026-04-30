@@ -770,6 +770,9 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   }
 
   Widget _buildLoadingState(ReaderV2State state) {
+    if (state.phase != ReaderV2Phase.error) {
+      widget.runtime.recordFullScreenLoadingSample();
+    }
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapUp: widget.onTapUp,
@@ -818,6 +821,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   }
 
   Widget _buildCanvasWithLoadingOverlay() {
+    widget.runtime.recordOverlayLoadingSample();
     return Stack(
       fit: StackFit.expand,
       children: [

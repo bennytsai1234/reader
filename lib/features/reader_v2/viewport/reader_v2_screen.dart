@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_style.dart';
@@ -44,6 +45,7 @@ class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addTimingsCallback(_handleFrameTimings);
     _lastMode = widget.runtime.state.mode;
     widget.runtime.addListener(_handleRuntimeChanged);
   }
@@ -61,6 +63,7 @@ class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    WidgetsBinding.instance.removeTimingsCallback(_handleFrameTimings);
     widget.runtime.removeListener(_handleRuntimeChanged);
     super.dispose();
   }
@@ -83,6 +86,11 @@ class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
       _lastMode = currentMode;
       setState(() {});
     }
+  }
+
+  void _handleFrameTimings(List<FrameTiming> timings) {
+    if (!mounted || timings.isEmpty) return;
+    widget.runtime.recordFrameTimings(timings);
   }
 
   @override

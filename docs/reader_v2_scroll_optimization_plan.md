@@ -132,4 +132,6 @@
 - [x] P1-1 速度感知方向預載（依 fling 速度擴大章節跨度）
 - [x] P1-2 Cache soft-retain（LRU/hysteresis）降低邊界來回 thrash
 - [x] P1-3 ChapterView 查找熱路徑改二分索引
+- [x] P2-1 Runtime/Viewport 指標串接（frame/layout/loading/placeholder）
+- [x] P2-2 回歸測試補齊（runtime metrics 與 slide placeholder/loading）
 - [x] 測試與驗證

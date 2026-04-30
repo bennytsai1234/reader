@@ -14,6 +14,7 @@ import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_layout_spec.d
 import 'package:inkpage_reader/features/reader_v2/render/reader_v2_render_page.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_chapter_view.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_location.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_performance_metrics.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_progress_controller.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_resolver.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_runtime.dart';
@@ -268,6 +269,44 @@ void main() {
           reason: 'line y=$localY',
         );
       }
+
+      runtime.dispose();
+    });
+
+    test('collects and clears performance metrics snapshot', () async {
+      final runtime = _runtime(initialMode: ReaderV2Mode.scroll);
+      await runtime.jumpToLocation(
+        const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+        immediateSave: false,
+      );
+
+      runtime.debugRecordFrameSample(totalMs: 18, buildMs: 7, rasterMs: 6);
+      runtime.debugRecordFrameSample(totalMs: 12, buildMs: 5, rasterMs: 4);
+      runtime.recordFullScreenLoadingSample();
+      runtime.recordOverlayLoadingSample();
+      runtime.recordSlidePlaceholderExposure(2);
+      runtime.recordSlidePlaceholderExposure(1);
+
+      final snapshot = runtime.performanceSnapshot;
+      expect(snapshot, isA<ReaderV2PerformanceSnapshot>());
+      expect(snapshot.layoutSampleCount, greaterThan(0));
+      expect(snapshot.frameSampleCount, 2);
+      expect(snapshot.worstFrameTotalMs, closeTo(18, 0.001));
+      expect(snapshot.jankyFrameCount, 1);
+      expect(snapshot.fullScreenLoadingSampleCount, 1);
+      expect(snapshot.overlayLoadingSampleCount, 1);
+      expect(snapshot.slidePlaceholderSampleCount, 2);
+      expect(snapshot.slidePlaceholderExposureCount, 3);
+      expect(runtime.performanceProfilingSignal, contains('frame('));
+
+      runtime.clearPerformanceMetrics();
+      final cleared = runtime.performanceSnapshot;
+      expect(cleared.frameSampleCount, 0);
+      expect(cleared.layoutSampleCount, 0);
+      expect(cleared.fullScreenLoadingSampleCount, 0);
+      expect(cleared.overlayLoadingSampleCount, 0);
+      expect(cleared.slidePlaceholderSampleCount, 0);
+      expect(cleared.slidePlaceholderExposureCount, 0);
 
       runtime.dispose();
     });

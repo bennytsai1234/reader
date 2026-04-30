@@ -282,6 +282,78 @@ void main() {
     runtime.dispose();
   });
 
+  testWidgets('slide viewport records full-screen loading samples', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.slide,
+      chapterCount: 2,
+      paragraphsPerChapter: 6,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: SlideReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            controller: ReaderV2ViewportController(),
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    final snapshot = runtime.performanceSnapshot;
+    expect(snapshot.fullScreenLoadingSampleCount, greaterThan(0));
+
+    runtime.dispose();
+  });
+
+  testWidgets('slide viewport records placeholder exposure samples', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.slide,
+      chapterCount: 2,
+      paragraphsPerChapter: 1,
+      failingChapters: <int>{1},
+    );
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+    runtime.clearPerformanceMetrics();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: SlideReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            controller: ReaderV2ViewportController(),
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    expect(runtime.state.pageWindow?.next?.isPlaceholder, isTrue);
+    final snapshot = runtime.performanceSnapshot;
+    expect(snapshot.slidePlaceholderSampleCount, greaterThan(0));
+    expect(snapshot.slidePlaceholderExposureCount, greaterThan(0));
+
+    runtime.dispose();
+  });
+
   testWidgets('slide viewport shows placeholders at book edges', (
     tester,
   ) async {
