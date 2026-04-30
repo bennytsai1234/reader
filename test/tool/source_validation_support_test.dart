@@ -57,6 +57,19 @@ void main() {
         isTrue,
       );
       expect(
+        isLikelyLockedChapter(
+          BookChapter(title: '普通章节', url: '/2', isVip: true, isPay: true),
+        ),
+        isFalse,
+      );
+      expect(
+        firstLikelyLockedChapter([
+          BookChapter(title: '普通章节', url: '/1'),
+          BookChapter(title: '第2章 VIP 鎖章', url: '/2'),
+        ])?.title,
+        '第2章 VIP 鎖章',
+      );
+      expect(
         isLikelyLockedChapter(BookChapter(title: '普通章节', url: '/3')),
         isFalse,
       );
@@ -322,6 +335,22 @@ void main() {
         StateError('書源需要登入後使用'),
         source: source,
         stage: 'search',
+      );
+
+      expect(result.outcome, SourceValidationOutcome.skip);
+      expect(result.category, 'login-required-source');
+    });
+
+    test('classification skips locked or vip chapter markers', () {
+      final source = BookSource(
+        bookSourceUrl: 'https://example.com',
+        bookSourceName: 'VIP 鎖章源',
+      );
+
+      final result = classifyValidationFailure(
+        StateError('章節疑似 VIP/鎖章，需要登入或付費: 第2章'),
+        source: source,
+        stage: 'toc',
       );
 
       expect(result.outcome, SourceValidationOutcome.skip);

@@ -35,6 +35,7 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
   Book? hydratedBook;
   List<BookChapter> chapters = [];
   String content = '';
+  final Map<String, String> contentByChapterUrl = {};
   Exception? contentError;
   Duration searchDelay = Duration.zero;
   bool completeSearchWhenCancelled = false;
@@ -44,6 +45,7 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
   Book? chapterRequestBook;
   Book? contentRequestBook;
   BookChapter? contentRequestChapter;
+  final List<BookChapter> contentRequestChapters = [];
   String? capturedNextChapterUrl;
   String? capturedExploreUrl;
   int infoRequestCount = 0;
@@ -122,9 +124,10 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
     contentRequestCount++;
     contentRequestBook = book;
     contentRequestChapter = chapter;
+    contentRequestChapters.add(chapter);
     capturedNextChapterUrl = nextChapterUrl;
     capturedContentPageConcurrency = pageConcurrency;
-    return content;
+    return contentByChapterUrl[chapter.url] ?? content;
   }
 
   @override
@@ -356,6 +359,186 @@ void main() {
     expect(service.progressOf(source.bookSourceUrl)?.message, contains('需要登入'));
     expect(service.progressOf(source.bookSourceUrl)?.hasIssue, isTrue);
   });
+
+  test(
+    'vip locked chapters are cleanup candidates without content fetch',
+    () async {
+      final source = BookSource(
+        bookSourceUrl: 'source://vip-lock',
+        bookSourceName: 'VIP 鎖章源',
+        searchUrl: '/search?key={{key}}',
+      );
+
+      final fakeDao =
+          _FakeBookSourceDao()..store[source.bookSourceUrl] = source;
+      final fakeService =
+          _FakeBookSourceService()
+            ..searchResults = [
+              SearchBook(
+                bookUrl: 'https://example.com/book/vip',
+                name: '測試書',
+                author: '作者甲',
+                origin: source.bookSourceUrl,
+                originName: source.bookSourceName,
+              ),
+            ]
+            ..hydratedBook = Book(
+              bookUrl: 'https://example.com/book/vip',
+              tocUrl: 'https://example.com/book/vip/catalog',
+              origin: source.bookSourceUrl,
+              originName: source.bookSourceName,
+              name: '測試書',
+              author: '作者甲',
+            )
+            ..chapters = [
+              BookChapter(
+                title: '第1章 VIP 鎖章',
+                url: 'https://example.com/book/vip/1.html',
+                bookUrl: 'https://example.com/book/vip',
+                isVip: true,
+                isPay: false,
+              ),
+            ]
+            ..content = '這段內容不應該被讀取。';
+
+      final service = CheckSourceService(
+        service: fakeService,
+        sourceDao: fakeDao,
+        eventBus: AppEventBus(),
+      );
+
+      final report = await service.check([source.bookSourceUrl]);
+
+      final saved = fakeDao.store[source.bookSourceUrl]!;
+      expect(saved.runtimeHealth.category, SourceHealthCategory.loginRequired);
+      expect(saved.isCleanupCandidate, isTrue);
+      expect(report.cleanupCandidateUrls, [source.bookSourceUrl]);
+      expect(fakeService.contentRequestCount, 0);
+      expect(saved.bookSourceComment, contains('VIP/鎖章'));
+    },
+  );
+
+  test(
+    'content check probes another chapter before marking source broken',
+    () async {
+      final source = BookSource(
+        bookSourceUrl: 'source://content-probe',
+        bookSourceName: '正文補測源',
+        searchUrl: '/search?key={{key}}',
+      );
+
+      final fakeDao =
+          _FakeBookSourceDao()..store[source.bookSourceUrl] = source;
+      final fakeService =
+          _FakeBookSourceService()
+            ..searchResults = [
+              SearchBook(
+                bookUrl: 'https://example.com/book/probe',
+                name: '測試書',
+                author: '作者甲',
+                origin: source.bookSourceUrl,
+                originName: source.bookSourceName,
+              ),
+            ]
+            ..hydratedBook = Book(
+              bookUrl: 'https://example.com/book/probe',
+              tocUrl: 'https://example.com/book/probe/catalog',
+              origin: source.bookSourceUrl,
+              originName: source.bookSourceName,
+              name: '測試書',
+              author: '作者甲',
+            )
+            ..chapters = [
+              BookChapter(
+                title: '第1章 空短',
+                url: 'https://example.com/book/probe/1.html',
+                bookUrl: 'https://example.com/book/probe',
+              ),
+              BookChapter(
+                title: '第2章 正常',
+                url: 'https://example.com/book/probe/2.html',
+                bookUrl: 'https://example.com/book/probe',
+              ),
+            ];
+      fakeService.contentByChapterUrl.addAll({
+        'https://example.com/book/probe/1.html': '太短',
+        'https://example.com/book/probe/2.html': '這是一段足夠長的正文內容，肯定超過十個字。',
+      });
+
+      final service = CheckSourceService(
+        service: fakeService,
+        sourceDao: fakeDao,
+        eventBus: AppEventBus(),
+      );
+
+      await service.check([source.bookSourceUrl]);
+
+      expect(
+        fakeService.contentRequestChapters.map((chapter) => chapter.title),
+        ['第1章 空短', '第2章 正常'],
+      );
+      expect(
+        fakeDao.store[source.bookSourceUrl]!.runtimeHealth.category,
+        SourceHealthCategory.healthy,
+      );
+    },
+  );
+
+  test(
+    'terminal search failures skip discovery work for the same source',
+    () async {
+      final source = BookSource(
+        bookSourceUrl: 'source://terminal-skip',
+        bookSourceName: '終止校驗源',
+        searchUrl: '/search?key={{key}}',
+        exploreUrl: '玄幻::/explore',
+      );
+
+      final fakeDao =
+          _FakeBookSourceDao()..store[source.bookSourceUrl] = source;
+      final fakeService =
+          _FakeBookSourceService()
+            ..searchResults = [
+              SearchBook(
+                bookUrl: 'https://example.com/book/terminal',
+                name: '測試書',
+                author: '作者甲',
+                origin: source.bookSourceUrl,
+                originName: source.bookSourceName,
+              ),
+            ]
+            ..hydratedBook = Book(
+              bookUrl: '',
+              tocUrl: '',
+              origin: source.bookSourceUrl,
+              originName: source.bookSourceName,
+              name: '',
+              author: '作者甲',
+            )
+            ..exploreResults = [
+              SearchBook(
+                bookUrl: 'https://example.com/book/explore',
+                name: '發現書',
+                author: '作者乙',
+                origin: source.bookSourceUrl,
+                originName: source.bookSourceName,
+              ),
+            ];
+      final service = CheckSourceService(
+        service: fakeService,
+        sourceDao: fakeDao,
+        eventBus: AppEventBus(),
+      );
+
+      await service.check([source.bookSourceUrl]);
+
+      expect(fakeService.capturedExploreUrl, isNull);
+      expect(
+        fakeDao.store[source.bookSourceUrl]!.runtimeHealth.category,
+        SourceHealthCategory.detailBroken,
+      );
+    },
+  );
 
   test('loadConfig reads persisted validation preferences', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{

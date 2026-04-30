@@ -4,12 +4,14 @@
 
 - 書源管理：`lib/features/source_manager`
 - 瀏覽器 / 驗證：`lib/features/browser`
+- 書源校驗服務層：`lib/core/services/check_source_service.dart` 負責批次校驗、狀態分組、清理候選判定與取消/超時控制；`tool/source_validation_support.dart` 用同一套分類方向支撐批次驗證腳本。
 - 代表檔案：
   - `lib/features/source_manager/source_manager_page.dart`
   - `lib/features/source_manager/source_editor_page.dart`
   - `lib/features/source_manager/source_debug_page.dart`
   - `lib/features/browser/browser_page.dart`
   - `lib/features/browser/source_verification_coordinator.dart`
+  - `lib/core/services/check_source_service.dart`
 
 ## Reader 上下游依賴
 
@@ -30,6 +32,7 @@
 - 書源清單、編輯器、除錯器如何拆分
 - 規則輸入 UI 與實際解析執行如何隔開
 - 來源驗證、登入、驗證碼、Cookie 回寫如何與主流程解耦
+- 校驗流程先用章節欄位與明確限制訊號分類清理候選，再有限度探測正文，避免慢源或鎖章源拖住整批校驗
 
 ## 不要做的事
 

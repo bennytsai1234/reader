@@ -244,6 +244,7 @@ extension on _SourceCheckMode {
 class CheckSourceService extends ChangeNotifier {
   static const int _validationPageConcurrency = 1;
   static const int _validationChapterLimit = 8;
+  static const int _validationContentProbeLimit = 5;
   static const int _sourceCheckConcurrency = 8;
   static const Duration _notifyThrottleInterval = Duration(milliseconds: 120);
   final BookSourceService _service;
@@ -548,7 +549,9 @@ class CheckSourceService extends ChangeNotifier {
       _appendLog('  ≡ 跳過搜尋檢查', sourceUrl: url);
     }
 
-    if (config.checkDiscovery) {
+    if (_hasTerminalSourceIssue(issues)) {
+      _appendLog('  ≡ 跳過發現檢查: 已判定來源需清理或隔離', sourceUrl: url);
+    } else if (config.checkDiscovery) {
       await _runDiscoveryCheck(
         source,
         config,
@@ -1032,99 +1035,128 @@ class CheckSourceService extends ChangeNotifier {
       return;
     }
 
+    final lockedChapter = _firstLockedChapter(readableChapters);
+    if (lockedChapter != null) {
+      _recordIssue(source, issues, _lockedChapterIssue(mode, lockedChapter));
+      return;
+    }
+
     if (!config.checkContent) {
       return;
     }
 
-    final firstChapter = readableChapters.first;
-    final nextChapterUrl = _nextReadableChapterUrl(
+    await _runContentProbeCheck(
+      source,
+      book,
       readableChapters,
-      firstChapter,
+      config: config,
+      issues: issues,
+      mode: mode,
     );
+  }
 
-    try {
-      _setSourceProgress(
-        source,
-        '${mode.label}正文: ${firstChapter.title}',
-        isFinal: false,
-        hasIssue: false,
-      );
-      _appendLog(
-        '  ◇ 測試${mode.label}正文: ${firstChapter.title}',
-        sourceUrl: source.bookSourceUrl,
-      );
-      final content = await _runWithCancelOnTimeout(
-        sourceUrl: source.bookSourceUrl,
-        timeout: config.timeoutDuration,
-        timeoutMessage: '${mode.label}正文檢查超時',
-        action:
-            (cancelToken) => _service.getContent(
-              source,
-              book,
-              firstChapter,
-              nextChapterUrl: nextChapterUrl,
-              pageConcurrency: _validationPageConcurrency,
-              cancelToken: cancelToken,
+  Future<void> _runContentProbeCheck(
+    BookSource source,
+    Book book,
+    List<BookChapter> readableChapters, {
+    required SourceCheckConfig config,
+    required List<_SourceCheckIssue> issues,
+    required _SourceCheckMode mode,
+  }) async {
+    final probeIndexes = _buildContentProbeIndexes(
+      readableChapters,
+      _validationContentProbeLimit,
+    );
+    var probedCount = 0;
+
+    for (final chapterIndex in probeIndexes) {
+      final chapter = readableChapters[chapterIndex];
+      final nextChapterUrl = _nextReadableChapterUrl(readableChapters, chapter);
+
+      try {
+        probedCount++;
+        _setSourceProgress(
+          source,
+          '${mode.label}正文: ${chapter.title}',
+          isFinal: false,
+          hasIssue: false,
+        );
+        _appendLog(
+          '  ◇ 測試${mode.label}正文: ${chapter.title}',
+          sourceUrl: source.bookSourceUrl,
+        );
+        final content = await _runWithCancelOnTimeout(
+          sourceUrl: source.bookSourceUrl,
+          timeout: config.timeoutDuration,
+          timeoutMessage: '${mode.label}正文檢查超時',
+          action:
+              (cancelToken) => _service.getContent(
+                source,
+                book,
+                chapter,
+                nextChapterUrl: nextChapterUrl,
+                pageConcurrency: _validationPageConcurrency,
+                cancelToken: cancelToken,
+              ),
+        );
+        if (_shouldIgnoreSourceUpdate(source.bookSourceUrl)) return;
+
+        if (looksLikeLoginRequiredContent(content)) {
+          _recordIssue(
+            source,
+            issues,
+            _loginRequiredIssue(
+              stage: _stageFor(mode, 'content'),
+              message: '正文需要登入、VIP 或解鎖後閱讀',
             ),
-      );
-      if (_shouldIgnoreSourceUpdate(source.bookSourceUrl)) return;
+          );
+          return;
+        }
 
-      if (looksLikeLoginRequiredContent(content)) {
+        if (looksReadable(content)) {
+          return;
+        }
+      } on TimeoutException catch (error) {
         _recordIssue(
           source,
           issues,
-          const _SourceCheckIssue(
-            stage: 'content',
-            message: '正文需要登入後閱讀',
-            health: SourceRuntimeHealth(
-              category: SourceHealthCategory.loginRequired,
-              label: loginRequiredSourceGroupTag,
-              description: '來源需要登入後才能閱讀',
-              allowsSearch: false,
-              allowsReading: false,
-              cleanupCandidate: true,
-              quarantined: false,
-            ),
+          _issueFromException(
+            stage: _stageFor(mode, 'content'),
+            error: error,
+            fallbackMessage: '${mode.label}正文檢查超時',
+            mode: mode,
+          ),
+        );
+        return;
+      } catch (error) {
+        _recordIssue(
+          source,
+          issues,
+          _issueFromException(
+            stage: _stageFor(mode, 'content'),
+            error: error,
+            fallbackMessage: error.toString(),
+            mode: mode,
           ),
         );
         return;
       }
 
-      if (!looksReadable(content)) {
-        _recordIssue(
-          source,
-          issues,
-          _SourceCheckIssue(
-            stage: _stageFor(mode, 'content'),
-            message:
-                mode == _SourceCheckMode.search ? '正文內容過短或為空' : '發現書籍正文內容過短或為空',
-            health: _contentHealthFor(mode),
-          ),
-        );
-      }
-    } on TimeoutException catch (error) {
-      _recordIssue(
-        source,
-        issues,
-        _issueFromException(
-          stage: _stageFor(mode, 'content'),
-          error: error,
-          fallbackMessage: '${mode.label}正文檢查超時',
-          mode: mode,
-        ),
-      );
-    } catch (error) {
-      _recordIssue(
-        source,
-        issues,
-        _issueFromException(
-          stage: _stageFor(mode, 'content'),
-          error: error,
-          fallbackMessage: error.toString(),
-          mode: mode,
-        ),
-      );
+      if (_shouldIgnoreSourceUpdate(source.bookSourceUrl)) return;
     }
+
+    _recordIssue(
+      source,
+      issues,
+      _SourceCheckIssue(
+        stage: _stageFor(mode, 'content'),
+        message:
+            mode == _SourceCheckMode.search
+                ? '前 $probedCount 個候選章節正文內容過短或為空'
+                : '發現書籍前 $probedCount 個候選章節正文內容過短或為空',
+        health: _contentHealthFor(mode),
+      ),
+    );
   }
 
   _SourceCheckIssue _issueFromException({
@@ -1144,20 +1176,15 @@ class CheckSourceService extends ChangeNotifier {
         normalized.contains('需要登入後閱讀') ||
         normalized.contains('需要登录后阅读') ||
         normalized.contains('loginrequired') ||
-        normalized.contains('permissionlimit')) {
-      return const _SourceCheckIssue(
-        stage: 'content',
-        message: '正文需要登入後閱讀',
-        health: SourceRuntimeHealth(
-          category: SourceHealthCategory.loginRequired,
-          label: loginRequiredSourceGroupTag,
-          description: '來源需要登入後才能閱讀',
-          allowsSearch: false,
-          allowsReading: false,
-          cleanupCandidate: true,
-          quarantined: false,
-        ),
-      );
+        normalized.contains('permissionlimit') ||
+        normalized.contains('vip') ||
+        normalized.contains('鎖章') ||
+        normalized.contains('锁章') ||
+        normalized.contains('解鎖') ||
+        normalized.contains('解锁') ||
+        normalized.contains('付費') ||
+        normalized.contains('付费')) {
+      return _loginRequiredIssue(stage: 'content', message: '正文需要登入後閱讀');
     }
 
     if (_looksLikeTimeout(normalized)) {
@@ -1684,6 +1711,122 @@ SourceRuntimeHealth _contentHealthFor(_SourceCheckMode mode) {
   );
 }
 
+const SourceRuntimeHealth _loginRequiredCleanupHealth = SourceRuntimeHealth(
+  category: SourceHealthCategory.loginRequired,
+  label: loginRequiredSourceGroupTag,
+  description: '來源需要登入、VIP 或解鎖後才能閱讀',
+  allowsSearch: false,
+  allowsReading: false,
+  cleanupCandidate: true,
+  quarantined: false,
+);
+
+_SourceCheckIssue _loginRequiredIssue({
+  required String stage,
+  required String message,
+}) {
+  return _SourceCheckIssue(
+    stage: stage,
+    message: message,
+    health: _loginRequiredCleanupHealth,
+  );
+}
+
+_SourceCheckIssue _lockedChapterIssue(
+  _SourceCheckMode mode,
+  BookChapter chapter,
+) {
+  final title = _compactChapterTitle(chapter.title);
+  return _loginRequiredIssue(
+    stage: _stageFor(mode, 'content'),
+    message:
+        title.isEmpty ? '章節疑似 VIP/鎖章，需要登入或付費' : '章節疑似 VIP/鎖章，需要登入或付費: $title',
+  );
+}
+
+bool _hasTerminalSourceIssue(List<_SourceCheckIssue> issues) {
+  return issues.any(
+    (issue) => issue.health.cleanupCandidate || issue.health.quarantined,
+  );
+}
+
+BookChapter? _firstLockedChapter(List<BookChapter> chapters) {
+  for (final chapter in chapters) {
+    if (_looksLikeLockedChapterMarker(chapter)) {
+      return chapter;
+    }
+  }
+  return null;
+}
+
+bool _looksLikeLockedChapterMarker(BookChapter chapter) {
+  // Legado marks locked chapters by parsed toc fields:
+  // isVip=true and isPay=false means the chapter should show the lock icon.
+  if (chapter.isVip && !chapter.isPay) {
+    return true;
+  }
+
+  final normalized = chapter.title.trim().toLowerCase();
+  if (normalized.isEmpty) return false;
+  const titleMarkers = <String>[
+    '🔒',
+    '[vip]',
+    'vip',
+    ' vip',
+    'vip ',
+    'vip章',
+    'vip章节',
+    'vip章節',
+    'isvip',
+    '鎖章',
+    '锁章',
+    '解鎖',
+    '解锁',
+    '付費',
+    '付费',
+    '收費',
+    '收费',
+    '訂閱',
+    '订阅',
+    '購買',
+    '购买',
+  ];
+  return titleMarkers.any(normalized.contains);
+}
+
+List<int> _buildContentProbeIndexes(List<BookChapter> chapters, int maxProbe) {
+  final preferred = <int>[];
+  final fallback = <int>[];
+
+  void addProbe(int index) {
+    if (index < 0 || index >= chapters.length) return;
+    if (preferred.contains(index) || fallback.contains(index)) return;
+    if (_looksLikeLockedChapterMarker(chapters[index])) {
+      fallback.add(index);
+    } else {
+      preferred.add(index);
+    }
+  }
+
+  final headCount = math.min(maxProbe, chapters.length);
+  for (var i = 0; i < headCount; i++) {
+    addProbe(i);
+  }
+
+  final tailStart = math.max(chapters.length - maxProbe, 0);
+  for (var i = tailStart; i < chapters.length; i++) {
+    addProbe(i);
+  }
+
+  return <int>[...preferred, ...fallback].take(maxProbe).toList();
+}
+
+String _compactChapterTitle(String title) {
+  final trimmed = title.trim();
+  if (trimmed.length <= 40) return trimmed;
+  return '${trimmed.substring(0, 40)}...';
+}
+
 int _issuePriority(SourceHealthCategory category) {
   switch (category) {
     case SourceHealthCategory.nonNovel:
@@ -1795,7 +1938,20 @@ bool looksLikeLoginRequiredContent(String content) {
       normalized.contains('登入後閱讀') ||
       normalized.contains('登录后阅读') ||
       normalized.contains('請先登錄') ||
-      normalized.contains('请先登录');
+      normalized.contains('请先登录') ||
+      normalized.contains('vip') ||
+      normalized.contains('鎖章') ||
+      normalized.contains('锁章') ||
+      normalized.contains('解鎖') ||
+      normalized.contains('解锁') ||
+      normalized.contains('付費') ||
+      normalized.contains('付费') ||
+      normalized.contains('收費') ||
+      normalized.contains('收费') ||
+      normalized.contains('訂閱') ||
+      normalized.contains('订阅') ||
+      normalized.contains('購買') ||
+      normalized.contains('购买');
 }
 
 bool looksLikeDownloadOnlySource(

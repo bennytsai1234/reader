@@ -357,6 +357,10 @@ Future<SourceValidationResult> validateSourceFlow(
     if (looksLikeDownloadOnlySource(hydratedBook, readableChapters)) {
       throw StateError('來源為下載站，非線上正文書源');
     }
+    final lockedChapter = firstLikelyLockedChapter(readableChapters);
+    if (lockedChapter != null) {
+      throw StateError('章節疑似 VIP/鎖章，需要登入或付費: ${lockedChapter.title}');
+    }
 
     Future<String> loadChapterContent(int chapterIndex) async {
       final cached = contentCache[chapterIndex];
@@ -564,7 +568,14 @@ ValidationFailureClassification classifyValidationFailure(
       rawNormalized.contains('需要登入後閱讀') ||
       rawNormalized.contains('需要登录后阅读') ||
       rawNormalized.contains('loginrequired') ||
-      rawNormalized.contains('permissionlimit')) {
+      rawNormalized.contains('permissionlimit') ||
+      rawNormalized.contains('vip') ||
+      rawNormalized.contains('鎖章') ||
+      rawNormalized.contains('锁章') ||
+      rawNormalized.contains('解鎖') ||
+      rawNormalized.contains('解锁') ||
+      rawNormalized.contains('付費') ||
+      rawNormalized.contains('付费')) {
     return const ValidationFailureClassification(
       outcome: SourceValidationOutcome.skip,
       category: 'login-required-source',
@@ -1022,7 +1033,24 @@ List<int> buildNeighborProbeIndexes(
 
 bool isLikelyLockedChapter(BookChapter chapter) {
   final title = chapter.title.trim().toUpperCase();
-  return chapter.isVip || title.contains('🔒') || title.contains('VIP');
+  return (chapter.isVip && !chapter.isPay) ||
+      title.contains('🔒') ||
+      title.contains('VIP') ||
+      title.contains('鎖章') ||
+      title.contains('锁章') ||
+      title.contains('解鎖') ||
+      title.contains('解锁') ||
+      title.contains('付費') ||
+      title.contains('付费');
+}
+
+BookChapter? firstLikelyLockedChapter(List<BookChapter> chapters) {
+  for (final chapter in chapters) {
+    if (isLikelyLockedChapter(chapter)) {
+      return chapter;
+    }
+  }
+  return null;
 }
 
 List<String> buildKeywordCandidates(String seed) {
