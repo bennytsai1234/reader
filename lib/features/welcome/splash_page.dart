@@ -56,9 +56,6 @@ class _SplashPageState extends State<SplashPage> {
         Navigator.of(
           context,
         ).pushReplacement(MaterialPageRoute(builder: (_) => const MainPage()));
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          unawaited(_initDeferredStartupData());
-        });
       }
     } catch (e, stack) {
       AppLog.e('Init Error: $e', error: e, stackTrace: stack);
@@ -68,14 +65,6 @@ class _SplashPageState extends State<SplashPage> {
           _isInitializing = false;
         });
       }
-    }
-  }
-
-  Future<void> _initDeferredStartupData() async {
-    try {
-      await DefaultData.initDeferred();
-    } catch (e, stack) {
-      AppLog.e('Deferred init error: $e', error: e, stackTrace: stack);
     }
   }
 

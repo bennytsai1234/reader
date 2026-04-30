@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:inkpage_reader/core/services/app_log_service.dart';
+import 'package:inkpage_reader/core/services/default_data.dart';
 import 'package:inkpage_reader/features/bookshelf/bookshelf_page.dart';
 import 'package:inkpage_reader/features/explore/explore_page.dart';
 import 'package:inkpage_reader/features/settings/settings_page.dart';
@@ -40,6 +44,14 @@ class _MainPageState extends State<MainPage> {
     ),
   ];
   final List<Widget?> _pages = List<Widget?>.filled(_destinations.length, null);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_initDeferredStartupData());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +104,14 @@ class _MainPageState extends State<MainPage> {
 
   Widget _pageAt(int index) {
     return _pages[index] ??= _destinations[index].page;
+  }
+
+  Future<void> _initDeferredStartupData() async {
+    try {
+      await DefaultData.initDeferred();
+    } catch (e, stack) {
+      AppLog.e('Deferred init error: $e', error: e, stackTrace: stack);
+    }
   }
 
   Future<void> _handleBackIntent() async {

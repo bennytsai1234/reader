@@ -3,8 +3,8 @@
 ## Reader 現況
 
 - 主入口：`lib/main.dart`
-- 啟動流程：`lib/features/welcome`
-- 主導航殼層：`lib/features/welcome/main_page.dart`
+- 啟動流程：`lib/features/welcome/splash_page.dart` 負責必要初始化與錯誤恢復
+- 主導航殼層：`lib/features/welcome/main_page.dart` 負責主分頁狀態，並在首幀後啟動延後初始化
 - Provider 組裝：`lib/app_providers.dart`
 
 ## Reader 上下游依賴
