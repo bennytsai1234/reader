@@ -132,16 +132,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
                               ),
                             ),
                             const PopupMenuItem(
-                              value: 'add_url',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.link, size: 20),
-                                  SizedBox(width: 12),
-                                  Text('添加網址書籍'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
                               value: 'sort',
                               child: Row(
                                 children: [
@@ -215,9 +205,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
                               );
                             }
                             break;
-                          case 'add_url':
-                            await _showAddBookUrlDialog(context, provider);
-                            break;
                           case 'sort':
                             await _showSortSheet(context, provider);
                             break;
@@ -281,48 +268,6 @@ class _BookshelfPageState extends State<BookshelfPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('匯入失敗: $e')));
-    }
-  }
-
-  Future<void> _showAddBookUrlDialog(
-    BuildContext context,
-    BookshelfProvider provider,
-  ) async {
-    final controller = TextEditingController();
-    final url = await showDialog<String>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('添加網址書籍'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: '輸入小說詳情頁網址'),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('取消'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                child: const Text('匯入'),
-              ),
-            ],
-          ),
-    );
-    if (url == null || url.isEmpty || !context.mounted) return;
-    try {
-      final book = await provider.importBookFromUrl(url);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已加入「${book.name}」')));
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('添加網址書籍失敗: $e')));
     }
   }
 

@@ -33,13 +33,11 @@ class _ExplorePageContent extends StatefulWidget {
 }
 
 class _ExplorePageContentState extends State<_ExplorePageContent> {
-  final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   final Map<String, GlobalKey> _itemKeys = <String, GlobalKey>{};
 
   @override
   void dispose() {
-    _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -51,53 +49,52 @@ class _ExplorePageContentState extends State<_ExplorePageContent> {
 
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 12,
-        toolbarHeight: 58,
-        title: _buildSearchBar(provider, theme),
+        title: const Text('發現'),
         actions: [
-          if (provider.groups.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: PopupMenuButton<String?>(
-                icon: Icon(
-                  Icons.tune_rounded,
-                  color:
-                      provider.selectedGroup == null
-                          ? null
-                          : theme.colorScheme.primary,
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed:
+                () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SearchPage()),
                 ),
-                tooltip: '按分組篩選',
-                onSelected: (group) {
-                  FocusScope.of(context).unfocus();
-                  _searchController.clear();
-                  provider.setGroupFilter(group);
-                },
-                itemBuilder: (ctx) {
-                  final items = <PopupMenuEntry<String?>>[
-                    PopupMenuItem<String?>(
-                      value: null,
+          ),
+          if (provider.groups.isNotEmpty)
+            PopupMenuButton<String?>(
+              icon: Icon(
+                Icons.tune_rounded,
+                color:
+                    provider.selectedGroup == null
+                        ? null
+                        : theme.colorScheme.primary,
+              ),
+              tooltip: '按分組篩選',
+              onSelected: provider.setGroupFilter,
+              itemBuilder: (ctx) {
+                final items = <PopupMenuEntry<String?>>[
+                  PopupMenuItem<String?>(
+                    value: null,
+                    child: _buildCheckedMenuRow(
+                      theme,
+                      checked: provider.selectedGroup == null,
+                      text: '全部',
+                    ),
+                  ),
+                ];
+                items.addAll(
+                  provider.groups.map((group) {
+                    return PopupMenuItem<String?>(
+                      value: group,
                       child: _buildCheckedMenuRow(
                         theme,
-                        checked: provider.selectedGroup == null,
-                        text: '全部',
+                        checked: provider.selectedGroup == group,
+                        text: group,
                       ),
-                    ),
-                  ];
-                  items.addAll(
-                    provider.groups.map((group) {
-                      return PopupMenuItem<String?>(
-                        value: group,
-                        child: _buildCheckedMenuRow(
-                          theme,
-                          checked: provider.selectedGroup == group,
-                          text: group,
-                        ),
-                      );
-                    }),
-                  );
-                  return items;
-                },
-              ),
+                    );
+                  }),
+                );
+                return items;
+              },
             ),
         ],
       ),
@@ -123,49 +120,6 @@ class _ExplorePageContentState extends State<_ExplorePageContent> {
           style: TextStyle(color: checked ? theme.colorScheme.primary : null),
         ),
       ],
-    );
-  }
-
-  Widget _buildSearchBar(ExploreProvider provider, ThemeData theme) {
-    final inputBackground = theme.colorScheme.surfaceContainerHighest;
-    final inputHint = theme.colorScheme.onSurfaceVariant;
-
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        color: inputBackground.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: TextField(
-        controller: _searchController,
-        onChanged: provider.setSearchQuery,
-        textInputAction: TextInputAction.search,
-        style: const TextStyle(fontSize: 14),
-        decoration: InputDecoration(
-          hintText:
-              provider.selectedGroup == null
-                  ? '搜尋發現書源'
-                  : '搜尋 ${provider.selectedGroup} 分組書源',
-          hintStyle: TextStyle(color: inputHint, fontSize: 13),
-          border: InputBorder.none,
-          prefixIcon: const Icon(Icons.search_rounded, size: 18),
-          suffixIcon:
-              _searchController.text.isEmpty && provider.selectedGroup == null
-                  ? null
-                  : IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: () {
-                      _searchController.clear();
-                      if (provider.selectedGroup != null) {
-                        provider.setGroupFilter(null);
-                      } else {
-                        provider.setSearchQuery('');
-                      }
-                    },
-                  ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        ),
-      ),
     );
   }
 
@@ -195,7 +149,6 @@ class _ExplorePageContentState extends State<_ExplorePageContent> {
         actions: [
           TextButton.icon(
             onPressed: () {
-              _searchController.clear();
               if (provider.selectedGroup != null) {
                 provider.setGroupFilter(null);
               } else {
