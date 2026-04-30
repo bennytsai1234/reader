@@ -75,6 +75,51 @@ void main() {
     runtime.dispose();
   });
 
+  testWidgets('scroll viewport top-aligns chapter jumps', (tester) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.scroll,
+      chapterCount: 3,
+      paragraphsPerChapter: 1,
+    );
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: ScrollReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            controller: ReaderV2ViewportController(),
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    await runtime.jumpToChapter(1);
+    await _pumpViewportCommand(tester);
+
+    final targetTile = find.byWidgetPredicate(
+      (widget) =>
+          widget is ReaderV2TileLayer &&
+          widget.tile.chapterIndex == 1 &&
+          widget.tile.pageIndex == 0,
+    );
+    expect(targetTile, findsOneWidget);
+    expect(tester.getTopLeft(targetTile).dy, closeTo(0, 0.001));
+    expect(runtime.state.visibleLocation.chapterIndex, 1);
+    expect(runtime.state.visibleLocation.charOffset, 0);
+
+    runtime.dispose();
+  });
+
   testWidgets(
     'scroll viewport ensureCharRangeVisible accepts visible TTS range',
     (tester) async {

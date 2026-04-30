@@ -86,13 +86,7 @@ class ReaderV2ControllerHost {
       repository: repository,
       bookDao: dependencies.bookDao,
     );
-    final initialLocation =
-        openTarget?.location ??
-        ReaderV2Location(
-          chapterIndex: book.chapterIndex,
-          charOffset: book.charOffset,
-          visualOffsetPx: book.visualOffsetPx,
-        );
+    final initialLocation = _initialLocationFor(spec);
     final nextRuntime = ReaderV2Runtime(
       book: book,
       repository: repository,
@@ -160,6 +154,23 @@ class ReaderV2ControllerHost {
     return pageTurnMode == ReaderV2PageMode.scroll.pageAnim
         ? ReaderV2Mode.scroll
         : ReaderV2Mode.slide;
+  }
+
+  ReaderV2Location _initialLocationFor(ReaderV2LayoutSpec spec) {
+    final target = openTarget;
+    if (target != null) {
+      if (target.intent == ReaderV2OpenIntent.chapterStart) {
+        return target.location.copyWith(
+          visualOffsetPx: spec.anchorOffsetInViewport,
+        );
+      }
+      return target.location;
+    }
+    return ReaderV2Location(
+      chapterIndex: book.chapterIndex,
+      charOffset: book.charOffset,
+      visualOffsetPx: book.visualOffsetPx,
+    );
   }
 
   ReaderV2LayoutSpec specFromStyle(Size size, ReaderV2Style style) {

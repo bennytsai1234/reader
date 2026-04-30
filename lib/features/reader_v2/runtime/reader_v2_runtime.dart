@@ -321,11 +321,18 @@ class ReaderV2Runtime extends ChangeNotifier {
     return _repository.loadContent(chapterIndex);
   }
 
-  Future<void> jumpToChapter(int chapterIndex) {
-    return jumpToLocation(
-      ReaderV2Location(chapterIndex: chapterIndex, charOffset: 0),
-      immediateSave: true,
+  Future<void> jumpToChapter(int chapterIndex) async {
+    final location = _topAlignedChapterLocation(chapterIndex);
+    await jumpToLocation(location, immediateSave: false);
+    final normalized = location.normalized(
+      chapterCount: _repository.chapterCount,
     );
+    if (_disposed ||
+        state.phase != ReaderV2Phase.ready ||
+        state.visibleLocation != normalized) {
+      return;
+    }
+    await _saveProgressLocation(normalized);
   }
 
   Future<void> jumpToLocation(
@@ -422,6 +429,10 @@ class ReaderV2Runtime extends ChangeNotifier {
       final positioned = await restore(restoreTarget);
       if (!positioned || _disposed || generation != state.layoutGeneration) {
         return false;
+      }
+      if (_isTopAlignedChapterStart(restoreTarget)) {
+        _setState(state.copyWith(visibleLocation: restoreTarget));
+        return true;
       }
       final captured = _captureVisibleLocation(allowDuringRestore: true);
       return captured != null;
@@ -877,6 +888,19 @@ class ReaderV2Runtime extends ChangeNotifier {
   }
 
   double _anchorOffsetInViewport() => state.layoutSpec.anchorOffsetInViewport;
+
+  ReaderV2Location _topAlignedChapterLocation(int chapterIndex) {
+    return ReaderV2Location(
+      chapterIndex: chapterIndex,
+      charOffset: 0,
+      visualOffsetPx: _anchorOffsetInViewport(),
+    );
+  }
+
+  bool _isTopAlignedChapterStart(ReaderV2Location location) {
+    return location.charOffset == 0 &&
+        (location.visualOffsetPx - _anchorOffsetInViewport()).abs() < 0.01;
+  }
 
   bool _samePageAddress(ReaderV2PageAddress a, ReaderV2PageAddress b) {
     return a.chapterIndex == b.chapterIndex && a.pageIndex == b.pageIndex;

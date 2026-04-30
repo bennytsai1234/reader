@@ -370,9 +370,10 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     }
     _initialJumpCompleted = true;
     _lastSyncedLocation = location;
-    final captured = widget.runtime.captureVisibleLocation(
-      notifyIfChanged: false,
-    );
+    final captured =
+        _isTopAlignedChapterStart(location)
+            ? location
+            : widget.runtime.captureVisibleLocation(notifyIfChanged: false);
     _lastReportedLocation = captured ?? location;
     if (mounted) setState(() {});
   }
@@ -406,6 +407,11 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
       anchorOffset: _anchorOffsetInViewport(),
       style: _scrollRenderStyle(),
     );
+  }
+
+  bool _isTopAlignedChapterStart(ReaderV2Location location) {
+    return location.charOffset == 0 &&
+        (location.visualOffsetPx - _anchorOffsetInViewport()).abs() < 0.01;
   }
 
   Future<bool> _restoreToLocation(ReaderV2Location location) async {
