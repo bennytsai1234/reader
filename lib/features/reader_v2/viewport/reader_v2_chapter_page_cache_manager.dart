@@ -6,7 +6,20 @@ typedef ReaderV2ScrollPageExtentResolver =
     double Function(ReaderV2PageCache page);
 
 class ReaderV2CachedChapterPages {
-  ReaderV2CachedChapterPages({
+  factory ReaderV2CachedChapterPages({
+    required ReaderV2ChapterView layout,
+    required List<ReaderV2PageCache> pages,
+    required List<double> pageExtents,
+  }) {
+    final continuousExtents = _continuousPageExtents(pages, pageExtents);
+    return ReaderV2CachedChapterPages._(
+      layout: layout,
+      pages: pages,
+      pageExtents: continuousExtents,
+    );
+  }
+
+  ReaderV2CachedChapterPages._({
     required this.layout,
     required List<ReaderV2PageCache> pages,
     required List<double> pageExtents,
@@ -49,6 +62,43 @@ class ReaderV2CachedChapterPages {
       top += _normalPageExtent(extent);
     }
     return offsets;
+  }
+
+  static List<double> _continuousPageExtents(
+    List<ReaderV2PageCache> pages,
+    List<double> fallbackExtents,
+  ) {
+    if (pages.isEmpty) return const <double>[];
+    // Scroll mode stacks paginated tiles as one continuous chapter, so internal
+    // page boundaries follow the next page's layout-local start instead of
+    // reusing full viewport-sized page boxes.
+    return <double>[
+      for (var index = 0; index < pages.length; index++)
+        if (index + 1 < pages.length)
+          _continuousGap(
+            pages[index].localStartY,
+            pages[index + 1].localStartY,
+            _extentAt(fallbackExtents, index),
+          )
+        else
+          _normalPageExtent(_extentAt(fallbackExtents, index)),
+    ];
+  }
+
+  static double _continuousGap(
+    double currentLocalStart,
+    double nextLocalStart,
+    double fallback,
+  ) {
+    final current = currentLocalStart.isFinite ? currentLocalStart : 0.0;
+    final next = nextLocalStart.isFinite ? nextLocalStart : current;
+    final gap = next - current;
+    return gap > 0 ? gap : _normalPageExtent(fallback);
+  }
+
+  static double _extentAt(List<double> extents, int index) {
+    if (index < 0 || index >= extents.length) return 1.0;
+    return extents[index];
   }
 
   static double _visualExtent(List<double> pageExtents) {

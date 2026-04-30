@@ -152,6 +152,14 @@ class ReaderV2PageCoordinator {
     final viewportSize = _host.runtime?.state.layoutSpec.viewportSize;
     if (runtime == null || viewportSize == null) return;
     if (runtime.state.mode == ReaderV2Mode.scroll) {
+      final command =
+          forward
+              ? _host.viewportController.moveToNextPage
+              : _host.viewportController.moveToPrevPage;
+      if (command != null) {
+        unawaited(command());
+        return;
+      }
       final animateBy = _host.viewportController.animateBy;
       if (animateBy != null) {
         unawaited(animateBy(viewportSize.height * (forward ? 0.9 : -0.9)));

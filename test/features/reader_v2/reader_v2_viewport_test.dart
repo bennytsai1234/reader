@@ -154,6 +154,92 @@ void main() {
     },
   );
 
+  test('scroll cache keeps page boundaries continuous', () async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.scroll,
+      chapterCount: 1,
+      paragraphsPerChapter: 80,
+    );
+    final layout = await runtime.debugResolver.ensureLayout(0);
+    expect(layout.pages.length, greaterThan(1));
+
+    final manager = ReaderV2ChapterPageCacheManager(
+      runtime: runtime,
+      pageExtent: _visiblePageContentExtent,
+    );
+    final chapter = await manager.ensureChapter(0);
+    expect(chapter, isNotNull);
+
+    final pages = chapter!.pages;
+    for (var index = 0; index < pages.length - 1; index++) {
+      final current = pages[index];
+      final next = pages[index + 1];
+      final expectedGap = next.localStartY - current.localStartY;
+
+      expect(chapter.pageOffsetTop(index), closeTo(current.localStartY, 0.001));
+      expect(chapter.pageExtentAt(index), closeTo(expectedGap, 0.001));
+      expect(
+        chapter.pageOffsetTop(index + 1),
+        closeTo(next.localStartY, 0.001),
+      );
+    }
+
+    runtime.dispose();
+  });
+
+  testWidgets('scroll viewport exposes line-aware page commands', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.scroll,
+      chapterCount: 1,
+      paragraphsPerChapter: 80,
+    );
+    final controller = ReaderV2ViewportController();
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: ScrollReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            controller: controller,
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    expect(controller.moveToNextPage, isNotNull);
+    expect(controller.moveToPrevPage, isNotNull);
+    final start = runtime.captureVisibleLocation();
+    expect(start, isNotNull);
+
+    final next = controller.moveToNextPage!();
+    await _pumpViewportCommand(tester);
+    expect(await next, isTrue);
+    final afterNext = runtime.captureVisibleLocation();
+    expect(afterNext, isNotNull);
+    expect(afterNext!.charOffset, greaterThan(start!.charOffset));
+
+    final prev = controller.moveToPrevPage!();
+    await _pumpViewportCommand(tester);
+    expect(await prev, isTrue);
+    final afterPrev = runtime.captureVisibleLocation();
+    expect(afterPrev, isNotNull);
+    expect(afterPrev!.charOffset, lessThan(afterNext.charOffset));
+
+    runtime.dispose();
+  });
+
   testWidgets('scroll viewport survives a fast multi-page jump', (
     tester,
   ) async {
@@ -668,6 +754,20 @@ Future<void> _pumpViewport(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 16));
   await tester.pump(const Duration(milliseconds: 16));
+}
+
+Future<void> _pumpViewportCommand(WidgetTester tester) async {
+  for (var i = 0; i < 24; i++) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+}
+
+double _visiblePageContentExtent(ReaderV2PageCache page) {
+  if (page.lines.isEmpty) return page.height;
+  return page.lines.fold<double>(
+    0.0,
+    (bottom, line) => line.bottom > bottom ? line.bottom : bottom,
+  );
 }
 
 ReaderV2Runtime _runtime({

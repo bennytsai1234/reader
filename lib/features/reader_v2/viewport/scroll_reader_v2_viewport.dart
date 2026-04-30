@@ -154,8 +154,8 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     widget.controller
       ?..scrollBy = _scrollBy
       ..animateBy = _animateBy
-      ..moveToNextPage = null
-      ..moveToPrevPage = null
+      ..moveToNextPage = _moveToNextPage
+      ..moveToPrevPage = _moveToPrevPage
       ..ensureCharRangeVisible = _ensureCharRangeVisible;
   }
 
@@ -219,6 +219,11 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   double _anchorOffsetInViewport() =>
       widget.runtime.state.layoutSpec.anchorOffsetInViewport;
 
+  // Vertical padding belongs to the viewport/chapter edge in scroll mode, not
+  // every paginated tile boundary.
+  ReaderV2Style _scrollRenderStyle() =>
+      widget.style.copyWith(paddingTop: 0, paddingBottom: 0);
+
   double _shiftThreshold() {
     return math.min(120.0, _viewportHeight() * 0.2);
   }
@@ -235,13 +240,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
       0.0,
       (bottom, line) => math.max(bottom, line.bottom),
     );
-    final visualHeight =
-        widget.style.paddingTop + contentBottom + widget.style.paddingBottom;
-    final minHeight = math.min(
-      fullHeight,
-      math.max(120.0, _viewportHeight() * 0.3),
-    );
-    return visualHeight.clamp(minHeight, fullHeight).toDouble();
+    return math.max(1.0, contentBottom);
   }
 
   double _forwardWindowExtent() =>
@@ -368,7 +367,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
       cacheManager: _cacheManager,
       strip: _strip,
       anchorOffset: _anchorOffsetInViewport(),
-      style: widget.style,
+      style: _scrollRenderStyle(),
     );
   }
 
@@ -391,7 +390,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
       strip: _strip,
       readingY: _readingY,
       anchorOffset: _anchorOffsetInViewport(),
-      style: widget.style,
+      style: _scrollRenderStyle(),
     );
   }
 
@@ -658,6 +657,79 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     return _animateToReadingY(_readingY + delta);
   }
 
+  Future<bool> _moveToNextPage() {
+    return _enqueueViewportCommand(() => _moveByVisibleLine(forward: true));
+  }
+
+  Future<bool> _moveToPrevPage() {
+    return _enqueueViewportCommand(() => _moveByVisibleLine(forward: false));
+  }
+
+  Future<bool> _moveByVisibleLine({required bool forward}) {
+    if (!mounted || !_visiblePages.hasPages) {
+      return Future<bool>.value(false);
+    }
+    final lines = _visibleTextLines();
+    if (lines.isEmpty) {
+      return _animateByNow(_viewportHeight() * (forward ? 0.9 : -0.9));
+    }
+
+    final viewportHeight = _viewportHeight();
+    final minUsefulDelta = math.max(
+      24.0,
+      widget.style.fontSize * widget.style.effectiveLineHeight,
+    );
+    final target =
+        forward
+            ? lines.last.worldTop
+            : lines.first.worldBottom - viewportHeight;
+    var delta = target - _readingY;
+    if (delta.abs() < minUsefulDelta) {
+      delta = viewportHeight * (forward ? 0.9 : -0.9);
+    }
+    return _animateByNow(delta);
+  }
+
+  List<_ScrollVisibleLine> _visibleTextLines() {
+    final visibleTop = _readingY;
+    final visibleBottom = _readingY + _viewportHeight();
+    final renderStyle = _scrollRenderStyle();
+    final lines = <_ScrollVisibleLine>[];
+    for (final placement in _visiblePages.visiblePages(
+      readingY: _readingY,
+      viewportHeight: _viewportHeight(),
+    )) {
+      final chapter = _cacheManager.chapterAt(placement.page.chapterIndex);
+      final chapterTop = _strip.chapterTop(placement.page.chapterIndex);
+      if (chapter == null || chapterTop == null) continue;
+      for (final line in placement.page.lines) {
+        if (line.text.isEmpty) continue;
+        final worldTop = _positionTracker.lineWorldTop(
+          chapter: chapter,
+          chapterTop: chapterTop,
+          line: line,
+          style: renderStyle,
+        );
+        final worldBottom = _positionTracker.lineWorldBottom(
+          chapter: chapter,
+          chapterTop: chapterTop,
+          line: line,
+          style: renderStyle,
+        );
+        if (worldTop == null || worldBottom == null) continue;
+        if (worldBottom <= visibleTop + 0.5 ||
+            worldTop >= visibleBottom - 0.5) {
+          continue;
+        }
+        lines.add(
+          _ScrollVisibleLine(worldTop: worldTop, worldBottom: worldBottom),
+        );
+      }
+    }
+    lines.sort((a, b) => a.worldTop.compareTo(b.worldTop));
+    return lines;
+  }
+
   Future<bool> _enqueueViewportCommand(Future<bool> Function() command) {
     if (!mounted) return Future<bool>.value(false);
     final completer = Completer<bool>();
@@ -757,13 +829,13 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
       chapter: chapter,
       chapterTop: chapterTop,
       line: first,
-      style: widget.style,
+      style: _scrollRenderStyle(),
     );
     final lastBottom = _positionTracker.lineWorldBottom(
       chapter: chapter,
       chapterTop: chapterTop,
       line: last,
-      style: widget.style,
+      style: _scrollRenderStyle(),
     );
     if (firstTop == null || lastBottom == null) return false;
 
@@ -906,6 +978,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     required double viewportHeight,
   }) {
     final children = <Widget>[];
+    final renderStyle = _scrollRenderStyle();
     for (final placement in _visiblePages.visiblePages(
       readingY: readingY,
       viewportHeight: viewportHeight,
@@ -924,7 +997,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
               ReaderV2TileLayer(
                 tile: placement.page,
                 tileKey: _tileKey(placement.page),
-                style: widget.style,
+                style: renderStyle,
                 backgroundColor: widget.backgroundColor,
                 textColor: widget.textColor,
                 expand: true,
@@ -932,7 +1005,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
               ),
               ReaderV2TtsHighlightOverlayLayer(
                 tile: placement.page,
-                style: widget.style,
+                style: renderStyle,
                 textColor: widget.textColor,
                 highlight: widget.ttsHighlight,
               ),
@@ -977,4 +1050,11 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     }
     return _buildCanvas();
   }
+}
+
+class _ScrollVisibleLine {
+  const _ScrollVisibleLine({required this.worldTop, required this.worldBottom});
+
+  final double worldTop;
+  final double worldBottom;
 }
