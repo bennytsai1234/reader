@@ -21,6 +21,10 @@ typedef ReaderV2ViewportRestore =
     Future<bool> Function(ReaderV2Location location);
 
 class ReaderV2Runtime extends ChangeNotifier {
+  static const double _fastPreloadVelocityLow = 1500;
+  static const double _fastPreloadVelocityMedium = 2600;
+  static const double _fastPreloadVelocityHigh = 3600;
+
   ReaderV2Runtime({
     required Book book,
     required ReaderV2ChapterRepository repository,
@@ -533,6 +537,31 @@ class ReaderV2Runtime extends ChangeNotifier {
     );
   }
 
+  Future<void> preloadDirectionalForVelocity({
+    required int chapterIndex,
+    required bool forward,
+    required double velocity,
+  }) {
+    if (_disposed || _repository.chapterCount <= 0) {
+      return Future<void>.value();
+    }
+    final speed = velocity.abs();
+    final span =
+        speed >= _fastPreloadVelocityHigh
+            ? 3
+            : speed >= _fastPreloadVelocityMedium
+            ? 2
+            : speed >= _fastPreloadVelocityLow
+            ? 1
+            : 0;
+    if (span <= 0) return Future<void>.value();
+    return _preloadScheduler.scheduleDirectional(
+      fromChapterIndex: chapterIndex,
+      forward: forward,
+      chapterSpan: span,
+    );
+  }
+
   Future<bool> ensureSlideNeighborReady({required bool forward}) async {
     if (state.mode != ReaderV2Mode.slide) return false;
     final window = state.pageWindow;
@@ -624,18 +653,20 @@ class ReaderV2Runtime extends ChangeNotifier {
     _maybeAutoAdvancePendingNeighbor();
   }
 
-  ReaderV2Location? captureVisibleLocation() => _captureVisibleLocation();
+  ReaderV2Location? captureVisibleLocation({bool notifyIfChanged = true}) =>
+      _captureVisibleLocation(notifyIfChanged: notifyIfChanged);
 
   Future<ReaderV2Location?> saveProgress({bool immediate = true}) async {
     if (_restoreInProgress) return null;
-    final location = captureVisibleLocation();
+    final location = captureVisibleLocation(notifyIfChanged: false);
     if (location == null) return null;
     return _saveProgressLocation(location, immediate: immediate);
   }
 
   Future<ReaderV2Location?> flushProgress() {
     if (_restoreInProgress) return Future<ReaderV2Location?>.value();
-    final location = captureVisibleLocation() ?? state.visibleLocation;
+    final location =
+        captureVisibleLocation(notifyIfChanged: false) ?? state.visibleLocation;
     return _saveProgressLocation(location);
   }
 
@@ -810,7 +841,10 @@ class ReaderV2Runtime extends ChangeNotifier {
         current.pageIndex == address.pageIndex;
   }
 
-  ReaderV2Location? _captureVisibleLocation({bool allowDuringRestore = false}) {
+  ReaderV2Location? _captureVisibleLocation({
+    bool allowDuringRestore = false,
+    bool notifyIfChanged = true,
+  }) {
     if (_disposed || state.phase != ReaderV2Phase.ready) return null;
     if (_restoreInProgress && !allowDuringRestore) return null;
     final capture = _visibleLocationCapture;
@@ -818,7 +852,12 @@ class ReaderV2Runtime extends ChangeNotifier {
     final captured = _normalizeCapturedLocation(capture());
     if (captured == null) return null;
     if (captured == state.visibleLocation) return captured;
-    _setState(state.copyWith(visibleLocation: captured));
+    final next = state.copyWith(visibleLocation: captured);
+    if (notifyIfChanged) {
+      _setState(next);
+    } else {
+      state = next;
+    }
     return captured;
   }
 

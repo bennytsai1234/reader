@@ -142,7 +142,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _postFrameCapturePending = false;
       if (!mounted) return;
-      widget.runtime.captureVisibleLocation();
+      widget.runtime.captureVisibleLocation(notifyIfChanged: false);
     });
   }
 

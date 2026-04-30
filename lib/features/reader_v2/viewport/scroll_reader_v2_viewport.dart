@@ -349,7 +349,9 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     }
     _initialJumpCompleted = true;
     _lastSyncedLocation = location;
-    final captured = widget.runtime.captureVisibleLocation();
+    final captured = widget.runtime.captureVisibleLocation(
+      notifyIfChanged: false,
+    );
     _lastReportedLocation = captured ?? location;
     if (mounted) setState(() {});
   }
@@ -415,7 +417,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     _capturingVisibleLocation = true;
     final ReaderV2Location? location;
     try {
-      location = widget.runtime.captureVisibleLocation();
+      location = widget.runtime.captureVisibleLocation(notifyIfChanged: false);
     } finally {
       _capturingVisibleLocation = false;
     }
@@ -540,6 +542,15 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     );
   }
 
+  int _anchorChapterIndex() {
+    final anchorWorldY = _readingY + _anchorOffsetInViewport();
+    final placement = _visiblePages.placementAtWorldY(anchorWorldY);
+    final chapterIndex =
+        placement?.page.chapterIndex ??
+        widget.runtime.state.visibleLocation.chapterIndex;
+    return _safeChapterIndex(chapterIndex);
+  }
+
   void _handleScrollAnimationTick() {
     final current = _scrollAnimation.value;
     final delta = current - _lastAnimationValue;
@@ -579,6 +590,13 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     _scrollAnimation.stop();
     _scrollAnimation.value = _readingY;
     _lastAnimationValue = _readingY;
+    unawaited(
+      widget.runtime.preloadDirectionalForVelocity(
+        chapterIndex: _anchorChapterIndex(),
+        forward: velocity > 0,
+        velocity: velocity,
+      ),
+    );
     final simulation = ClampingScrollSimulation(
       position: _readingY,
       velocity: velocity,
@@ -740,7 +758,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   Future<void> _handleScrollSettled() async {
     if (!mounted || _isDragging) return;
     _captureAndReportVisibleLocation();
-    final saved = await widget.runtime.saveProgress();
+    final saved = await widget.runtime.saveProgress(immediate: false);
     if (saved != null) _lastReportedLocation = saved;
   }
 
@@ -796,6 +814,60 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCanvasWithLoadingOverlay() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _buildCanvas(),
+        Positioned(
+          top: 12,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: Center(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: widget.backgroundColor.withValues(alpha: 0.82),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.8,
+                          color: widget.textColor.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '載入中',
+                        style: TextStyle(
+                          color: widget.textColor.withValues(alpha: 0.7),
+                          fontSize:
+                              math
+                                  .max(11, widget.style.fontSize * 0.72)
+                                  .toDouble(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -868,6 +940,9 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
                       currentChapter,
         ),
       );
+      if (_cacheManager.hasChapters && _visiblePages.hasPages) {
+        return _buildCanvasWithLoadingOverlay();
+      }
       return _buildLoadingState(state);
     }
     return _buildCanvas();

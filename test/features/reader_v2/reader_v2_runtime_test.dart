@@ -11,11 +11,14 @@ import 'package:inkpage_reader/features/reader_v2/content/reader_v2_content.dart
 import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_layout.dart';
 import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_layout_engine.dart';
 import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_layout_spec.dart';
+import 'package:inkpage_reader/features/reader_v2/render/reader_v2_render_page.dart';
+import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_chapter_view.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_location.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_progress_controller.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_resolver.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_runtime.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_state.dart';
+import 'package:inkpage_reader/features/reader_v2/viewport/reader_v2_chapter_page_cache_manager.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +69,38 @@ void main() {
       },
     );
 
+    test('captureVisibleLocation can update state silently', () async {
+      final runtime = _runtime(initialMode: ReaderV2Mode.scroll);
+      await runtime.jumpToLocation(
+        const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+        immediateSave: false,
+      );
+
+      var notifyCount = 0;
+      runtime.addListener(() => notifyCount += 1);
+      final captureOwner = Object();
+      var nextOffset = 6;
+      runtime.registerVisibleLocationCapture(captureOwner, () {
+        return ReaderV2Location(chapterIndex: 0, charOffset: nextOffset);
+      });
+
+      final silent = runtime.captureVisibleLocation(notifyIfChanged: false);
+      expect(silent, isNotNull);
+      expect(silent!.charOffset, 6);
+      expect(runtime.state.visibleLocation.charOffset, 6);
+      expect(notifyCount, 0);
+
+      nextOffset = 9;
+      final notified = runtime.captureVisibleLocation();
+      expect(notified, isNotNull);
+      expect(notified!.charOffset, 9);
+      expect(runtime.state.visibleLocation.charOffset, 9);
+      expect(notifyCount, 1);
+
+      runtime.unregisterVisibleLocationCapture(captureOwner);
+      runtime.dispose();
+    });
+
     test('applyPresentation keeps location while changing mode/spec', () async {
       final runtime = _runtime(initialMode: ReaderV2Mode.slide);
       await runtime.jumpToLocation(
@@ -110,12 +145,146 @@ void main() {
         runtime.dispose();
       },
     );
+
+    test(
+      'preloadDirectionalForVelocity widens preload span for fast fling',
+      () async {
+        final runtime = _runtime(
+          initialMode: ReaderV2Mode.scroll,
+          chapterCount: 7,
+        );
+        await runtime.jumpToLocation(
+          const ReaderV2Location(chapterIndex: 3, charOffset: 0),
+          immediateSave: false,
+        );
+
+        await runtime.preloadDirectionalForVelocity(
+          chapterIndex: 3,
+          forward: true,
+          velocity: 4200,
+        );
+
+        expect(runtime.debugResolver.cachedLayout(4), isNotNull);
+        expect(runtime.debugResolver.cachedLayout(5), isNotNull);
+        expect(runtime.debugResolver.cachedLayout(6), isNotNull);
+
+        runtime.dispose();
+      },
+    );
+
+    test(
+      'cache manager keeps recent chapter across one window shift',
+      () async {
+        final runtime = _runtime(
+          initialMode: ReaderV2Mode.scroll,
+          chapterCount: 8,
+        );
+        await runtime.jumpToLocation(
+          const ReaderV2Location(chapterIndex: 2, charOffset: 0),
+          immediateSave: false,
+        );
+
+        final manager = ReaderV2ChapterPageCacheManager(
+          runtime: runtime,
+          pageExtent: (page) => page.height,
+        );
+        await manager.ensureWindowAround(
+          centerChapterIndex: 2,
+          backwardExtent: 1,
+          forwardExtent: 1,
+        );
+        expect(manager.containsChapter(1), isTrue);
+
+        await manager.ensureWindowAround(
+          centerChapterIndex: 3,
+          backwardExtent: 1,
+          forwardExtent: 1,
+        );
+        expect(manager.containsChapter(1), isTrue);
+
+        await manager.ensureWindowAround(
+          centerChapterIndex: 5,
+          backwardExtent: 1,
+          forwardExtent: 1,
+        );
+        expect(manager.containsChapter(1), isFalse);
+
+        runtime.dispose();
+      },
+    );
+
+    test('chapter view binary lookups match reference scan logic', () async {
+      final runtime = _runtime(
+        initialMode: ReaderV2Mode.scroll,
+        chapterCount: 1,
+        paragraphsPerChapter: 36,
+      );
+      final view = await runtime.debugResolver.ensureLayout(0);
+      final textLength = view.displayText.length;
+      final offsets = <int>{
+        0,
+        1,
+        2,
+        textLength ~/ 4,
+        textLength ~/ 2,
+        (textLength * 3) ~/ 4,
+        textLength,
+        textLength + 7,
+      };
+
+      for (final offset in offsets) {
+        final actual = view.lineForCharOffset(offset);
+        final expected = _referenceLineForCharOffset(view, offset);
+        expect(actual, expected, reason: 'offset=$offset');
+      }
+
+      final ranges = <({int start, int end})>[
+        (start: 0, end: 6),
+        (start: textLength ~/ 3, end: textLength ~/ 3 + 24),
+        (start: textLength ~/ 2, end: textLength ~/ 2),
+        (start: textLength - 12, end: textLength + 4),
+      ];
+      for (final range in ranges) {
+        final actual = view.linesForRange(range.start, range.end);
+        final expected = _referenceLinesForRange(view, range.start, range.end);
+        expect(
+          actual.map((line) => line.lineIndex).toList(growable: false),
+          expected.map((line) => line.lineIndex).toList(growable: false),
+          reason: 'range=${range.start}-${range.end}',
+        );
+      }
+
+      final maxY = view.contentHeight + 48;
+      for (var step = 0; step <= 12; step++) {
+        final localY = (maxY / 12) * step;
+        expect(
+          view.pageForLocalY(localY),
+          _referencePageForLocalY(view, localY),
+          reason: 'page y=$localY',
+        );
+        expect(
+          view.lineAtOrNearLocalY(localY),
+          _referenceLineAtOrNearLocalY(view, localY),
+          reason: 'line y=$localY',
+        );
+      }
+
+      runtime.dispose();
+    });
   });
 }
 
-ReaderV2Runtime _runtime({required ReaderV2Mode initialMode}) {
+ReaderV2Runtime _runtime({
+  required ReaderV2Mode initialMode,
+  int chapterCount = 3,
+  int paragraphsPerChapter = 12,
+}) {
   final book = _book();
-  final repository = _repository(book: book);
+  final repository = _repository(
+    book: book,
+    chapterCount: chapterCount,
+    paragraphsPerChapter: paragraphsPerChapter,
+  );
   return ReaderV2Runtime(
     book: book,
     repository: repository,
@@ -131,13 +300,22 @@ ReaderV2Runtime _runtime({required ReaderV2Mode initialMode}) {
   );
 }
 
-ReaderV2ChapterRepository _repository({Book? book}) {
+ReaderV2ChapterRepository _repository({
+  Book? book,
+  int chapterCount = 3,
+  int paragraphsPerChapter = 12,
+}) {
   final targetBook = book ?? _book();
+  final chapters = _chapters(
+    targetBook.bookUrl,
+    count: chapterCount,
+    paragraphsPerChapter: paragraphsPerChapter,
+  );
   return ReaderV2ChapterRepository(
     book: targetBook,
-    initialChapters: _chapters(targetBook.bookUrl),
+    initialChapters: chapters,
     bookDao: _FakeBookDao(),
-    chapterDao: _FakeChapterDao(_chapters(targetBook.bookUrl)),
+    chapterDao: _FakeChapterDao(chapters),
     sourceDao: _FakeSourceDao(),
     contentDao: null,
   );
@@ -152,18 +330,120 @@ Book _book() {
   );
 }
 
-List<BookChapter> _chapters(String bookUrl) {
-  return List<BookChapter>.generate(3, (index) {
+List<BookChapter> _chapters(
+  String bookUrl, {
+  int count = 3,
+  int paragraphsPerChapter = 12,
+}) {
+  return List<BookChapter>.generate(count, (index) {
     return BookChapter(
       index: index,
       bookUrl: bookUrl,
       title: '第${index + 1}章',
       content: List<String>.filled(
-        12,
+        paragraphsPerChapter,
         '這是第${index + 1}章的測試內容，用於建立足夠多的排版行與頁面。',
       ).join('\n\n'),
     );
   });
+}
+
+ReaderV2RenderLine? _referenceLineForCharOffset(
+  ReaderV2ChapterView view,
+  int charOffset,
+) {
+  final queryLines = view.lines;
+  if (queryLines.isEmpty) return null;
+  ReaderV2RenderLine? previous;
+  for (var index = 0; index < queryLines.length; index++) {
+    final line = queryLines[index];
+    if (line.text.isEmpty) continue;
+    final effectiveEnd = _referenceEffectiveLineEnd(queryLines, index);
+    if (charOffset >= line.startCharOffset && charOffset < effectiveEnd) {
+      return line;
+    }
+    if (charOffset < line.startCharOffset) return line;
+    previous = line;
+  }
+  return previous;
+}
+
+ReaderV2RenderLine? _referenceLineAtOrNearLocalY(
+  ReaderV2ChapterView view,
+  double localY,
+) {
+  ReaderV2RenderLine? nearest;
+  var nearestDistance = double.infinity;
+  for (final line in view.lines) {
+    if (line.text.isEmpty) continue;
+    if (localY >= line.top && localY <= line.bottom) return line;
+    final distance =
+        localY < line.top ? line.top - localY : localY - line.bottom;
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearest = line;
+    }
+  }
+  return nearest;
+}
+
+ReaderV2RenderPage? _referencePageForLocalY(
+  ReaderV2ChapterView view,
+  double localY,
+) {
+  if (view.pages.isEmpty) return null;
+  if (localY <= view.pages.first.localStartY) return view.pages.first;
+  var best = view.pages.first;
+  for (final page in view.pages) {
+    if (page.localStartY <= localY) {
+      best = page;
+    } else {
+      break;
+    }
+  }
+  return best;
+}
+
+List<ReaderV2RenderLine> _referenceLinesForRange(
+  ReaderV2ChapterView view,
+  int startCharOffset,
+  int endCharOffset,
+) {
+  final start =
+      startCharOffset <= endCharOffset ? startCharOffset : endCharOffset;
+  final end =
+      startCharOffset <= endCharOffset ? endCharOffset : startCharOffset;
+  if (start == end) {
+    final line = _referenceLineForCharOffset(view, start);
+    return line == null
+        ? const <ReaderV2RenderLine>[]
+        : <ReaderV2RenderLine>[line];
+  }
+  final queryLines = view.lines;
+  return queryLines
+      .asMap()
+      .entries
+      .where((entry) {
+        final line = entry.value;
+        if (line.text.isEmpty) return false;
+        return _referenceEffectiveLineEnd(queryLines, entry.key) > start &&
+            line.startCharOffset < end;
+      })
+      .map((entry) => entry.value)
+      .toList(growable: false);
+}
+
+int _referenceEffectiveLineEnd(List<ReaderV2RenderLine> lines, int index) {
+  final line = lines[index];
+  for (var nextIndex = index + 1; nextIndex < lines.length; nextIndex++) {
+    final next = lines[nextIndex];
+    if (next.text.isEmpty) continue;
+    if (next.startCharOffset > line.endCharOffset) {
+      return next.startCharOffset;
+    }
+    break;
+  }
+  return line.endCharOffset;
 }
 
 ReaderV2LayoutSpec _spec({double fontSize = 18}) {

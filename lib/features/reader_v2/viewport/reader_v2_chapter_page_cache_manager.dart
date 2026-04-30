@@ -83,6 +83,8 @@ class ReaderV2ChapterPageCacheWindow {
 }
 
 class ReaderV2ChapterPageCacheManager {
+  static const int softRetainRecentChapterCount = 2;
+
   ReaderV2ChapterPageCacheManager({
     required this.runtime,
     required ReaderV2ScrollPageExtentResolver pageExtent,
@@ -96,6 +98,8 @@ class ReaderV2ChapterPageCacheManager {
   final Map<int, Future<ReaderV2CachedChapterPages>> _inFlightLoads =
       <int, Future<ReaderV2CachedChapterPages>>{};
   final Set<int> _evictedChapters = <int>{};
+  final Map<int, int> _chapterTouchTicks = <int, int>{};
+  int _touchTick = 0;
   int _cacheGeneration = 0;
   int _revision = 0;
   String? _lastInvalidationReason;
@@ -122,7 +126,10 @@ class ReaderV2ChapterPageCacheManager {
     if (runtime.chapterCount <= 0) return null;
     final safeIndex = _safeChapterIndex(chapterIndex);
     final cached = _chapters[safeIndex];
-    if (cached != null) return cached;
+    if (cached != null) {
+      _touchChapter(safeIndex);
+      return cached;
+    }
     _evictedChapters.remove(safeIndex);
     final generation = _cacheGeneration;
     try {
@@ -133,6 +140,7 @@ class ReaderV2ChapterPageCacheManager {
         return null;
       }
       _chapters[safeIndex] = loaded;
+      _touchChapter(safeIndex);
       _bumpRevision();
       return loaded;
     } catch (_) {
@@ -229,29 +237,37 @@ class ReaderV2ChapterPageCacheManager {
 
   void evictOutsideWindow(Set<int> retained) {
     final retainedSafeIndexes = retained.map(_safeChapterIndex).toSet();
+    final softRetained = _recentlyTouchedChapters(
+      retained: retainedSafeIndexes,
+      limit: softRetainRecentChapterCount,
+    );
+    final effectiveRetained = <int>{...retainedSafeIndexes, ...softRetained};
     final evicted = <int>{};
     for (final chapterIndex in _chapters.keys) {
-      if (!retainedSafeIndexes.contains(chapterIndex)) {
+      if (!effectiveRetained.contains(chapterIndex)) {
         evicted.add(chapterIndex);
       }
     }
     for (final chapterIndex in _inFlightLoads.keys) {
-      if (!retainedSafeIndexes.contains(chapterIndex)) {
+      if (!effectiveRetained.contains(chapterIndex)) {
         evicted.add(chapterIndex);
       }
     }
     final hadEvictions = evicted.isNotEmpty;
     _evictedChapters
       ..addAll(evicted)
-      ..removeWhere(retainedSafeIndexes.contains);
+      ..removeWhere(effectiveRetained.contains);
+    _chapterTouchTicks.removeWhere(
+      (chapterIndex, _) => !effectiveRetained.contains(chapterIndex),
+    );
     _chapters.removeWhere(
-      (chapterIndex, _) => !retainedSafeIndexes.contains(chapterIndex),
+      (chapterIndex, _) => !effectiveRetained.contains(chapterIndex),
     );
     _inFlightLoads.removeWhere(
-      (chapterIndex, _) => !retainedSafeIndexes.contains(chapterIndex),
+      (chapterIndex, _) => !effectiveRetained.contains(chapterIndex),
     );
     if (hadEvictions) _bumpRevision();
-    runtime.debugResolver.retainLayoutsFor(retainedSafeIndexes);
+    runtime.debugResolver.retainLayoutsFor(effectiveRetained);
   }
 
   void retainChapters(Set<int> retained) {
@@ -281,6 +297,8 @@ class ReaderV2ChapterPageCacheManager {
     _chapters.clear();
     _inFlightLoads.clear();
     _evictedChapters.clear();
+    _chapterTouchTicks.clear();
+    _touchTick = 0;
   }
 
   void clear() {
@@ -304,6 +322,28 @@ class ReaderV2ChapterPageCacheManager {
 
   void _bumpRevision() {
     _revision += 1;
+  }
+
+  void _touchChapter(int chapterIndex) {
+    _touchTick += 1;
+    _chapterTouchTicks[chapterIndex] = _touchTick;
+  }
+
+  Set<int> _recentlyTouchedChapters({
+    required Set<int> retained,
+    required int limit,
+  }) {
+    if (limit <= 0 || _chapterTouchTicks.isEmpty) return const <int>{};
+    final ranked = _chapterTouchTicks.entries
+      .where((entry) {
+        final chapterIndex = entry.key;
+        if (retained.contains(chapterIndex)) return false;
+        return _chapters.containsKey(chapterIndex) ||
+            _inFlightLoads.containsKey(chapterIndex);
+      })
+      .toList(growable: false)..sort((a, b) => b.value.compareTo(a.value));
+    if (ranked.isEmpty) return const <int>{};
+    return ranked.take(limit).map((entry) => entry.key).toSet();
   }
 
   Future<ReaderV2CachedChapterPages> _loadChapter(int chapterIndex) {

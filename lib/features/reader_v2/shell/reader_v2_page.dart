@@ -52,6 +52,7 @@ class _ReaderV2PageState extends State<ReaderV2Page>
   late final ReaderV2ControllerHost _host;
   late final ReaderV2PageCoordinator _coordinator;
   Size? _lastViewportSize;
+  bool _rebuildQueued = false;
 
   @override
   void initState() {
@@ -80,7 +81,16 @@ class _ReaderV2PageState extends State<ReaderV2Page>
   void _handleControllerChanged() {
     _drainRuntimeNotice();
     _coordinator.maybeFollowTtsHighlight();
-    if (mounted) setState(() {});
+    _scheduleRebuild();
+  }
+
+  void _scheduleRebuild() {
+    if (!mounted || _rebuildQueued) return;
+    _rebuildQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _rebuildQueued = false;
+      if (mounted) setState(() {});
+    });
   }
 
   @override

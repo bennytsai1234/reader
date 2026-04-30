@@ -99,11 +99,16 @@ class ReaderV2PreloadScheduler {
   Future<void> scheduleDirectional({
     required int fromChapterIndex,
     required bool forward,
+    int chapterSpan = 1,
   }) {
-    final target = fromChapterIndex + (forward ? 1 : -1);
+    final span = chapterSpan < 1 ? 1 : chapterSpan;
+    final targets = <int>[
+      for (var distance = 1; distance <= span; distance++)
+        fromChapterIndex + (forward ? distance : -distance),
+    ];
     return scheduleChapters(
-      contentChapterIndexes: <int>[target],
-      layoutChapterIndexes: <int>[target],
+      contentChapterIndexes: targets,
+      layoutChapterIndexes: targets,
       priority: true,
     );
   }

@@ -21,13 +21,36 @@ class ReaderV2ChapterView {
            .toList(growable: false),
        lines = layout.lines
            .map(readerV2TextLineToRenderLine)
-           .toList(growable: false);
+           .toList(growable: false) {
+    _nonEmptyLines = lines
+        .where((line) => line.text.isNotEmpty)
+        .toList(growable: false);
+    _nonEmptyLineStarts = _nonEmptyLines
+        .map((line) => line.startCharOffset)
+        .toList(growable: false);
+    _nonEmptyLineEffectiveEnds = _buildEffectiveLineEnds(_nonEmptyLines);
+    _nonEmptyLineTops = _nonEmptyLines
+        .map((line) => line.top)
+        .toList(growable: false);
+    _pageStartOffsets = pages
+        .map((page) => page.startCharOffset)
+        .toList(growable: false);
+    _pageLocalStarts = pages
+        .map((page) => page.localStartY)
+        .toList(growable: false);
+  }
 
   final ReaderV2ChapterLayout layout;
   final int chapterSize;
   final String title;
   final List<ReaderV2RenderPage> pages;
   final List<ReaderV2RenderLine> lines;
+  late final List<ReaderV2RenderLine> _nonEmptyLines;
+  late final List<int> _nonEmptyLineStarts;
+  late final List<int> _nonEmptyLineEffectiveEnds;
+  late final List<double> _nonEmptyLineTops;
+  late final List<int> _pageStartOffsets;
+  late final List<double> _pageLocalStarts;
 
   int get chapterIndex => layout.chapterIndex;
   String get displayText => layout.displayText;
@@ -44,57 +67,62 @@ class ReaderV2ChapterView {
         height: 1,
       );
     }
-    for (final page in pages) {
-      if (page.containsCharOffset(charOffset)) return page;
+    final pageIndex = _lastIndexWhereIntAtMost(_pageStartOffsets, charOffset);
+    if (pageIndex < 0) return pages.first;
+    final candidate = pages[pageIndex];
+    if (candidate.containsCharOffset(charOffset)) return candidate;
+    if (pageIndex + 1 < pages.length) {
+      final next = pages[pageIndex + 1];
+      if (next.containsCharOffset(charOffset)) return next;
     }
     final line = lineForCharOffset(charOffset);
     if (line != null) {
       final page = pageForLocalY(line.top);
       if (page != null) return page;
     }
-    if (charOffset <= pages.first.startCharOffset) return pages.first;
-    var best = pages.first;
-    for (final page in pages) {
-      if (page.startCharOffset <= charOffset) {
-        best = page;
-      } else {
-        break;
-      }
-    }
-    return best;
+    return candidate;
   }
 
   ReaderV2RenderLine? lineForCharOffset(int charOffset) {
-    final queryLines = lines;
+    final queryLines = _nonEmptyLines;
     if (queryLines.isEmpty) return null;
-    ReaderV2RenderLine? previous;
-    for (var index = 0; index < queryLines.length; index++) {
-      final line = queryLines[index];
-      if (line.text.isEmpty) continue;
-      final effectiveEnd = _effectiveLineEnd(queryLines, index);
-      if (charOffset >= line.startCharOffset && charOffset < effectiveEnd) {
-        return line;
-      }
-      if (charOffset < line.startCharOffset) return line;
-      previous = line;
+    if (charOffset < _nonEmptyLineStarts.first) return queryLines.first;
+    final index = _lastIndexWhereIntAtMost(_nonEmptyLineStarts, charOffset);
+    if (index < 0) return queryLines.first;
+    if (charOffset < _nonEmptyLineEffectiveEnds[index]) {
+      return queryLines[index];
     }
-    return previous;
+    if (index + 1 < queryLines.length) {
+      return queryLines[index + 1];
+    }
+    return queryLines[index];
   }
 
   ReaderV2RenderPage? pageForLine(ReaderV2RenderLine line) =>
       pageForLocalY(line.top);
 
   ReaderV2RenderLine? lineAtOrNearLocalY(double localY) {
-    ReaderV2RenderLine? nearest;
-    var nearestDistance = double.infinity;
-    for (final line in lines) {
-      if (line.text.isEmpty) continue;
-      if (localY >= line.top && localY <= line.bottom) return line;
-      final distance =
-          localY < line.top ? line.top - localY : localY - line.bottom;
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearest = line;
+    final queryLines = _nonEmptyLines;
+    if (queryLines.isEmpty) return null;
+    final index = _lastIndexWhereDoubleAtMost(_nonEmptyLineTops, localY);
+    if (index < 0) return queryLines.first;
+    final current = queryLines[index];
+    if (localY >= current.top && localY <= current.bottom) return current;
+    var nearest = current;
+    var nearestDistance = _distanceToLine(current, localY);
+    if (index > 0) {
+      final previous = queryLines[index - 1];
+      final previousDistance = _distanceToLine(previous, localY);
+      if (previousDistance < nearestDistance) {
+        nearestDistance = previousDistance;
+        nearest = previous;
+      }
+    }
+    if (index + 1 < queryLines.length) {
+      final next = queryLines[index + 1];
+      final nextDistance = _distanceToLine(next, localY);
+      if (nextDistance < nearestDistance) {
+        nearest = next;
       }
     }
     return nearest;
@@ -102,16 +130,9 @@ class ReaderV2ChapterView {
 
   ReaderV2RenderPage? pageForLocalY(double localY) {
     if (pages.isEmpty) return null;
-    if (localY <= pages.first.localStartY) return pages.first;
-    var best = pages.first;
-    for (final page in pages) {
-      if (page.localStartY <= localY) {
-        best = page;
-      } else {
-        break;
-      }
-    }
-    return best;
+    final index = _lastIndexWhereDoubleAtMost(_pageLocalStarts, localY);
+    if (index < 0) return pages.first;
+    return pages[index];
   }
 
   List<ReaderV2RenderLine> linesForRange(
@@ -128,18 +149,17 @@ class ReaderV2ChapterView {
           ? const <ReaderV2RenderLine>[]
           : <ReaderV2RenderLine>[line];
     }
-    final queryLines = lines;
-    return queryLines
-        .asMap()
-        .entries
-        .where((entry) {
-          final line = entry.value;
-          if (line.text.isEmpty) return false;
-          return _effectiveLineEnd(queryLines, entry.key) > start &&
-              line.startCharOffset < end;
-        })
-        .map((entry) => entry.value)
-        .toList(growable: false);
+    final queryLines = _nonEmptyLines;
+    if (queryLines.isEmpty) return const <ReaderV2RenderLine>[];
+    var from = _lastIndexWhereIntAtMost(_nonEmptyLineStarts, start);
+    if (from < 0) from = 0;
+    while (from < queryLines.length &&
+        _nonEmptyLineEffectiveEnds[from] <= start) {
+      from += 1;
+    }
+    if (from >= queryLines.length) return const <ReaderV2RenderLine>[];
+    final to = _firstIndexWhereIntAtLeast(_nonEmptyLineStarts, end, from: from);
+    return queryLines.sublist(from, to);
   }
 
   List<Rect> fullLineRectsForRange({
@@ -162,20 +182,68 @@ class ReaderV2ChapterView {
         .toList(growable: false);
   }
 
-  int _effectiveLineEnd(List<ReaderV2RenderLine> queryLines, int index) {
-    final line = queryLines[index];
-    for (
-      var nextIndex = index + 1;
-      nextIndex < queryLines.length;
-      nextIndex++
-    ) {
-      final next = queryLines[nextIndex];
-      if (next.text.isEmpty) continue;
-      if (next.startCharOffset > line.endCharOffset) {
-        return next.startCharOffset;
+  static List<int> _buildEffectiveLineEnds(List<ReaderV2RenderLine> lines) {
+    if (lines.isEmpty) return const <int>[];
+    final ends = <int>[];
+    for (var index = 0; index < lines.length; index++) {
+      final line = lines[index];
+      var effectiveEnd = line.endCharOffset;
+      if (index + 1 < lines.length) {
+        final nextStart = lines[index + 1].startCharOffset;
+        if (nextStart > effectiveEnd) {
+          effectiveEnd = nextStart;
+        }
       }
-      break;
+      ends.add(effectiveEnd);
     }
-    return line.endCharOffset;
+    return ends;
+  }
+
+  int _lastIndexWhereIntAtMost(List<int> values, int target) {
+    var low = 0;
+    var high = values.length;
+    while (low < high) {
+      final mid = (low + high) >> 1;
+      if (values[mid] <= target) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low - 1;
+  }
+
+  int _lastIndexWhereDoubleAtMost(List<double> values, double target) {
+    var low = 0;
+    var high = values.length;
+    while (low < high) {
+      final mid = (low + high) >> 1;
+      if (values[mid] <= target) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low - 1;
+  }
+
+  int _firstIndexWhereIntAtLeast(List<int> values, int target, {int from = 0}) {
+    var low = from.clamp(0, values.length).toInt();
+    var high = values.length;
+    while (low < high) {
+      final mid = (low + high) >> 1;
+      if (values[mid] < target) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  }
+
+  double _distanceToLine(ReaderV2RenderLine line, double localY) {
+    if (localY < line.top) return line.top - localY;
+    if (localY > line.bottom) return localY - line.bottom;
+    return 0.0;
   }
 }
