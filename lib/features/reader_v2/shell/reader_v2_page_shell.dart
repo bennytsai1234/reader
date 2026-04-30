@@ -115,8 +115,8 @@ class ReaderV2PageShell extends StatelessWidget {
               if (controlsVisible)
                 Positioned.fill(
                   child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: onToggleControls,
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (_) => onToggleControls(),
                   ),
                 ),
               ReaderV2TopMenu(

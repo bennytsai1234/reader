@@ -24,7 +24,7 @@ void main() {
     test('UTF-8 Chapter Splitting', () async {
       final parser = TxtParser(utf8File);
       await parser.load();
-      
+
       final result = await parser.splitChapters();
       final chapters = result.chapters;
 
@@ -36,7 +36,7 @@ void main() {
     test('No Chapter Title Handling', () async {
       final parser = TxtParser(noChapterFile);
       await parser.load();
-      
+
       final result = await parser.splitChapters();
       final chapters = result.chapters;
 
@@ -45,21 +45,53 @@ void main() {
       expect(chapters[0]['title'], contains('正文'));
     });
 
+    test(
+      'No Chapter Title Large Content Splits Into Multiple Chunks',
+      () async {
+        final largeNoChapter = File(
+          '${Directory.systemTemp.path}/no_chapter_large.txt',
+        );
+        final largeContent = '沒有章節標題\\n' * 20000;
+        await largeNoChapter.writeAsString(largeContent);
+
+        try {
+          final parser = TxtParser(largeNoChapter);
+          final result = await parser.splitChapters();
+          final chapters = result.chapters;
+
+          expect(chapters.length, greaterThan(1));
+          expect(chapters.first['title'], contains('正文'));
+
+          for (var i = 0; i < chapters.length - 1; i++) {
+            expect(chapters[i]['end'], equals(chapters[i + 1]['start']));
+          }
+
+          final bytes = await largeNoChapter.readAsBytes();
+          expect(chapters.first['start'], equals(0));
+          expect(chapters.last['end'], equals(bytes.length));
+        } finally {
+          if (await largeNoChapter.exists()) {
+            await largeNoChapter.delete();
+          }
+        }
+      },
+    );
+
     test('Large File Splitting Logic', () async {
       final largeContent = '內容' * 30000; // 超過 50,000 字符閾值 (假設一箇中文字 2 bytes)
       final tempFile = File('${Directory.systemTemp.path}/large.txt');
       await tempFile.writeAsString('第一章\n$largeContent');
-      
+
       final parser = TxtParser(tempFile);
       await parser.load();
-      
+
       final result = await parser.splitChapters();
       final chapters = result.chapters;
 
       // 驗證是否觸發了物理切塊 (預期會有 2 個或更多切片)
       expect(chapters.length, greaterThan(1));
       expect(chapters[0]['title'], contains('(1)'));
-      
+
       await tempFile.delete();
     });
   });

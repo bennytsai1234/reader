@@ -53,6 +53,8 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
   bool _postFrameCapturePending = false;
   bool _pageTurnInProgress = false;
   bool _dragActive = false;
+  bool _queueingBusyDrag = false;
+  double _queuedBusyDragDx = 0;
   final ValueNotifier<double> _dragOffset = ValueNotifier<double>(0.0);
   Future<void> _pageCommandTail = Future<void>.value();
 
@@ -171,6 +173,8 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
     _warmedDragDirection = 0;
     _pageTurnInProgress = false;
     _dragActive = false;
+    _queueingBusyDrag = false;
+    _queuedBusyDragDx = 0;
     _dragDx = 0;
     _rawDragDx = 0;
     _dragOffset.value = 0;
@@ -311,8 +315,14 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
   }
 
   void _handleDragStart(DragStartDetails details) {
-    if (_pageTurnInProgress) return;
+    if (_pageTurnInProgress || _slideController.isAnimating) {
+      _queueingBusyDrag = true;
+      _queuedBusyDragDx = 0;
+      return;
+    }
     _dragActive = true;
+    _queueingBusyDrag = false;
+    _queuedBusyDragDx = 0;
     _slideController.stop();
     _slideController.value = 0;
     _lastAnimationValue = 0;
@@ -322,6 +332,10 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
+    if (_queueingBusyDrag) {
+      _queuedBusyDragDx += details.delta.dx;
+      return;
+    }
     if (_pageTurnInProgress) return;
     final window = widget.runtime.state.pageWindow;
     if (window == null) return;
@@ -340,6 +354,22 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
   }
 
   void _handleDragEnd(DragEndDetails details, double width) {
+    if (_queueingBusyDrag) {
+      _queueingBusyDrag = false;
+      if (width <= 0) return;
+      final velocity = details.primaryVelocity ?? 0;
+      final forward =
+          _queuedBusyDragDx.abs() >= _dragWarmupDistance
+              ? _queuedBusyDragDx < 0
+              : velocity < 0;
+      final distancePassed = _queuedBusyDragDx.abs() > width * 0.25;
+      final velocityPassed = velocity.abs() > 700;
+      if (distancePassed || velocityPassed) {
+        _queueAdjacentPageTurn(forward: forward);
+      }
+      _queuedBusyDragDx = 0;
+      return;
+    }
     if (_pageTurnInProgress) return;
     _dragActive = false;
     if (width <= 0) {
@@ -382,6 +412,23 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
       if (mounted) {
         _pageTurnInProgress = false;
       }
+    });
+  }
+
+  void _handleDragCancel() {
+    if (_queueingBusyDrag) {
+      _queueingBusyDrag = false;
+      _queuedBusyDragDx = 0;
+      return;
+    }
+    _resetViewport();
+  }
+
+  void _queueAdjacentPageTurn({required bool forward}) {
+    _pageCommandTail = _pageCommandTail.catchError((_) {}).then((_) async {
+      await _waitForSlideIdle();
+      if (!mounted) return;
+      await _animateToAdjacentPage(forward: forward);
     });
   }
 
@@ -736,7 +783,7 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
           onHorizontalDragStart: _handleDragStart,
           onHorizontalDragUpdate: _handleDragUpdate,
           onHorizontalDragEnd: (details) => _handleDragEnd(details, width),
-          onHorizontalDragCancel: _resetViewport,
+          onHorizontalDragCancel: _handleDragCancel,
           child: ColoredBox(
             color: widget.backgroundColor,
             child: ClipRect(

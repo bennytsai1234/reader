@@ -43,6 +43,9 @@ class ScrollReaderV2Viewport extends StatefulWidget {
 
 class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     with SingleTickerProviderStateMixin {
+  static const double _maxFlingVelocity = 5000.0;
+  static const int _animationShiftThrottleEveryTicks = 2;
+
   late final AnimationController _scrollAnimation;
   late ReaderV2ChapterPageCacheManager _cacheManager;
   late ReaderV2VisiblePageCalculator _visiblePages;
@@ -64,6 +67,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   bool _visibleLocationCaptureFramePending = false;
   bool _shiftWindowFramePending = false;
   bool _shiftWindowAgainRequested = false;
+  int _animationTickCount = 0;
   Future<void>? _shiftWindowTask;
   Future<void> _viewportCommandTail = Future<void>.value();
 
@@ -173,6 +177,7 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     _currentChapterIndex = null;
     _setReadingY(0.0);
     _lastAnimationValue = 0.0;
+    _animationTickCount = 0;
     _initialJumpCompleted = false;
   }
 
@@ -424,7 +429,11 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     if (location != null) _lastReportedLocation = location;
   }
 
-  bool _applyReadingDelta(double delta, {bool scheduleShift = true}) {
+  bool _applyReadingDelta(
+    double delta, {
+    bool scheduleShift = true,
+    bool captureVisibleLocation = true,
+  }) {
     if (delta == 0 || !_visiblePages.hasPages) return false;
     final nextReadingY = _clampReadingY(_readingY + delta);
     if ((nextReadingY - _readingY).abs() < 0.01) {
@@ -432,7 +441,9 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
       return false;
     }
     _setReadingY(nextReadingY);
-    _scheduleVisibleLocationCapture();
+    if (captureVisibleLocation) {
+      _scheduleVisibleLocationCapture();
+    }
     if (scheduleShift) _scheduleWindowShiftForAnchor();
     return true;
   }
@@ -556,15 +567,25 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
     final delta = current - _lastAnimationValue;
     _lastAnimationValue = current;
     if (delta == 0) return;
-    final moved = _applyReadingDelta(delta);
+    final moved = _applyReadingDelta(
+      delta,
+      scheduleShift: false,
+      captureVisibleLocation: false,
+    );
     if (!moved) {
       _scrollAnimation.stop();
+      return;
+    }
+    _animationTickCount += 1;
+    if (_animationTickCount % _animationShiftThrottleEveryTicks == 0) {
+      _scheduleWindowShiftForAnchor();
     }
   }
 
   void _handleDragStart(DragStartDetails details) {
     _isDragging = true;
     _scrollAnimation.stop();
+    _animationTickCount = 0;
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
@@ -587,19 +608,24 @@ class _ScrollReaderV2ViewportState extends State<ScrollReaderV2Viewport>
   }
 
   void _startFling(double velocity) {
+    final effectiveVelocity = velocity.clamp(
+      -_maxFlingVelocity,
+      _maxFlingVelocity,
+    );
     _scrollAnimation.stop();
     _scrollAnimation.value = _readingY;
     _lastAnimationValue = _readingY;
+    _animationTickCount = 0;
     unawaited(
       widget.runtime.preloadDirectionalForVelocity(
         chapterIndex: _anchorChapterIndex(),
-        forward: velocity > 0,
-        velocity: velocity,
+        forward: effectiveVelocity > 0,
+        velocity: effectiveVelocity,
       ),
     );
     final simulation = ClampingScrollSimulation(
       position: _readingY,
-      velocity: velocity,
+      velocity: effectiveVelocity,
     );
     unawaited(
       _scrollAnimation.animateWith(simulation).whenComplete(() {
