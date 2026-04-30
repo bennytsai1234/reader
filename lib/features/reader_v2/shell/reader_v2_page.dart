@@ -188,6 +188,7 @@ class _ReaderV2PageState extends State<ReaderV2Page>
 
         final style = _host.settings.readStyleFor(
           mediaPadding,
+          topInfoReservedExternally: true,
           bottomInfoReservedExternally: _host.settings.showReadTitleAddition,
         );
         final runtime = _host.ensureRuntime(size, style);

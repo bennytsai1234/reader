@@ -89,6 +89,7 @@ class ReaderV2PageShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topSystemExtent = _topSystemExtent(context);
     final permanentInfoExtent =
         showReadTitleAddition ? _permanentInfoExtent(context) : 0.0;
     return PopScope<void>(
@@ -103,7 +104,23 @@ class ReaderV2PageShell extends StatelessWidget {
           color: backgroundColor,
           child: Stack(
             children: [
-              Positioned.fill(bottom: permanentInfoExtent, child: content),
+              Positioned.fill(
+                top: topSystemExtent,
+                bottom: permanentInfoExtent,
+                child: content,
+              ),
+              if (topSystemExtent > 0)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: topSystemExtent,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (_) => onToggleControls(),
+                    child: _TopSystemInfoBar(shell: this),
+                  ),
+                ),
               if (_shouldShowPermanentInfo())
                 Positioned(
                   bottom: 0,
@@ -176,6 +193,21 @@ class ReaderV2PageShell extends StatelessWidget {
   double _permanentInfoExtent(BuildContext context) {
     return MediaQuery.paddingOf(context).bottom +
         kReaderPermanentInfoReservedHeight;
+  }
+
+  double _topSystemExtent(BuildContext context) {
+    return MediaQuery.paddingOf(context).top;
+  }
+}
+
+class _TopSystemInfoBar extends StatelessWidget {
+  const _TopSystemInfoBar({required this.shell});
+
+  final ReaderV2PageShell shell;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(color: shell.backgroundColor);
   }
 }
 

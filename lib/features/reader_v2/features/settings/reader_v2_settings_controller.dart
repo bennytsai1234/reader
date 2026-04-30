@@ -61,10 +61,13 @@ class ReaderV2SettingsController extends ChangeNotifier {
 
   ReaderV2Style readStyleFor(
     EdgeInsets mediaPadding, {
+    bool topInfoReservedExternally = false,
     bool bottomInfoReservedExternally = false,
   }) {
     final top =
-        (mediaPadding.top * kReaderContentTopSafeAreaFactor) +
+        (topInfoReservedExternally
+            ? 0.0
+            : mediaPadding.top * kReaderContentTopSafeAreaFactor) +
         kReaderContentTopSpacing;
     final bottom = bottomInfoReservedExternally ? 0.0 : mediaPadding.bottom;
     return ReaderV2Style(
