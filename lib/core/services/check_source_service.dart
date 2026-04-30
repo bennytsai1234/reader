@@ -262,6 +262,8 @@ class CheckSourceService extends ChangeNotifier {
   final Map<String, SourceCheckProgress> _sourceProgress =
       <String, SourceCheckProgress>{};
   final Set<String> _timedOutSourceUrls = <String>{};
+  final Map<String, Set<CancelToken>> _activeCancelTokens =
+      <String, Set<CancelToken>>{};
   Timer? _notifyTimer;
   bool _isDisposed = false;
 
@@ -339,10 +341,11 @@ class CheckSourceService extends ChangeNotifier {
     _logs.clear();
     _sourceProgress.clear();
     _timedOutSourceUrls.clear();
+    _activeCancelTokens.clear();
     _appendLog('開始校驗，共 $_totalCount 個書源 (${config.summary})');
     _notifyIfAlive();
 
-    final entries = <SourceCheckEntry>[];
+    final results = List<SourceCheckEntry?>.filled(normalizedUrls.length, null);
     var nextIndex = 0;
     final workerCount = math.min(
       _sourceCheckConcurrency,
@@ -359,13 +362,13 @@ class CheckSourceService extends ChangeNotifier {
         try {
           final entry = await _checkSingleSourceWithBudget(url, config);
           if (entry != null) {
-            entries.add(entry);
+            results[cursor] = entry;
           }
         } catch (error, stack) {
           AppLog.e('書源校驗任務失敗: $url', error: error, stackTrace: stack);
           final entry = await _recordUnexpectedSourceFailure(url, error);
           if (entry != null) {
-            entries.add(entry);
+            results[cursor] = entry;
           }
         } finally {
           _currentCount++;
@@ -381,7 +384,11 @@ class CheckSourceService extends ChangeNotifier {
     }
 
     _isChecking = false;
-    _lastReport = SourceCheckReport(entries);
+    _cancelAllActiveRequests('書源校驗已結束');
+    _activeCancelTokens.clear();
+    _lastReport = SourceCheckReport(
+      results.whereType<SourceCheckEntry>().toList(growable: false),
+    );
     _statusMsg = _lastReport.summary;
     _appendLog('校驗完成：${_lastReport.summary}');
     _eventBus.fire(AppEvent(AppEventBus.checkSourceDone, data: _lastReport));
@@ -395,29 +402,37 @@ class CheckSourceService extends ChangeNotifier {
   ) {
     return _checkSingleSource(url, config).timeout(
       config.sourceTimeoutDuration,
-      onTimeout: () => _recordSourceTimeout(url, config),
+      onTimeout: () {
+        _cancelActiveRequestsForSource(url, '整體校驗超時');
+        return _recordSourceTimeout(url, config);
+      },
     );
   }
 
   Future<T> _runWithCancelOnTimeout<T>({
+    required String sourceUrl,
     required Future<T> Function(CancelToken cancelToken) action,
     required Duration timeout,
     required String timeoutMessage,
   }) {
     final cancelToken = CancelToken();
-    return action(cancelToken).timeout(
-      timeout,
-      onTimeout: () {
-        cancelToken.cancel(timeoutMessage);
-        throw TimeoutException(timeoutMessage, timeout);
-      },
-    );
+    _registerCancelToken(sourceUrl, cancelToken);
+    return action(cancelToken)
+        .timeout(
+          timeout,
+          onTimeout: () {
+            cancelToken.cancel(timeoutMessage);
+            throw TimeoutException(timeoutMessage, timeout);
+          },
+        )
+        .whenComplete(() => _unregisterCancelToken(sourceUrl, cancelToken));
   }
 
   Future<SourceCheckEntry?> _recordSourceTimeout(
     String url,
     SourceCheckConfig config,
   ) async {
+    _cancelActiveRequestsForSource(url, '整體校驗超時');
     if (_isDisposed || !_isChecking) return null;
     _timedOutSourceUrls.add(url);
     final source = await _sourceDao.getByUrl(url);
@@ -625,6 +640,7 @@ class CheckSourceService extends ChangeNotifier {
     _appendLog('  ◇ 測試搜尋: $searchWord', sourceUrl: source.bookSourceUrl);
     try {
       final searchResults = await _runWithCancelOnTimeout(
+        sourceUrl: source.bookSourceUrl,
         timeout: config.timeoutDuration,
         timeoutMessage: '搜尋超時',
         action:
@@ -758,6 +774,7 @@ class CheckSourceService extends ChangeNotifier {
       );
       _appendLog('  ◇ 測試發現: $discoveryUrl', sourceUrl: source.bookSourceUrl);
       final books = await _runWithCancelOnTimeout(
+        sourceUrl: source.bookSourceUrl,
         timeout: config.timeoutDuration,
         timeoutMessage: '發現檢查超時',
         action:
@@ -858,6 +875,7 @@ class CheckSourceService extends ChangeNotifier {
         sourceUrl: source.bookSourceUrl,
       );
       book = await _runWithCancelOnTimeout(
+        sourceUrl: source.bookSourceUrl,
         timeout: config.timeoutDuration,
         timeoutMessage: '${mode.label}詳情檢查超時',
         action:
@@ -921,6 +939,7 @@ class CheckSourceService extends ChangeNotifier {
         sourceUrl: source.bookSourceUrl,
       );
       final chapters = await _runWithCancelOnTimeout(
+        sourceUrl: source.bookSourceUrl,
         timeout: config.timeoutDuration,
         timeoutMessage: '${mode.label}目錄檢查超時',
         action:
@@ -1035,6 +1054,7 @@ class CheckSourceService extends ChangeNotifier {
         sourceUrl: source.bookSourceUrl,
       );
       final content = await _runWithCancelOnTimeout(
+        sourceUrl: source.bookSourceUrl,
         timeout: config.timeoutDuration,
         timeoutMessage: '${mode.label}正文檢查超時',
         action:
@@ -1460,6 +1480,7 @@ class CheckSourceService extends ChangeNotifier {
   void cancel() {
     if (!_isChecking) return;
     _isChecking = false;
+    _cancelAllActiveRequests('書源校驗已取消');
     _appendLog('收到取消指令，停止派發新校驗任務');
     _notifyIfAlive(immediate: true);
   }
@@ -1474,6 +1495,44 @@ class CheckSourceService extends ChangeNotifier {
 
   bool _shouldIgnoreSourceUpdate(String sourceUrl) =>
       _isDisposed || !_isChecking || _timedOutSourceUrls.contains(sourceUrl);
+
+  void _registerCancelToken(String sourceUrl, CancelToken cancelToken) {
+    if (_isDisposed || !_isChecking) {
+      if (!cancelToken.isCancelled) {
+        cancelToken.cancel('書源校驗已停止');
+      }
+      return;
+    }
+    _activeCancelTokens
+        .putIfAbsent(sourceUrl, () => <CancelToken>{})
+        .add(cancelToken);
+  }
+
+  void _unregisterCancelToken(String sourceUrl, CancelToken cancelToken) {
+    final tokens = _activeCancelTokens[sourceUrl];
+    if (tokens == null) return;
+    tokens.remove(cancelToken);
+    if (tokens.isEmpty) {
+      _activeCancelTokens.remove(sourceUrl);
+    }
+  }
+
+  void _cancelActiveRequestsForSource(String sourceUrl, String reason) {
+    final tokens = _activeCancelTokens[sourceUrl];
+    if (tokens == null || tokens.isEmpty) return;
+    for (final token in List<CancelToken>.from(tokens)) {
+      if (!token.isCancelled) {
+        token.cancel(reason);
+      }
+    }
+  }
+
+  void _cancelAllActiveRequests(String reason) {
+    if (_activeCancelTokens.isEmpty) return;
+    for (final sourceUrl in List<String>.from(_activeCancelTokens.keys)) {
+      _cancelActiveRequestsForSource(sourceUrl, reason);
+    }
+  }
 
   void _appendLog(String msg, {String? sourceUrl, bool force = false}) {
     if (_isDisposed) return;
@@ -1525,6 +1584,8 @@ class CheckSourceService extends ChangeNotifier {
     if (_isDisposed) return;
     _isDisposed = true;
     _isChecking = false;
+    _cancelAllActiveRequests('書源校驗服務已釋放');
+    _activeCancelTokens.clear();
     _notifyTimer?.cancel();
     _notifyTimer = null;
     super.dispose();

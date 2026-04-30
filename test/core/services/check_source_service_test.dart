@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:inkpage_reader/core/database/dao/book_source_dao.dart';
@@ -36,6 +37,8 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
   String content = '';
   Exception? contentError;
   Duration searchDelay = Duration.zero;
+  bool completeSearchWhenCancelled = false;
+  CancelToken? capturedSearchCancelToken;
 
   Book? infoRequestBook;
   Book? chapterRequestBook;
@@ -60,6 +63,13 @@ class _FakeBookSourceService extends Fake implements BookSourceService {
     dynamic cancelToken,
   }) async {
     searchOrder.add(source.bookSourceUrl);
+    if (cancelToken is CancelToken) {
+      capturedSearchCancelToken = cancelToken;
+      if (completeSearchWhenCancelled) {
+        await cancelToken.whenCancel;
+        return <SearchBook>[];
+      }
+    }
     final completer = searchCompleters[source.bookSourceUrl];
     if (completer != null) {
       return completer.future;
@@ -716,6 +726,88 @@ void main() {
       await future;
     },
   );
+
+  test(
+    'report keeps input order when concurrent checks finish out of order',
+    () async {
+      final sources = List.generate(
+        3,
+        (index) => BookSource(
+          bookSourceUrl: 'source://ordered-$index',
+          bookSourceName: '順序源 $index',
+          searchUrl: '/search?key={{key}}',
+        ),
+      );
+      final fakeDao = _FakeBookSourceDao();
+      for (final source in sources) {
+        fakeDao.store[source.bookSourceUrl] = source;
+      }
+      final fakeService =
+          _FakeBookSourceService()
+            ..searchDelays[sources.first.bookSourceUrl] = const Duration(
+              milliseconds: 30,
+            );
+      final service = CheckSourceService(
+        service: fakeService,
+        sourceDao: fakeDao,
+        eventBus: AppEventBus(),
+      );
+      await service.updateConfig(
+        SourceCheckConfig.defaults.copyWith(
+          checkDiscovery: false,
+          checkInfo: false,
+          checkCategory: false,
+          checkContent: false,
+        ),
+      );
+
+      final report = await service.check(
+        sources.map((source) => source.bookSourceUrl).toList(),
+      );
+
+      expect(
+        report.entries.map((entry) => entry.sourceUrl),
+        sources.map((source) => source.bookSourceUrl),
+      );
+    },
+  );
+
+  test('cancel actively cancels in-flight request tokens', () async {
+    final source = BookSource(
+      bookSourceUrl: 'source://cancel-token',
+      bookSourceName: '取消 Token 源',
+      searchUrl: '/search?key={{key}}',
+    );
+    final fakeDao = _FakeBookSourceDao()..store[source.bookSourceUrl] = source;
+    final fakeService =
+        _FakeBookSourceService()..completeSearchWhenCancelled = true;
+    final service = CheckSourceService(
+      service: fakeService,
+      sourceDao: fakeDao,
+      eventBus: AppEventBus(),
+    );
+    await service.updateConfig(
+      SourceCheckConfig.defaults.copyWith(
+        checkDiscovery: false,
+        checkInfo: false,
+        checkCategory: false,
+        checkContent: false,
+      ),
+    );
+
+    final future = service.check([source.bookSourceUrl]);
+    for (var i = 0; i < 20; i++) {
+      if (fakeService.capturedSearchCancelToken != null) break;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+
+    expect(fakeService.capturedSearchCancelToken, isNotNull);
+    service.cancel();
+
+    final report = await future.timeout(const Duration(seconds: 1));
+    expect(fakeService.capturedSearchCancelToken!.isCancelled, isTrue);
+    expect(report.entries, isEmpty);
+  });
 
   test('cancel suppresses late source updates from in-flight checks', () async {
     final source = BookSource(
