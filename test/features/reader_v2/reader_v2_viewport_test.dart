@@ -402,6 +402,70 @@ void main() {
     runtime.dispose();
   });
 
+  testWidgets(
+    'scroll viewport defers small drag location updates until settle',
+    (tester) async {
+      final runtime = _runtime(
+        initialMode: ReaderV2Mode.scroll,
+        chapterCount: 2,
+        paragraphsPerChapter: 80,
+      );
+      await runtime.jumpToLocation(
+        const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+        immediateSave: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 260,
+            height: 360,
+            child: ScrollReaderV2Viewport(
+              runtime: runtime,
+              backgroundColor: Colors.white,
+              textColor: Colors.black,
+              style: _style(),
+              controller: ReaderV2ViewportController(),
+            ),
+          ),
+        ),
+      );
+      await _pumpViewport(tester);
+
+      var notifyCount = 0;
+      void listener() {
+        notifyCount += 1;
+      }
+
+      runtime.addListener(listener);
+      final firstTile = find.byType(ReaderV2TileLayer).first;
+      final startTop = tester.getTopLeft(firstTile).dy;
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(ScrollReaderV2Viewport)),
+      );
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(milliseconds: 700));
+        await gesture.moveBy(const Offset(0, -24));
+        await tester.pump();
+      }
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(tester.getTopLeft(firstTile).dy, closeTo(startTop - 72, 0.001));
+      expect(notifyCount, 0);
+
+      await gesture.up();
+      await _pumpViewportCommand(tester);
+
+      expect(notifyCount, greaterThan(0));
+      expect(tester.getTopLeft(firstTile).dy, closeTo(startTop - 72, 0.001));
+      expect(tester.takeException(), isNull);
+
+      runtime.removeListener(listener);
+      runtime.dispose();
+    },
+  );
+
   testWidgets('scroll viewport reports visible page before drag settles', (
     tester,
   ) async {
