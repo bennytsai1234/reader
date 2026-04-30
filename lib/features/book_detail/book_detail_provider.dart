@@ -497,13 +497,12 @@ class BookDetailProvider extends ChangeNotifier {
     final previous = _isInBookshelf;
     _isInBookshelf = value;
     _book.isInBookshelf = value;
+    notifyListeners();
 
     if (_isInBookshelf) {
       if (_book.syncTime == 0) {
         _book.syncTime = DateTime.now().millisecondsSinceEpoch;
       }
-      _isLoading = true;
-      notifyListeners();
       try {
         if (_allChapters.isEmpty) {
           await _loadChapters();
@@ -516,9 +515,6 @@ class BookDetailProvider extends ChangeNotifier {
         _book.isInBookshelf = previous;
         notifyListeners();
         return BookDetailOperationResult.failure('加入書架失敗: $e');
-      } finally {
-        _isLoading = false;
-        notifyListeners();
       }
     } else {
       await _bookDao.upsert(_book);

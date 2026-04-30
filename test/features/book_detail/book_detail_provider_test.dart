@@ -257,6 +257,21 @@ void main() {
     });
   });
 
+  group('BookDetailProvider - 書架操作', () {
+    test('加入書架期間不切換成全頁載入狀態', () async {
+      final p = await makeProvider();
+
+      final resultFuture = p.setInBookshelf(true);
+
+      expect(p.isInBookshelf, isTrue);
+      expect(p.isLoading, isFalse);
+
+      final result = await resultFuture;
+      expect(result.success, isTrue);
+      expect(p.isLoading, isFalse);
+    });
+  });
+
   group('BookDetailProvider - 章節篩選', () {
     test('setSearchQuery 篩選章節', () async {
       final chapters = _makeChapters(5);
