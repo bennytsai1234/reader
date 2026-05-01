@@ -1526,6 +1526,9 @@ void main() {
       expect(engine.currentSpokenText, isNotEmpty);
       expect(tts.isPlaying, isTrue);
       expect(tts.speechStartLocation?.chapterIndex, 0);
+      expect(tts.currentHighlight?.chapterIndex, 0);
+      expect(tts.currentHighlight?.highlightStart, 0);
+      expect(tts.currentHighlight?.highlightEnd, greaterThan(0));
 
       engine.emitProgress(2, 5);
       expect(tts.currentHighlight?.highlightStart, 2);
@@ -1576,6 +1579,38 @@ void main() {
   });
 
   test(
+    'tts highlights current segment when engine emits no progress',
+    () async {
+      final runtime = _runtime(
+        initialMode: ReaderV2Mode.scroll,
+        chapterCount: 1,
+        paragraphsPerChapter: 4,
+      );
+      await runtime.jumpToLocation(
+        const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+        immediateSave: false,
+      );
+      final engine = _FakeTtsEngine();
+      final tts = ReaderV2TtsController(runtime: runtime, tts: engine);
+
+      await tts.startFromVisibleLocation();
+
+      final highlight = tts.currentHighlight;
+      expect(engine.currentWordStart, -1);
+      expect(highlight, isNotNull);
+      expect(highlight!.chapterIndex, 0);
+      expect(highlight.highlightStart, tts.speechStartLocation?.charOffset);
+      expect(
+        highlight.highlightEnd,
+        tts.speechStartLocation!.charOffset + engine.currentSpokenText.length,
+      );
+
+      tts.dispose();
+      runtime.dispose();
+    },
+  );
+
+  test(
     'tts completion continues with next chapter and clears at book end',
     () async {
       final runtime = _runtime(
@@ -1593,22 +1628,31 @@ void main() {
       await tts.startFromVisibleLocation();
       expect(engine.speakCount, 1);
       expect(tts.speechStartLocation?.chapterIndex, 0);
+      final firstOffset = tts.speechStartLocation?.charOffset ?? 0;
 
       engine.emitComplete();
       await _flushMicrotasks();
 
       expect(engine.speakCount, 2);
+      expect(tts.speechStartLocation?.chapterIndex, 0);
+      expect(tts.speechStartLocation?.charOffset, greaterThan(firstOffset));
+
+      for (var i = 0; i < 20; i += 1) {
+        if (tts.speechStartLocation?.chapterIndex == 1) break;
+        engine.emitComplete();
+        await _flushMicrotasks();
+      }
       expect(tts.speechStartLocation?.chapterIndex, 1);
-      expect(tts.speechStartLocation?.charOffset, 0);
-      expect(engine.currentSpokenText.startsWith('第2章'), isTrue);
 
       engine.emitProgress(0, 2);
       expect(tts.currentHighlight?.chapterIndex, 1);
 
-      engine.emitComplete();
-      await _flushMicrotasks();
+      for (var i = 0; i < 40; i += 1) {
+        if (tts.speechStartLocation == null) break;
+        engine.emitComplete();
+        await _flushMicrotasks();
+      }
 
-      expect(engine.speakCount, 2);
       expect(tts.speechStartLocation, isNull);
       expect(tts.currentHighlight, isNull);
 

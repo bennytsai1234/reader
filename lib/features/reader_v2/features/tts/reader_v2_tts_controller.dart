@@ -102,9 +102,14 @@ class ReaderV2TtsController extends ChangeNotifier
   final bool _ownsTtsEngine;
   late final StreamSubscription<String> _eventSubscription;
   ReaderV2Location? _speechStartLocation;
+  List<_ReaderV2TtsSegment> _segments = const <_ReaderV2TtsSegment>[];
+  int _segmentIndex = -1;
   int _speechGeneration = 0;
   bool _handlingCompletion = false;
   bool _disposed = false;
+
+  static const int _minSegmentLength = 24;
+  static const int _maxSegmentLength = 220;
 
   @override
   bool get isPlaying => _tts.isPlaying;
@@ -119,22 +124,28 @@ class ReaderV2TtsController extends ChangeNotifier
   ReaderV2Location? get speechStartLocation => _speechStartLocation;
 
   ReaderV2TtsHighlight? get currentHighlight {
-    final start = _speechStartLocation;
+    final segment = _currentSegment;
+    if (segment == null) return null;
     final wordStart = _tts.currentWordStart;
-    final spokenLength = _tts.currentSpokenText.length;
-    if (start == null || wordStart < 0 || spokenLength <= 0) return null;
-    if (wordStart >= spokenLength) return null;
-    final boundedWordStart = wordStart.clamp(0, spokenLength - 1).toInt();
+    final segmentLength = segment.text.length;
+    if (wordStart < 0 || segmentLength <= 0 || wordStart >= segmentLength) {
+      return ReaderV2TtsHighlight(
+        chapterIndex: segment.chapterIndex,
+        highlightStart: segment.startCharOffset,
+        highlightEnd: segment.endCharOffset,
+      );
+    }
+    final boundedWordStart = wordStart.clamp(0, segmentLength - 1).toInt();
     final wordEnd =
         _tts.currentWordEnd > boundedWordStart
             ? _tts.currentWordEnd
             : boundedWordStart + 1;
     final boundedWordEnd =
-        wordEnd.clamp(boundedWordStart + 1, spokenLength).toInt();
+        wordEnd.clamp(boundedWordStart + 1, segmentLength).toInt();
     return ReaderV2TtsHighlight(
-      chapterIndex: start.chapterIndex,
-      highlightStart: start.charOffset + boundedWordStart,
-      highlightEnd: start.charOffset + boundedWordEnd,
+      chapterIndex: segment.chapterIndex,
+      highlightStart: segment.startCharOffset + boundedWordStart,
+      highlightEnd: segment.startCharOffset + boundedWordEnd,
     );
   }
 
@@ -188,28 +199,22 @@ class ReaderV2TtsController extends ChangeNotifier
     final content = await runtime.loadContentForTts(location);
     final safeOffset =
         location.charOffset.clamp(0, content.displayText.length).toInt();
-    final span = _readableSpan(content.displayText, safeOffset);
-    if (!_isActiveGeneration(generation)) return false;
-    if (span == null) {
-      _speechStartLocation = null;
-      notifyListeners();
-      return false;
-    }
-    final text = content.displayText.substring(span.start, span.end);
-    _speechStartLocation = ReaderV2Location(
+    final segments = _segmentsFor(
+      text: content.displayText,
       chapterIndex: location.chapterIndex,
-      charOffset: span.start,
+      startOffset: safeOffset,
     );
-    await _tts.speak(text);
     if (!_isActiveGeneration(generation)) return false;
-    notifyListeners();
-    return true;
+    _segments = segments;
+    _segmentIndex = segments.isEmpty ? -1 : 0;
+    if (segments.isEmpty) return _clearSpeechState(generation);
+    return _speakCurrentSegment(generation);
   }
 
   @override
   Future<void> stop() async {
     _speechGeneration += 1;
-    _speechStartLocation = null;
+    _clearSpeechStateWithoutNotify();
     await _tts.stop();
     notifyListeners();
   }
@@ -260,16 +265,20 @@ class ReaderV2TtsController extends ChangeNotifier
 
   Future<void> _handleSpeechCompleted() async {
     if (_handlingCompletion || _disposed) return;
-    final start = _speechStartLocation;
-    if (start == null) {
+    final completedSegment = _currentSegment;
+    if (completedSegment == null) {
       notifyListeners();
       return;
     }
     final generation = _speechGeneration;
     _handlingCompletion = true;
     try {
+      if (_advanceSegment()) {
+        await _speakCurrentSegment(generation);
+        return;
+      }
       for (
-        var chapterIndex = start.chapterIndex + 1;
+        var chapterIndex = completedSegment.chapterIndex + 1;
         _isActiveGeneration(generation) && chapterIndex < runtime.chapterCount;
         chapterIndex += 1
       ) {
@@ -280,7 +289,7 @@ class ReaderV2TtsController extends ChangeNotifier
         if (started) return;
       }
       if (_isActiveGeneration(generation)) {
-        _speechStartLocation = null;
+        _clearSpeechStateWithoutNotify();
         notifyListeners();
       }
     } catch (error, stackTrace) {
@@ -293,7 +302,7 @@ class ReaderV2TtsController extends ChangeNotifier
         ),
       );
       if (_isActiveGeneration(generation)) {
-        _speechStartLocation = null;
+        _clearSpeechStateWithoutNotify();
         notifyListeners();
       }
     } finally {
@@ -303,6 +312,110 @@ class ReaderV2TtsController extends ChangeNotifier
 
   bool _isActiveGeneration(int generation) {
     return !_disposed && generation == _speechGeneration;
+  }
+
+  _ReaderV2TtsSegment? get _currentSegment {
+    final index = _segmentIndex;
+    if (index < 0 || index >= _segments.length) return null;
+    return _segments[index];
+  }
+
+  bool _advanceSegment() {
+    if (_segmentIndex + 1 >= _segments.length) return false;
+    _segmentIndex += 1;
+    return true;
+  }
+
+  Future<bool> _speakCurrentSegment(int generation) async {
+    final segment = _currentSegment;
+    if (segment == null) return _clearSpeechState(generation);
+    _speechStartLocation = ReaderV2Location(
+      chapterIndex: segment.chapterIndex,
+      charOffset: segment.startCharOffset,
+    );
+    await _tts.speak(segment.text);
+    if (!_isActiveGeneration(generation)) return false;
+    notifyListeners();
+    return true;
+  }
+
+  bool _clearSpeechState(int generation) {
+    if (!_isActiveGeneration(generation)) return false;
+    _clearSpeechStateWithoutNotify();
+    notifyListeners();
+    return false;
+  }
+
+  void _clearSpeechStateWithoutNotify() {
+    _speechStartLocation = null;
+    _segments = const <_ReaderV2TtsSegment>[];
+    _segmentIndex = -1;
+  }
+
+  List<_ReaderV2TtsSegment> _segmentsFor({
+    required String text,
+    required int chapterIndex,
+    required int startOffset,
+  }) {
+    final span = _readableSpan(text, startOffset);
+    if (span == null) return const <_ReaderV2TtsSegment>[];
+    final segments = <_ReaderV2TtsSegment>[];
+    var cursor = span.start;
+    while (cursor < span.end) {
+      while (cursor < span.end && _isWhitespace(text.codeUnitAt(cursor))) {
+        cursor += 1;
+      }
+      if (cursor >= span.end) break;
+      var end = _segmentEnd(text, cursor, span.end);
+      while (end > cursor && _isWhitespace(text.codeUnitAt(end - 1))) {
+        end -= 1;
+      }
+      if (end <= cursor) {
+        cursor += 1;
+        continue;
+      }
+      segments.add(
+        _ReaderV2TtsSegment(
+          chapterIndex: chapterIndex,
+          startCharOffset: cursor,
+          endCharOffset: end,
+          text: text.substring(cursor, end),
+        ),
+      );
+      cursor = end;
+    }
+    return segments;
+  }
+
+  int _segmentEnd(String text, int start, int chapterEnd) {
+    final preferredLimit =
+        (start + _maxSegmentLength).clamp(start + 1, chapterEnd).toInt();
+    for (var index = start; index < preferredLimit; index += 1) {
+      final length = index - start + 1;
+      if (length < _minSegmentLength && index + 1 < chapterEnd) continue;
+      final codeUnit = text.codeUnitAt(index);
+      if (_isSegmentBoundary(codeUnit)) return index + 1;
+    }
+    for (var index = preferredLimit - 1; index > start; index -= 1) {
+      if (_isWhitespace(text.codeUnitAt(index))) return index;
+    }
+    return preferredLimit;
+  }
+
+  bool _isSegmentBoundary(int codeUnit) {
+    switch (codeUnit) {
+      case 0x0A: // \n
+      case 0x21: // !
+      case 0x2E: // .
+      case 0x3B: // ;
+      case 0x3F: // ?
+      case 0x3002: // 。
+      case 0xFF01: // ！
+      case 0xFF1B: // ；
+      case 0xFF1F: // ？
+        return true;
+    }
+    return false;
   }
 
   ({int start, int end})? _readableSpan(String text, int offset) {
@@ -328,6 +441,9 @@ class ReaderV2TtsController extends ChangeNotifier
       case 0x20:
       case 0x85:
       case 0xA0:
+      case 0x2028:
+      case 0x2029:
+      case 0x3000:
         return true;
     }
     return false;
@@ -337,10 +453,25 @@ class ReaderV2TtsController extends ChangeNotifier
   void dispose() {
     _disposed = true;
     _speechGeneration += 1;
+    _clearSpeechStateWithoutNotify();
     unawaited(_eventSubscription.cancel());
     _tts.removeListener(_handleTtsChanged);
     unawaited(_tts.stop());
     if (_ownsTtsEngine) _tts.dispose();
     super.dispose();
   }
+}
+
+class _ReaderV2TtsSegment {
+  const _ReaderV2TtsSegment({
+    required this.chapterIndex,
+    required this.startCharOffset,
+    required this.endCharOffset,
+    required this.text,
+  });
+
+  final int chapterIndex;
+  final int startCharOffset;
+  final int endCharOffset;
+  final String text;
 }
