@@ -80,10 +80,12 @@ flutter test test/features/reader_v2 \
   test/features/source_manager/source_manager_provider_test.dart \
   test/features/source_manager/source_manager_page_smoke_test.dart \
   test/features/source_manager/source_login_test.dart
+git push origin HEAD
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
 - If version metadata changes are needed, update `pubspec.yaml` before tagging and commit that change first.
+- Always push the release commit branch before creating or pushing the release tag. Do not tag unpublished local commits.
 - After pushing the release tag, check GitHub Actions once and confirm the Android Release workflow has started building.
 - Once the remote workflow is visibly building, it is acceptable to close the task without waiting for the build to finish.
