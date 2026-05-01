@@ -569,6 +569,63 @@ void main() {
     },
   );
 
+  testWidgets('scroll viewport keeps short drags pixel-continuous', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.scroll,
+      chapterCount: 2,
+      paragraphsPerChapter: 80,
+    );
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: ScrollReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            controller: ReaderV2ViewportController(),
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    final firstTile = find.byType(ReaderV2TileLayer).first;
+    final startTop = tester.getTopLeft(firstTile).dy;
+    final startLocation = runtime.captureVisibleLocation();
+    expect(startLocation, isNotNull);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(ScrollReaderV2Viewport)),
+    );
+    for (var i = 0; i < 4; i++) {
+      await gesture.moveBy(const Offset(0, -12));
+      await tester.pump();
+      expect(
+        tester.getTopLeft(firstTile).dy,
+        closeTo(startTop - (12.0 * (i + 1)), 0.001),
+      );
+    }
+
+    await gesture.up();
+    await _pumpViewportCommand(tester);
+
+    expect(tester.getTopLeft(firstTile).dy, closeTo(startTop - 48, 0.001));
+    expect(runtime.captureVisibleLocation(), isNotNull);
+    expect(tester.takeException(), isNull);
+
+    runtime.dispose();
+  });
+
   testWidgets('scroll viewport reports visible page before drag settles', (
     tester,
   ) async {
