@@ -78,6 +78,80 @@ void main() {
     },
   );
 
+  testWidgets(
+    'controls overlay slight move does not dismiss or pass through content',
+    (tester) async {
+      var dismissCalls = 0;
+      var contentTapCalls = 0;
+
+      final shell = MaterialApp(
+        home: ReaderV2PageShell(
+          book: Book(bookUrl: 'test://book', name: '測試書', originName: '本地'),
+          scaffoldKey: GlobalKey<ScaffoldState>(),
+          content: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => contentTapCalls += 1,
+            child: const SizedBox.expand(),
+          ),
+          drawer: ReaderV2ChaptersDrawer(
+            chapters: const [],
+            currentChapterIndex: 0,
+            titleFor: (_) => '',
+            onChapterTap: (_) async {},
+          ),
+          backgroundColor: Colors.white,
+          textColor: Colors.black,
+          controlsVisible: true,
+          readBarStyleFollowPage: true,
+          showReadTitleAddition: false,
+          hasVisibleContent: true,
+          isLoading: false,
+          chapterTitle: '第一章',
+          chapterUrl: '',
+          originName: '本地',
+          displayPageLabel: '1/1',
+          displayChapterPercentLabel: '10%',
+          navigation: ReaderV2ChapterNavigationState(
+            chapterCount: 1,
+            currentIndex: 0,
+            isScrubbing: false,
+            scrubIndex: 0,
+            pendingIndex: null,
+            titleFor: (_) => '',
+          ),
+          isAutoPaging: false,
+          dayNightIcon: Icons.light_mode,
+          dayNightTooltip: '日夜切換',
+          onExitIntent: () {},
+          onMore: () {},
+          onOpenDrawer: () {},
+          onTts: () {},
+          onInterface: () {},
+          onSettings: () {},
+          onAutoPage: () {},
+          onToggleDayNight: () {},
+          onReplaceRule: () {},
+          onShowControls: () {},
+          onDismissControls: () => dismissCalls += 1,
+          onPrevChapter: () {},
+          onNextChapter: () {},
+          onScrubStart: () {},
+          onScrubbing: (_) {},
+          onScrubEnd: (_) {},
+        ),
+      );
+
+      await tester.pumpWidget(shell);
+      final gesture = await tester.startGesture(const Offset(120, 220));
+      await gesture.moveBy(const Offset(4, 3));
+      await gesture.up();
+      await tester.pump();
+
+      expect(dismissCalls, 0);
+      expect(contentTapCalls, 0);
+    },
+  );
+
   testWidgets('permanent info bar tap shows controls', (tester) async {
     var showCalls = 0;
     var dismissCalls = 0;

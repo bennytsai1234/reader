@@ -4,6 +4,7 @@ import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_layout_consta
 import 'package:inkpage_reader/features/reader_v2/features/menu/reader_v2_bottom_menu.dart';
 import 'package:inkpage_reader/features/reader_v2/features/menu/reader_v2_top_menu.dart';
 import 'package:inkpage_reader/features/reader_v2/shell/reader_v2_chapters_drawer.dart';
+import 'package:inkpage_reader/features/reader_v2/viewport/reader_v2_pointer_tap_layer.dart';
 
 class ReaderV2PageShell extends StatelessWidget {
   const ReaderV2PageShell({
@@ -137,9 +138,9 @@ class ReaderV2PageShell extends StatelessWidget {
                 ),
               if (controlsVisible)
                 Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (_) => onDismissControls(),
+                  child: ReaderV2PointerTapLayer(
+                    onTapUp: (_) => onDismissControls(),
+                    child: const SizedBox.expand(),
                   ),
                 ),
               ReaderV2TopMenu(

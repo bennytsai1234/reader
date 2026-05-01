@@ -91,6 +91,9 @@ class _ReaderV2PageState extends State<ReaderV2Page>
       _rebuildQueued = false;
       if (mounted) setState(() {});
     });
+    // A pure tap may be the only event; do not wait for a drag animation to
+    // provide the next frame that drains the post-frame rebuild.
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   @override
