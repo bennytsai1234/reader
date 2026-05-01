@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 class ReaderV2GestureLayer extends StatefulWidget {
@@ -18,7 +19,8 @@ class ReaderV2GestureLayer extends StatefulWidget {
 
 class _ReaderV2GestureLayerState extends State<ReaderV2GestureLayer> {
   int? _pointer;
-  bool _moved = false;
+  Offset? _downPosition;
+  bool _dragged = false;
 
   void _handlePointerDown(PointerDownEvent event) {
     if (!widget.gesturesEnabled || widget.onTapUp == null) return;
@@ -27,17 +29,22 @@ class _ReaderV2GestureLayerState extends State<ReaderV2GestureLayer> {
       return;
     }
     _pointer = event.pointer;
-    _moved = false;
+    _downPosition = event.position;
+    _dragged = false;
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
     if (event.pointer != _pointer) return;
-    _moved = true;
+    final downPosition = _downPosition;
+    if (downPosition == null) return;
+    if ((event.position - downPosition).distance > kTouchSlop) {
+      _dragged = true;
+    }
   }
 
   void _handlePointerUp(PointerUpEvent event) {
     if (event.pointer != _pointer) return;
-    final shouldTap = !_moved;
+    final shouldTap = !_dragged;
     _resetTracking();
     if (!shouldTap || !widget.gesturesEnabled) return;
     widget.onTapUp?.call(
@@ -57,7 +64,8 @@ class _ReaderV2GestureLayerState extends State<ReaderV2GestureLayer> {
 
   void _resetTracking() {
     _pointer = null;
-    _moved = false;
+    _downPosition = null;
+    _dragged = false;
   }
 
   @override

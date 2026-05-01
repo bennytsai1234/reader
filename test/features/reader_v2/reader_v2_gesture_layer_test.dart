@@ -31,7 +31,7 @@ void main() {
     expect(disposeCount, 0);
   });
 
-  testWidgets('small pointer movement is not reported as content tap', (
+  testWidgets('small pointer movement is still reported as content tap', (
     tester,
   ) async {
     var tapCalls = 0;
@@ -49,6 +49,30 @@ void main() {
 
     final gesture = await tester.startGesture(const Offset(120, 180));
     await gesture.moveBy(const Offset(4, 3));
+    await gesture.up();
+    await tester.pump();
+
+    expect(tapCalls, 1);
+  });
+
+  testWidgets('movement beyond tap slop is not reported as content tap', (
+    tester,
+  ) async {
+    var tapCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox.expand(
+          child: ReaderV2GestureLayer(
+            onTapUp: (_) => tapCalls += 1,
+            child: const ColoredBox(color: Colors.white),
+          ),
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(const Offset(120, 180));
+    await gesture.moveBy(const Offset(24, 0));
     await gesture.up();
     await tester.pump();
 
