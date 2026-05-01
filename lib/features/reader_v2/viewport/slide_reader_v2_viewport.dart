@@ -509,30 +509,26 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
 
   Widget _buildTile(ReaderV2SlidePagePlacement placement) {
     final pageCache = placement.page;
-    return GestureDetector(
+    return Stack(
       key: ValueKey<ReaderV2TileKey>(_tileKey(pageCache)),
-      behavior: HitTestBehavior.opaque,
-      onTapUp: widget.onTapUp,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ReaderV2TileLayer(
-            tile: pageCache,
-            tileKey: _tileKey(pageCache),
-            style: widget.style,
-            backgroundColor: widget.backgroundColor,
-            textColor: widget.textColor,
-            expand: true,
-            paintBackground: false,
-          ),
-          ReaderV2TtsHighlightOverlayLayer(
-            tile: pageCache,
-            style: widget.style,
-            textColor: widget.textColor,
-            highlight: widget.ttsHighlight,
-          ),
-        ],
-      ),
+      fit: StackFit.expand,
+      children: [
+        ReaderV2TileLayer(
+          tile: pageCache,
+          tileKey: _tileKey(pageCache),
+          style: widget.style,
+          backgroundColor: widget.backgroundColor,
+          textColor: widget.textColor,
+          expand: true,
+          paintBackground: false,
+        ),
+        ReaderV2TtsHighlightOverlayLayer(
+          tile: pageCache,
+          style: widget.style,
+          textColor: widget.textColor,
+          highlight: widget.ttsHighlight,
+        ),
+      ],
     );
   }
 
@@ -749,18 +745,14 @@ class _SlideReaderV2ViewportState extends State<SlideReaderV2Viewport>
       widget.runtime.state.layoutSpec.anchorOffsetInViewport;
 
   Widget _buildEdgePlaceholder({required String message}) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapUp: widget.onTapUp,
-      child: ColoredBox(
-        color: widget.backgroundColor,
-        child: Center(
-          child: Text(
-            message,
-            style: TextStyle(
-              color: widget.textColor.withValues(alpha: 0.7),
-              fontSize: widget.style.fontSize,
-            ),
+    return ColoredBox(
+      color: widget.backgroundColor,
+      child: Center(
+        child: Text(
+          message,
+          style: TextStyle(
+            color: widget.textColor.withValues(alpha: 0.7),
+            fontSize: widget.style.fontSize,
           ),
         ),
       ),

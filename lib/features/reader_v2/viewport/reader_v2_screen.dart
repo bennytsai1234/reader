@@ -4,7 +4,6 @@ import 'dart:ui' show FrameTiming;
 import 'package:flutter/material.dart';
 import 'package:inkpage_reader/features/reader_v2/layout/reader_v2_style.dart';
 import 'package:inkpage_reader/features/reader_v2/features/tts/reader_v2_tts_highlight.dart';
-import 'package:inkpage_reader/features/reader_v2/viewport/reader_v2_gesture_layer.dart';
 import 'package:inkpage_reader/features/reader_v2/viewport/reader_v2_viewport_controller.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_runtime.dart';
 import 'package:inkpage_reader/features/reader_v2/runtime/reader_v2_state.dart';
@@ -103,6 +102,7 @@ class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
               backgroundColor: widget.backgroundColor,
               textColor: widget.textColor,
               style: widget.style,
+              onTapUp: widget.onContentTapUp,
               controller: widget.viewportController,
               ttsHighlight: widget.ttsHighlight,
             )
@@ -111,13 +111,10 @@ class _EngineReaderV2ScreenState extends State<EngineReaderV2Screen>
               backgroundColor: widget.backgroundColor,
               textColor: widget.textColor,
               style: widget.style,
+              onTapUp: widget.onContentTapUp,
               controller: widget.viewportController,
               ttsHighlight: widget.ttsHighlight,
             );
-    return ReaderV2GestureLayer(
-      onTapUp: widget.onContentTapUp,
-      gesturesEnabled: widget.onContentTapUp != null,
-      child: viewport,
-    );
+    return viewport;
   }
 }

@@ -286,6 +286,65 @@ void main() {
     runtime.dispose();
   });
 
+  testWidgets('scroll viewport handles tap and vertical drag in one layer', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.scroll,
+      chapterCount: 2,
+      paragraphsPerChapter: 80,
+    );
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+    var tapCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: ScrollReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            onTapUp: (_) => tapCalls += 1,
+            controller: ReaderV2ViewportController(),
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    final center = tester.getCenter(find.byType(ScrollReaderV2Viewport));
+    final tapGesture = await tester.startGesture(center);
+    await tapGesture.moveBy(const Offset(4, 3));
+    await tapGesture.up();
+    await tester.pump();
+
+    expect(tapCalls, 1);
+
+    final firstTile = find.byType(ReaderV2TileLayer).first;
+    final startTop = tester.getTopLeft(firstTile).dy;
+    final dragGesture = await tester.startGesture(center);
+    await dragGesture.moveBy(const Offset(0, -24));
+    await tester.pump();
+    await dragGesture.moveBy(const Offset(0, -96));
+    await tester.pump();
+
+    expect(tester.getTopLeft(firstTile).dy, lessThan(startTop));
+
+    await dragGesture.up();
+    await _pumpViewportCommand(tester);
+
+    expect(tapCalls, 1);
+    expect(tester.takeException(), isNull);
+
+    runtime.dispose();
+  });
+
   testWidgets('scroll viewport rubber-bands when dragged beyond book start', (
     tester,
   ) async {
@@ -698,6 +757,68 @@ void main() {
     await _pumpViewport(tester);
 
     expect(runtime.captureVisibleLocation()?.chapterIndex, 2);
+
+    runtime.dispose();
+  });
+
+  testWidgets('slide viewport handles tap and horizontal drag in one layer', (
+    tester,
+  ) async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.slide,
+      chapterCount: 1,
+      paragraphsPerChapter: 80,
+    );
+    final layout = await runtime.debugResolver.ensureLayout(0);
+    expect(layout.pages.length, greaterThan(1));
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+    var tapCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 260,
+          height: 360,
+          child: SlideReaderV2Viewport(
+            runtime: runtime,
+            backgroundColor: Colors.white,
+            textColor: Colors.black,
+            style: _style(),
+            onTapUp: (_) => tapCalls += 1,
+            controller: ReaderV2ViewportController(),
+          ),
+        ),
+      ),
+    );
+    await _pumpViewport(tester);
+
+    final center = tester.getCenter(find.byType(SlideReaderV2Viewport));
+    final tapGesture = await tester.startGesture(center);
+    await tapGesture.moveBy(const Offset(4, 3));
+    await tapGesture.up();
+    await tester.pump();
+
+    expect(tapCalls, 1);
+
+    final currentTile = find.byType(ReaderV2TileLayer).first;
+    expect(tester.getTopLeft(currentTile).dx, closeTo(0, 0.001));
+
+    final dragGesture = await tester.startGesture(center);
+    await dragGesture.moveBy(const Offset(-24, 0));
+    await tester.pump();
+    await dragGesture.moveBy(const Offset(-96, 0));
+    await tester.pump();
+
+    expect(tester.getTopLeft(currentTile).dx, lessThan(0));
+
+    await dragGesture.up();
+    await _pumpViewportCommand(tester);
+
+    expect(tapCalls, 1);
+    expect(tester.takeException(), isNull);
 
     runtime.dispose();
   });
