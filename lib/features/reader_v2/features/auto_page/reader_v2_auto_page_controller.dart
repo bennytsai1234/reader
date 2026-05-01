@@ -42,6 +42,7 @@ class ReaderV2AutoPageController extends ChangeNotifier {
     if (isRunning) return;
     _timer = _timerFactory(_interval, (_) => unawaited(stepAsync()));
     notifyListeners();
+    unawaited(stepAsync());
   }
 
   Future<bool> stepAsync() async {
@@ -61,20 +62,18 @@ class ReaderV2AutoPageController extends ChangeNotifier {
       final delta = _scrollStepDelta();
       if (delta > 0) {
         final animateBy = _viewportController?.animateBy;
-        if (animateBy != null) return animateBy(delta);
+        if (animateBy != null && await animateBy(delta)) return true;
         final scrollBy = _viewportController?.scrollBy;
-        if (scrollBy != null) return scrollBy(delta);
+        if (scrollBy != null && await scrollBy(delta)) return true;
       }
       final moveToNextPage = _viewportController?.moveToNextPage;
-      if (moveToNextPage != null) return moveToNextPage();
+      if (moveToNextPage != null && await moveToNextPage()) return true;
       final moved = runtime.moveToNextPage();
-      if (!moved) stop();
       return Future<bool>.value(moved);
     }
     final moveToNextPage = _viewportController?.moveToNextPage;
-    if (moveToNextPage != null) return moveToNextPage();
+    if (moveToNextPage != null && await moveToNextPage()) return true;
     final moved = runtime.moveSlidePageAndSettle(forward: true);
-    if (!moved) stop();
     return Future<bool>.value(moved);
   }
 

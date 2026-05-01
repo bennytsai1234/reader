@@ -1357,6 +1357,77 @@ void main() {
     },
   );
 
+  test('auto page starts with an immediate page step', () async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.slide,
+      chapterCount: 2,
+      paragraphsPerChapter: 20,
+    );
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+    final fakeTimer = _FakeTimer();
+    var pageCommands = 0;
+    final viewportController =
+        ReaderV2ViewportController()
+          ..moveToNextPage = () async {
+            pageCommands += 1;
+            return true;
+          };
+    final autoPage = ReaderV2AutoPageController(
+      runtime: runtime,
+      viewportController: viewportController,
+      timerFactory: (_, _) => fakeTimer,
+    );
+
+    autoPage.start();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(autoPage.isRunning, isTrue);
+    expect(fakeTimer.isActive, isTrue);
+    expect(pageCommands, 1);
+
+    autoPage.dispose();
+    runtime.dispose();
+  });
+
+  test('auto page falls back when smooth scroll cannot advance', () async {
+    final runtime = _runtime(
+      initialMode: ReaderV2Mode.scroll,
+      chapterCount: 2,
+      paragraphsPerChapter: 20,
+    );
+    await runtime.jumpToLocation(
+      const ReaderV2Location(chapterIndex: 0, charOffset: 0),
+      immediateSave: false,
+    );
+    var animateCalls = 0;
+    var scrollCalls = 0;
+    final viewportController =
+        ReaderV2ViewportController()
+          ..animateBy = (delta) async {
+            animateCalls += 1;
+            return false;
+          }
+          ..scrollBy = (delta) async {
+            scrollCalls += 1;
+            return true;
+          };
+    final autoPage = ReaderV2AutoPageController(
+      runtime: runtime,
+      viewportController: viewportController,
+      viewportExtent: () => 400,
+    );
+
+    expect(await autoPage.stepAsync(), isTrue);
+    expect(animateCalls, 1);
+    expect(scrollCalls, 1);
+
+    autoPage.dispose();
+    runtime.dispose();
+  });
+
   test('auto page uses slide moveToNextPage command', () async {
     final runtime = _runtime(
       initialMode: ReaderV2Mode.slide,
@@ -1726,6 +1797,21 @@ class _FakeTtsEngine extends ReaderV2TtsEngine {
     _currentWordStart = start;
     _currentWordEnd = end;
     notifyListeners();
+  }
+}
+
+class _FakeTimer implements Timer {
+  bool _active = true;
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  int get tick => 0;
+
+  @override
+  void cancel() {
+    _active = false;
   }
 }
 
