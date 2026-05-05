@@ -39,6 +39,14 @@
 - 本地書：`lib/core/local_book/`、`lib/core/services/local_book_service.dart`、`lib/core/services/epub_service.dart`。
 - 測試：`tool/flutter_test_with_quickjs.sh test/core/engine`，以及 `flutter test test/core/local_book test/core/models/replace_rule_test.dart test/features/reader_v2/reader_v2_content_transformer_test.dart`。
 
+## 目標專案變更路線
+
+- 修改規則語義：先看 `AnalyzeRule`、`RuleAnalyzer` 或目標 parser，再補對應 `test/core/engine` fixture；若與 Legado parity 有關，記錄差異是故意保留還是待補。
+- 修改 URL/request 規則：先更新 `AnalyzeUrl` 與 network/cookie/webview 邊界，再驗證 search/explore/detail/toc/content 五段流程。
+- 修改 JS extension：先更新 `lib/core/engine/js/`，再跑 QuickJS 專用腳本與 async bridge 測試，避免同步/非同步語義漂移。
+- 修改本地書解析：先從格式 parser 與 `LocalBookService` 下手，再同步書架匯入、章節 offset、reader fallback 與本地書測試。
+- 修改替換規則：先看核心模型與 DAO，再檢查一般替換 UI、閱讀器內替換入口與 content transformer。
+
 ## 已知風險
 
 - Legado 規則語義龐大，`reader` 目前是 Flutter/Dart 實作；不要假設 Kotlin 行為已完整覆蓋。
@@ -50,5 +58,5 @@
 ## 不要做
 
 - 不新增未規劃的本地格式或規則體系，除非使用者明確要求。
-- 不為了追 Legado 完整功能而改變 `reader` 已有 parser 對測試 fixture 的相容性。
+- 不為了追 Legado 完整功能而改變 `reader` 已有 parser 對測試 fixture 的相容性；parity 工作要用測試鎖定差異。
 - 不在本地書服務中處理書架 UI 或閱讀器 viewport。

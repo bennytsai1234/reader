@@ -35,6 +35,13 @@
 - 搜尋 UI 狀態：`lib/features/search/search_provider.dart`、`lib/features/search/search_page.dart`。
 - 測試：`flutter test test/features/explore/explore_provider_test.dart test/features/explore/explore_show_provider_test.dart test/features/search/search_model_test.dart test/features/search/search_provider_test.dart`。
 
+## 目標專案變更路線
+
+- 修改探索分類：先看 `ExploreUrlParser` 與 `ExploreProvider`，再檢查 `BookSource.enabledExplore`、runtime health 與 `legado_explore_kind_flow.dart` 是否仍匹配。
+- 修改探索結果分頁：先更新 `ExploreShowProvider` request serial 與分頁狀態，再驗證 stale response 不會覆蓋新分類。
+- 修改搜尋合併或排序：先更新 `search_model.dart` 的 normalization、duplicate 與 relevance 規則，再同步 `SearchProvider` 篩選、換源候選與相關測試。
+- 若來源可搜尋/可探索資格變更，回頭檢查 `Source Manager And Browser` 的健康度與停用策略。
+
 ## 已知風險
 
 - `SearchModel` 使用共享 `CancelToken` 與 pool 並行，修改取消或 timeout 時要防止舊結果回寫新搜尋。
@@ -45,5 +52,5 @@
 ## 不要做
 
 - 不把探索頁擴張成內容平台或 RSS 入口，除非使用者另行要求。
-- 不因為 `legado` 有搜內文等更多搜尋變體就新增需求。
+- 不因為 `legado` 有搜內文等更多搜尋變體就新增需求；只有明確 parity 工作才進入功能流程。
 - 不在搜尋 provider 裡直接處理書源編輯、校驗或登入流程。

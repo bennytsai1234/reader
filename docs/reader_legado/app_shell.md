@@ -36,9 +36,16 @@
 - Provider：`lib/app_providers.dart`。
 - 基礎檢查：`flutter analyze lib/main.dart lib/app_providers.dart lib/features/welcome`，必要時加上 `flutter test test/features/settings/settings_pages_compile_test.dart`。
 
+## 目標專案變更路線
+
+- 新增全域服務：先在服務自身建立可重複初始化或明確生命週期，再更新 `lib/core/di/injection.dart`；若 UI 要監聽狀態，再同步 `lib/app_providers.dart` 與相關 widget 測試。
+- 修改啟動流程：先從 `lib/main.dart` 的必要初始化與 post-first-frame 任務分界下手，再檢查 `SplashPage`、`StartupFailurePanel` 與 `Workmanager` callback 是否仍能在失敗時回復。
+- 修改主導航或根 `Navigator`：先看 `main_page.dart` 與 `rootNavigatorKey` 使用點，再驗證 `SourceVerificationCoordinator`、deep link 匯入與啟動後導頁沒有被破壞。
+- 若啟動責任、全域 provider 或主流程改變，更新本模組與受影響 feature 模組文檔。
+
 ## 已知風險
 
-- `configureDependencies()` 使用 get_it 註冊單例；重試啟動前若沒有 reset，重複註冊會造成狀態污染。
+- `configureDependencies()` 使用 get_it 註冊單例；`_retryCriticalStartup()` 會先 reset，但其他重複呼叫路徑仍要避免 duplicate registration。
 - `Workmanager` callback 在背景 isolate 重新初始化 DI；新增服務時要確認背景任務可用，不能依賴主 isolate 的 provider 狀態。
 - `MaterialApp.builder` 包住 `SourceVerificationCoordinator`；修改 navigation key 或 route 行為會影響驗證流程。
 - `SplashPage` 會在必要初始化完成後進入 `MainPage`，延後初始化失敗目前只寫 log，不能假設所有 default data 都已經存在。

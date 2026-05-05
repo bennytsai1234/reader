@@ -40,10 +40,18 @@
 - 備份還原：`lib/core/services/backup_service.dart`、`restore_service.dart`。
 - 測試：`flutter test test/features/settings test/download_executor_test.dart test/backup_service_test.dart test/core/services/tts_state_test.dart`，內容儲存變更再加 reader_v2 與 book_detail tests。
 
+## 目標專案變更路線
+
+- 新增偏好：先新增 `PreferKey` 與 `SettingsProvider` 預設/載入/setter，再同步設定頁、reader_v2 prefs repository 與測試。
+- 修改下載：先看 `DownloadService` 與 `download/` mixins，再同步 `Book Detail` 排程入口、`Cache Manager` UI、DAO 狀態與 `download_executor_test.dart`。
+- 修改章節內容儲存：先更新 `ReaderChapterContentStore`/`Storage`，再檢查 `Reader Runtime`、`Book Detail` 快取狀態、備份還原與下載過濾。
+- 修改備份格式：先更新 `BackupService` 與 `RestoreService` manifest/schema 判定，再同步 DAO/model serialization 與 `test/backup_service_test.dart`。
+- TTS 設定或服務變更要同時檢查全域 `TTSService` 與 reader_v2 TTS controller/highlight。
+
 ## 已知風險
 
 - `SettingsProvider` 同時載入大量偏好；新增欄位要補預設值、setter、`PreferKey`，必要時補 UI 與測試。
-- `DownloadService` 是 singleton 且在 constructor 載入任務；測試與重複初始化要避免共享殘留狀態。
+- `DownloadService` 是 factory singleton 且 constructor 會載入任務；測試與重複初始化要避免共享殘留狀態。
 - 下載任務與 chapter content store 都依賴章節 index/bookUrl/origin；來源切換或章節重建會影響快取命中。
 - `BackupService.currentSchemaVersion` 依 `AppDatabase().schemaVersion`，還原會拒絕缺少或不相容 manifest；備份格式變更要同步 restore。
 - `SharedPreferences` 裡的舊 key 可能仍被現有使用者資料依賴，不能只看目前 UI 是否使用。
@@ -51,5 +59,5 @@
 ## 不要做
 
 - 不把快取或下載擴張成新的產品功能，除非使用者明確要求。
-- 不為了對齊 `legado` 新增 `reader` 未使用的設定分類或 TTS 引擎。
+- 不為了對齊 `legado` 新增 `reader` 未使用的設定分類或 TTS 引擎；parity 工作也要先拆清楚。
 - 不讓設定頁直接修改 reader_v2 runtime 內部狀態；應透過既有 controller/repository/provider。

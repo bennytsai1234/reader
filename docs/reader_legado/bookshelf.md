@@ -34,6 +34,13 @@
 - 更新與下載：`lib/features/bookshelf/provider/bookshelf_update_mixin.dart`、`lib/core/services/download_service.dart`。
 - 測試：`flutter test test/features/bookshelf/bookshelf_provider_test.dart test/features/bookshelf/bookshelf_page_compile_test.dart test/core/services/bookshelf_exchange_service_test.dart`。
 
+## 目標專案變更路線
+
+- 修改書架排序或選取：先更新 `bookshelf_logic_mixin.dart` 與 provider state，再檢查 `bookshelf_page.dart` 的 UI 呈現與 `bookshelf_provider_test.dart`。
+- 修改書籍更新：先看 `bookshelf_update_mixin.dart` 的 `checkBookUpdate()`，再同步 `Book` 保留欄位、`ChapterDao.insertChapters()`、`Reader Runtime` 進度欄位與詳情頁更新行為。
+- 修改本地書匯入：先從 `bookshelf_import_mixin.dart` 與 `LocalBookService` 下手，再檢查本地書章節、封面、`Book.isLocal` 與閱讀器 fallback。
+- 修改刪除或清理：先走 `BookStorageService.discardBook()`，再確認 DAO、檔案資產、下載任務與書籤不留下孤兒資料。
+
 ## 已知風險
 
 - `loadBooks()` 會排序並通知 UI；排序偏好、手動 reorder 與資料庫 order 需要一致。

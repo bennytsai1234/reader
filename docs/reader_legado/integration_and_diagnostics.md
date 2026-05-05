@@ -38,6 +38,13 @@
 - 診斷：`lib/features/about/crash_log_page.dart`、`lib/core/services/crash_handler.dart`、`lib/core/services/app_log_service.dart`。
 - 測試：`flutter test test/import_logic_test.dart test/local_txt_test.dart test/core/local_book`；外部 intent 行為通常需要手動 smoke 或 widget-level 補測。
 
+## 目標專案變更路線
+
+- 修改 URI 支援：先更新 `UriAssociationHandler` 的 scheme/type mapping，再同步 import dialog、`api.md` parity 期望與 source/replace/book 對應測試。
+- 修改分享檔案匯入：先看 `FileAssociationHandler` 與 `AssociationDialogHelper`，再檢查本地書複製策略、JSON 類型推斷與 `BookshelfProvider.importLocalBookPath()`。
+- 修改 crash/log：先看 `CrashHandler` 與 `AppLog`，再同步 about/crash log UI、啟動錯誤面板與錯誤回報內容。
+- 若外部入口要追 Legado parity，先界定支援 type 與安全邊界，再決定是否需要新模組或只是本模組擴充。
+
 ## 已知風險
 
 - Android/iOS intent 與分享 callback 可能早於目標 page ready；使用 `BuildContext` 前要檢查 `mounted`。

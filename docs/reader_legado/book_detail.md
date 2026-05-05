@@ -34,6 +34,13 @@
 - 換封面：`lib/features/book_detail/change_cover_provider.dart`、`lib/features/book_detail/change_cover_sheet.dart`。
 - 測試：`flutter test test/features/book_detail/book_detail_provider_test.dart test/features/book_detail/book_detail_page_compile_test.dart test/features/book_detail/book_info_header_smoke_test.dart`。
 
+## 目標專案變更路線
+
+- 修改詳情載入：先看 `BookDetailProvider._init()`、`_loadSource()`、`_loadBookInfo()`、`_loadChapters()`，再確認失敗 fallback、來源健康度訊息與 UI loading 狀態。
+- 修改換源：先更新 `book_detail_change_source_provider.dart` 的候選邏輯，再檢查 `Book.migrateTo`、章節清理、正文快取與書架進度保留。
+- 修改快取或下載入口：先從 `BookDetailCacheStatus` 與 `StorageDownloadQueueResult` 下手，再同步 `DownloadService`、`ReaderChapterContentStore` 與 `Settings And Cache`。
+- 修改封面：先查 `ChangeCoverProvider` 與 `BookCoverStorageService`，再驗證詳情頁、書架與備份是否使用相同封面欄位。
+
 ## 已知風險
 
 - `changeSource()` 會先取得候選來源詳情與章節，再用舊書資料遷移；任何欄位漏保留都可能造成進度、書架狀態或自訂資訊遺失。
@@ -44,5 +51,5 @@
 ## 不要做
 
 - 不把詳情頁擴張成書源管理頁或閱讀器設定頁。
-- 不為了對齊 `legado` 新增 `reader` 沒有的詳情頁分支。
+- 不為了對齊 `legado` 新增 `reader` 沒有的詳情頁分支，除非這次功能工作明確要求 parity。
 - 不在詳情頁直接解析規則；應委派 `BookSourceService` 與 engine。

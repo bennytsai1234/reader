@@ -37,6 +37,14 @@
 - 排版與 viewport：`lib/features/reader_v2/layout/`、`render/`、`viewport/`。
 - 測試：`flutter test test/features/reader_v2`，效能或 viewport 變更至少跑對應 `reader_v2_viewport*_test.dart` 與 `reader_v2_layout_engine_test.dart`。
 
+## 目標專案變更路線
+
+- 修改開書或章節切換：先看 `ReaderV2Runtime.openBook()`、`jumpToLocation()` 與 `ReaderV2Resolver`，再檢查 preload generation、錯誤 phase 與進度保存。
+- 修改正文管線：先從 `ReaderV2ChapterRepository` 與 `ReaderV2ContentTransformer` 下手，再同步替換規則、簡繁轉換、`ReaderChapterContentStorage` 與 source switch 後 cache invalidation。
+- 修改排版：先更新 `ReaderV2LayoutSpec` 與 `ReaderV2LayoutEngine`，再檢查 render page、viewport restoration、TTS char range 與 layout engine tests。
+- 修改 scroll/slide 互動：先看 `viewport/` 的 controller、position tracker 與 visible page calculator，再驗證 `ReaderV2Runtime` 的 neighbor advance 與 saved anchor。
+- 若閱讀器 API、狀態生命週期或跨層責任改變，更新本模組與 `Settings And Cache`、`Book Detail` 的邊界說明。
+
 ## 已知風險
 
 - `ReaderV2Runtime` 透過 request id、layout generation 與 capture/restore callback 避免 stale async 更新；新增 async 流程時要延續這套防護。

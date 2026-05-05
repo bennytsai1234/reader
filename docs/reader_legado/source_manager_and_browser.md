@@ -40,6 +40,14 @@
 - Browser/驗證：`lib/features/browser/browser_provider.dart`、`source_verification_coordinator.dart`、`lib/core/services/source_verification_service.dart`。
 - 測試：`flutter test test/features/source_manager/source_manager_provider_test.dart test/features/source_manager/source_manager_page_smoke_test.dart test/features/source_manager/source_login_test.dart test/core/services/check_source_service_test.dart test/core/services/source_verification_service_test.dart test/tool/source_validation_support_test.dart`。
 
+## 目標專案變更路線
+
+- 修改書源匯入：先更新 `SourceImportService` 的 parse/preview/prepare 流程，再檢查 import preview UI、非小說來源標籤、`BookSource` serialization 與匯入測試。
+- 修改書源列表篩選或排序：先看 `SourceManagerProvider` 的 visible cache dirty flag，再同步 `source_filter_bar.dart`、`source_batch_toolbar.dart` 與 smoke tests。
+- 修改校驗策略：先更新 `CheckSourceService` 與 `SourceValidationContext`，再同步 runtime health 寫回、清理候選、tool validation support 與搜尋/探索啟用條件。
+- 修改登入或驗證：先看 `BrowserProvider`、`SourceVerificationCoordinator` 與 `SourceVerificationService`，再驗證 Cookie normalization、排隊策略與 source login tests。
+- 若 parity 要追 `legado` 書源管理能力，先把來源類型、資料欄位、校驗語義和 UI 入口分成獨立 feature boundaries。
+
 ## 已知風險
 
 - `CheckSourceService` 會把健康狀態寫回 source group/comment；變更標籤或 message 合成會影響清理候選、搜尋池與 UI 分組。
@@ -51,5 +59,5 @@
 ## 不要做
 
 - 不把 WebView 擴張成一般瀏覽器產品。
-- 不因為 `legado` 支援更多來源類型就新增 `reader` 未要求的 RSS、音訊或漫畫來源能力。
+- 不因為 `legado` 支援更多來源類型就新增 `reader` 未要求的 RSS、音訊或漫畫來源能力；明確 parity 工作也要拆獨立範圍。
 - 不在書源管理 UI 直接實作規則解析；規則執行仍屬 `core/engine` 與 `BookSourceService`。
