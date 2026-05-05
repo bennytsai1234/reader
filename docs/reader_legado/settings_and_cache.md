@@ -1,63 +1,68 @@
 # Settings And Cache
 
-## 目標專案目前狀態
+## Current Responsibility
 
-- 設定主狀態在 `lib/features/settings/settings_provider.dart`，基底在 `provider/settings_base.dart`，以 `SharedPreferences` 儲存偏好並透過 `ChangeNotifier` 通知 UI。
-- 設定頁分散在 `lib/features/settings/*_settings_page.dart`，閱讀器內設定在 `lib/features/reader_v2/features/settings`。
-- TTS 全域服務是 get_it 的 `TTSService`，`SettingsProvider` 會同步 rate/pitch/volume，`reader_v2` 也有自己的 TTS controller。
-- 下載在 `lib/core/services/download_service.dart`，由 `DownloadBase`、`DownloadScheduler`、`DownloadExecutor` 拆分，並持久化 `DownloadTask`。
-- 章節內容儲存、預備與排程在 `ReaderChapterContentStore`、`ReaderChapterContentStorage`、`ChapterContentPreparationPipeline`、`ChapterContentScheduler`。
-- 備份與還原在 `BackupService`、`RestoreService`，會輸出/匯入書架、書源、替換規則、書籤、閱讀紀錄、分組、下載任務、章節內容與 `config.json`。
+- Owns app preferences, reading/TTS/settings pages, reader-v2 preference repository, download task lifecycle, chapter content storage/preparation, cache manager UI, TTS service configuration, backup, restore, and settings-backed app behavior.
+- Future work should start here when a setting does not persist/apply, download/cache state is inconsistent, chapter content storage changes, TTS settings drift, or backup/restore fails.
 
-## 目標專案上下游
+## Scope
 
-- 上游依賴：`SharedPreferences`、`PreferKey`、`AppConfig`、`AppDatabase` schema、各 DAO、`BookSourceService`、`NetworkService`、`TTSService`、檔案系統 storage paths。
-- 下游影響：App Shell 主題與語系、Reader Runtime 排版/朗讀、Book Detail 快取與下載、Bookshelf 批次下載、Source Manager 校驗設定、備份還原完整性。
-- 偏好 key 與備份 schema 是長期相容契約；改名或移除要有遷移策略。
+- Settings state/UI: `lib/features/settings/settings_provider.dart`, `provider/settings_base.dart`, `settings_page.dart`, `*_settings_page.dart`, `font_provider.dart`, `lib/core/constant/prefer_key.dart`.
+- Reader settings: `lib/features/reader_v2/features/settings/`.
+- TTS/audio: `lib/core/services/tts_service.dart`, `audio_handler.dart`, reader-v2 TTS feature.
+- Download/cache: `lib/core/services/download_service.dart`, `lib/core/services/download/`, `lib/features/cache_manager/download_manager_page.dart`.
+- Chapter content storage: `reader_chapter_content_store.dart`, `reader_chapter_content_storage.dart`, `chapter_content_preparation_pipeline.dart`, `chapter_content_scheduler.dart`.
+- Backup/restore/export: `backup_service.dart`, `restore_service.dart`, `export_book_service.dart`.
+- Tests: `test/features/settings/`, `test/download_executor_test.dart`, `test/backup_service_test.dart`, `test/core/services/tts_state_test.dart`, content storage tests through reader/detail modules.
 
-## 參考對應
+## Dependencies And Impact
 
-- `legado/app/src/main/java/io/legado/app/ui/config`
-- `legado/app/src/main/java/io/legado/app/help/config`
-- `legado/app/src/main/java/io/legado/app/ui/book/cache`
-- `legado/app/src/main/java/io/legado/app/service/DownloadService.kt`
-- `legado/app/src/main/java/io/legado/app/service/CacheBookService.kt`
-- `legado/app/src/main/java/io/legado/app/help/storage/Backup.kt`
-- `legado/app/src/main/java/io/legado/app/help/storage/Restore.kt`
+- Depends on `SharedPreferences`, `PreferKey`, `AppConfig`, DAOs, `BookSourceService`, network service, `TTSService`, file/storage paths, and Data Model contracts.
+- Impacts App Shell theme/locale, Reader Runtime layout/TTS/content, Book Detail cache/download entrypoints, Bookshelf batch download, Source Manager validation settings, backup/restore compatibility, and release diagnostics when configuration changes.
+- Preference keys and backup schema are long-lived user data contracts.
 
-## 可參考模式
+## Key Flows
 
-- 設定頁可按閱讀、外觀、TTS、備份、隱私等主題拆分，但設定套用要透過 provider/service，而不是頁面直接操作下游模組。
-- 下載與快取任務要能暫停、恢復、重試、取消，並避免前景閱讀被背景任務拖慢。
-- 備份還原要先驗證 manifest/schema，再匯入資料，失敗時應有清楚中止點。
+- `SettingsProvider` loads preferences from `SharedPreferences`, exposes setters, and notifies UI and dependent services.
+- Reader-v2 settings repository maps shared preferences into reader layout/runtime settings.
+- `DownloadService` composes base/scheduler/executor behavior, persists `DownloadTask`, and coordinates chapter content downloads.
+- Content storage services separate chapter metadata from stored chapter content and track ready/failure state.
+- Backup exports app data and config; restore validates manifest/schema before importing persisted state.
+- TTS settings update both global `TTSService` and reader-v2 TTS controller behavior.
 
-## 目標專案變更入口
+## Change Entry Points
 
-- 設定狀態：`lib/features/settings/settings_provider.dart`、`lib/features/settings/provider/settings_base.dart`、`lib/core/constant/prefer_key.dart`。
-- 設定 UI：`lib/features/settings/*.dart`、`lib/features/reader_v2/features/settings/`。
-- 下載：`lib/core/services/download_service.dart`、`lib/core/services/download/`、`lib/features/cache_manager/download_manager_page.dart`。
-- 內容儲存：`lib/core/services/reader_chapter_content_*`、`lib/core/services/chapter_content_*`。
-- 備份還原：`lib/core/services/backup_service.dart`、`restore_service.dart`。
-- 測試：`flutter test test/features/settings test/download_executor_test.dart test/backup_service_test.dart test/core/services/tts_state_test.dart`，內容儲存變更再加 reader_v2 與 book_detail tests。
+- New or changed setting: `PreferKey`, `SettingsProvider`, relevant settings page, reader-v2 prefs repository if reader-facing.
+- Download lifecycle: `download_service.dart`, `core/services/download/`, `download_manager_page.dart`, `DownloadDao`.
+- Chapter content storage: `reader_chapter_content_*`, `chapter_content_*`, `ReaderChapterContentDao`.
+- Backup/restore: `backup_service.dart`, `restore_service.dart`, model/DAO serialization.
+- TTS: `tts_service.dart`, `features/reader_v2/features/tts/`, `tts_settings_page.dart`.
+- Tests: `flutter test test/features/settings test/download_executor_test.dart test/backup_service_test.dart test/core/services/tts_state_test.dart`.
 
-## 目標專案變更路線
+## Change Routes
 
-- 新增偏好：先新增 `PreferKey` 與 `SettingsProvider` 預設/載入/setter，再同步設定頁、reader_v2 prefs repository 與測試。
-- 修改下載：先看 `DownloadService` 與 `download/` mixins，再同步 `Book Detail` 排程入口、`Cache Manager` UI、DAO 狀態與 `download_executor_test.dart`。
-- 修改章節內容儲存：先更新 `ReaderChapterContentStore`/`Storage`，再檢查 `Reader Runtime`、`Book Detail` 快取狀態、備份還原與下載過濾。
-- 修改備份格式：先更新 `BackupService` 與 `RestoreService` manifest/schema 判定，再同步 DAO/model serialization 與 `test/backup_service_test.dart`。
-- TTS 設定或服務變更要同時檢查全域 `TTSService` 與 reader_v2 TTS controller/highlight。
+- Add a preference: define key/default/load/setter, update settings UI, sync reader-v2 repository or service consumers, and add focused tests.
+- Change download behavior: update service/scheduler/executor with DAO state transitions, then check Book Detail scheduling, Cache Manager UI, and download executor tests.
+- Change content storage keys/state: synchronize Data Model, Reader Runtime, Book Detail cache status, backup/restore, and download filtering.
+- Change backup format: update export and restore together, validate schema/manifest behavior, and add compatibility tests.
+- Change TTS settings/service: update global service, settings provider, reader-v2 TTS controller/highlight, and TTS state tests.
+- Update atlas docs when settings ownership, persistence contracts, or cache flows move between modules.
 
-## 已知風險
+## Known Risks
 
-- `SettingsProvider` 同時載入大量偏好；新增欄位要補預設值、setter、`PreferKey`，必要時補 UI 與測試。
-- `DownloadService` 是 factory singleton 且 constructor 會載入任務；測試與重複初始化要避免共享殘留狀態。
-- 下載任務與 chapter content store 都依賴章節 index/bookUrl/origin；來源切換或章節重建會影響快取命中。
-- `BackupService.currentSchemaVersion` 依 `AppDatabase().schemaVersion`，還原會拒絕缺少或不相容 manifest；備份格式變更要同步 restore。
-- `SharedPreferences` 裡的舊 key 可能仍被現有使用者資料依賴，不能只看目前 UI 是否使用。
+- `SettingsProvider` loads many preferences; missing defaults or setters can make UI appear correct while persistence is broken.
+- `DownloadService` loads tasks in its lifecycle; tests and repeated initialization can leak shared state if not isolated.
+- Download tasks and content storage depend on chapter index, book URL, origin, and content keys; source switch or chapter rebuild can invalidate cache assumptions.
+- `BackupService.currentSchemaVersion` follows database schema version; restore can reject incompatible manifests.
+- Old `SharedPreferences` keys may still exist in user data even when current UI no longer exposes them.
 
-## 不要做
+## Reference Notes
 
-- 不把快取或下載擴張成新的產品功能，除非使用者明確要求。
-- 不為了對齊 `legado` 新增 `reader` 未使用的設定分類或 TTS 引擎；parity 工作也要先拆清楚。
-- 不讓設定頁直接修改 reader_v2 runtime 內部狀態；應透過既有 controller/repository/provider。
+- Useful Legado counterparts: `ui/config`, `help/config`, `ui/book/cache`, `service/DownloadService.kt`, `service/CacheBookService.kt`, `help/storage/Backup.kt`, `help/storage/Restore.kt`, read-aloud services.
+- Legado is useful for separating settings pages from downstream services and for download/cache/backup recovery points. Feature parity is disabled, so extra Legado setting categories are not implied.
+
+## Do Not Do
+
+- Do not let settings pages directly mutate reader runtime internals; use provider/repository/controller boundaries.
+- Do not rename or remove preference keys without migration and restore implications.
+- Do not expand cache/download into new product features unless explicitly requested.

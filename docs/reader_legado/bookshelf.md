@@ -1,55 +1,61 @@
 # Bookshelf
 
-## 目標專案目前狀態
+## Current Responsibility
 
-- 主要 UI 與狀態在 `lib/features/bookshelf/bookshelf_page.dart`、`lib/features/bookshelf/bookshelf_provider.dart`。
-- `BookshelfProvider` 由 `BookshelfProviderBase` 加上三個 mixin 組成：`bookshelf_logic_mixin.dart` 管 UI 偏好、排序、批次選取；`bookshelf_update_mixin.dart` 管更新檢查、批次下載與書架匯入；`bookshelf_import_mixin.dart` 管本地書匯入。
-- 書架資料從 `BookDao.getInBookshelf()` 讀取，並透過 `AppEventBus.upBookshelf` 重新載入。
-- 刪除書籍時會走 `BookStorageService.discardBook()`，同步清理章節、正文儲存、書籤、下載任務與封面資產。
+- Owns the main bookshelf list, bookshelf sorting, manual reorder, batch selection, local book import entrypoints, book update checks, batch download scheduling, and deletion cleanup entrypoints.
+- Future work should start here when a user action begins from the bookshelf or when bookshelf state disagrees with detail, reader progress, download state, or local-book imports.
 
-## 目標專案上下游
+## Scope
 
-- 上游依賴：`BookDao`、`BookSourceDao`、`ChapterDao`、`BookSourceService`、`LocalBookService`、`BookCoverStorageService`、`ReaderChapterContentStore`、`DownloadService`、`BookshelfExchangeService`。
-- 下游影響：`lib/features/book_detail`、`lib/features/reader_v2`、`lib/features/settings`、批次下載、書架排序與進入閱讀的主流程。
-- 本地書與線上書在更新、下載、章節內容來源上分歧，跨模組變更要先確認 `Book.isLocal` 與 `origin == 'local'` 的路徑。
+- UI and provider: `lib/features/bookshelf/bookshelf_page.dart`, `bookshelf_provider.dart`, `provider/bookshelf_provider_base.dart`, `bookshelf_logic_mixin.dart`, `bookshelf_update_mixin.dart`, `bookshelf_import_mixin.dart`.
+- Supporting services: `lib/core/services/book_storage_service.dart`, `bookshelf_exchange_service.dart`, `bookshelf_state_tracker.dart`, `local_book_service.dart`, `download_service.dart`.
+- Data contracts: `BookDao`, `ChapterDao`, `BookSourceDao`, `Book`, `BookChapter`, `ReaderChapterContentStore`.
+- Tests: `test/features/bookshelf/`, `test/core/services/bookshelf_exchange_service_test.dart`, local-book import tests when import paths change.
 
-## 參考對應
+## Dependencies And Impact
 
-- `legado/app/src/main/java/io/legado/app/ui/main/bookshelf`
-- `legado/app/src/main/java/io/legado/app/ui/book/manage`
-- `legado/app/src/main/java/io/legado/app/ui/book/group`
-- `legado/app/src/main/java/io/legado/app/help/book/BookHelp.kt`
+- Depends on DAO access, `BookSourceService`, local book parsers, cover storage, reader content storage, download scheduler, and app event bus refresh signals.
+- Impacts Book Detail, Reader Runtime opening/progress, Settings/Cache download state, local book storage, backup/restore, and search/detail bookshelf markers.
+- Online books and local books split on `Book.isLocal` and `origin == 'local'`; changes must preserve both paths.
 
-## 可參考模式
+## Key Flows
 
-- 書架列表刷新、分組、排序、批次操作應維持清楚邊界，避免 UI 操作直接混入網路抓取細節。
-- 書籍更新流程要保留原書架資訊、進度與自訂資料，再更新來源回傳的書籍與章節。
-- 刪除或移除書籍要集中處理 downstream 資產清理，避免留下孤兒章節或下載任務。
+- `BookshelfProvider` composes base state with logic, update, and import mixins.
+- `loadBooks()` reads `BookDao.getInBookshelf()`, applies sort/display preferences, and notifies the UI.
+- Update checks call source services to refresh book info and chapters without losing user-owned progress and bookshelf metadata.
+- Local imports delegate file parsing and chapter generation to `LocalBookService`, then refresh the bookshelf.
+- Deletion routes through `BookStorageService.discardBook()` so chapters, content cache, bookmarks, download tasks, and cover assets are cleaned together.
 
-## 目標專案變更入口
+## Change Entry Points
 
-- 書架狀態：`lib/features/bookshelf/bookshelf_provider.dart` 與 `lib/features/bookshelf/provider/*.dart`。
-- 書架 UI：`lib/features/bookshelf/bookshelf_page.dart`。
-- 資料清理：`lib/core/services/book_storage_service.dart`。
-- 更新與下載：`lib/features/bookshelf/provider/bookshelf_update_mixin.dart`、`lib/core/services/download_service.dart`。
-- 測試：`flutter test test/features/bookshelf/bookshelf_provider_test.dart test/features/bookshelf/bookshelf_page_compile_test.dart test/core/services/bookshelf_exchange_service_test.dart`。
+- List state, selection, sorting: `provider/bookshelf_logic_mixin.dart`, `bookshelf_provider_base.dart`, `bookshelf_page.dart`.
+- Update and batch download: `provider/bookshelf_update_mixin.dart`, `lib/core/services/download_service.dart`.
+- Local import: `provider/bookshelf_import_mixin.dart`, `lib/core/services/local_book_service.dart`, `lib/core/local_book/`.
+- Cleanup: `lib/core/services/book_storage_service.dart`.
+- Tests: `flutter test test/features/bookshelf test/core/services/bookshelf_exchange_service_test.dart`.
 
-## 目標專案變更路線
+## Change Routes
 
-- 修改書架排序或選取：先更新 `bookshelf_logic_mixin.dart` 與 provider state，再檢查 `bookshelf_page.dart` 的 UI 呈現與 `bookshelf_provider_test.dart`。
-- 修改書籍更新：先看 `bookshelf_update_mixin.dart` 的 `checkBookUpdate()`，再同步 `Book` 保留欄位、`ChapterDao.insertChapters()`、`Reader Runtime` 進度欄位與詳情頁更新行為。
-- 修改本地書匯入：先從 `bookshelf_import_mixin.dart` 與 `LocalBookService` 下手，再檢查本地書章節、封面、`Book.isLocal` 與閱讀器 fallback。
-- 修改刪除或清理：先走 `BookStorageService.discardBook()`，再確認 DAO、檔案資產、下載任務與書籤不留下孤兒資料。
+- Sorting or selection change: update provider state first, then UI rendering and tests that assert visible order or selection mode.
+- Book update change: inspect update mixin, `Book.migrateTo`/book preservation logic, chapter insertion, reader progress fields, and detail refresh behavior.
+- Local import change: update parser/service boundary, then verify chapter offsets, cover handling, `Book.isLocal`, and reader fallback.
+- Delete/cleanup change: keep `BookStorageService.discardBook()` as the central route and validate all downstream storage cleanup.
+- If bookshelf state ownership changes, update this module plus Book Detail, Reader Runtime, Settings/Cache, or Data Model docs as needed.
 
-## 已知風險
+## Known Risks
 
-- `loadBooks()` 會排序並通知 UI；排序偏好、手動 reorder 與資料庫 order 需要一致。
-- 批次更新同時觸發多個來源請求，錯誤目前以單本結果回報；不要讓單本失敗中斷整批書架刷新。
-- 批次下載會依章節儲存狀態過濾待下載章節；修改內容儲存 key 或章節 index 時要一起檢查下載與詳情頁快取狀態。
-- 本地書匯入會複製封面與寫入章節；檔案路徑、charset、章節 offset 錯誤會一路影響 Reader Runtime。
+- Sorting preferences, manual order, and database `order` can drift if only UI state is updated.
+- Batch updates must isolate per-book failures; one slow or broken source should not abort the whole bookshelf refresh.
+- Download filtering depends on chapter index, book URL, origin, and content-store keys.
+- Local TXT import depends on charset and byte offsets; parser changes can break previously imported chapter positions.
 
-## 不要做
+## Reference Notes
 
-- 不因為 `legado` 有更多書架管理能力就擴增 `reader` 未要求的分組或批次功能。
-- 不在書架層直接解析書源規則或章節正文。
-- 不把閱讀器 runtime 的進度保存邏輯搬進書架 provider。
+- Useful Legado counterparts: `ui/main/bookshelf`, `ui/book/manage`, `ui/book/group`, and `help/book/BookHelp.kt`.
+- Legado is useful for separating list refresh, grouping/sorting, batch operations, and centralized book cleanup. Feature parity is disabled, so additional Legado bookshelf management abilities are not implied work.
+
+## Do Not Do
+
+- Do not parse book-source rules directly in the bookshelf layer.
+- Do not move reader progress-save logic into bookshelf provider.
+- Do not add Legado-only bookshelf grouping or batch features unless a later request explicitly asks for them.

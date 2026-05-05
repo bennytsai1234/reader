@@ -1,56 +1,63 @@
 # Discovery And Search
 
-## 目標專案目前狀態
+## Current Responsibility
 
-- 探索主頁在 `lib/features/explore/explore_provider.dart` 與 `explore_page.dart`，以 `BookSourceDao.watchAllPart()` 綁定可探索書源，並用 `ExploreUrlParser.parseAsync` 解析分類。
-- 探索結果在 `lib/features/explore/explore_show_provider.dart`，透過 `WebBook.exploreBookAwait` 分頁載入，並用 `BookshelfStateTracker` 標記是否已在書架。
-- 搜尋邏輯拆成 `lib/features/search/search_model.dart` 與 `search_provider.dart`；`SearchModel` 是多書源並行搜尋引擎，`SearchProvider` 管 UI 狀態、歷史、範圍、篩選與排序。
-- 搜尋範圍在 `lib/features/search/models/search_scope.dart`，結果持久化到 `SearchBookDao`，搜尋歷史走 `SearchKeywordDao`。
+- Owns source-driven discovery categories, paged discovery results, cross-source search execution, search history, search scope, result filtering/sorting, and routing search/explore results into Book Detail.
+- Future work should start here when results are missing before detail load, search cancellation/order is wrong, discovery pagination is stale, or source eligibility changes visible search/explore behavior.
 
-## 目標專案上下游
+## Scope
 
-- 上游依賴：`BookSourceDao`、`SearchBookDao`、`SearchKeywordDao`、`BookSourceService`、`WebBook`、`ExploreUrlParser`、`BookshelfStateTracker`、`SharedPreferences`。
-- 下游影響：`Book Detail` 入口、封面搜尋、換源搜尋、書源健康度帶來的可搜尋/可探索過濾。
-- 書源 runtime health 會影響搜尋與探索是否參與，來源校驗變更會間接改變本模組結果。
+- Explore: `lib/features/explore/explore_provider.dart`, `explore_page.dart`, `explore_show_provider.dart`, `explore_show_page.dart`.
+- Search: `lib/features/search/search_model.dart`, `search_provider.dart`, `search_page.dart`, `models/search_scope.dart`, `widgets/`.
+- Engine/service boundary: `lib/core/engine/explore_url_parser.dart`, `lib/core/engine/web_book/`, `lib/core/services/book_source_service.dart`.
+- Data: `SearchBookDao`, `SearchKeywordDao`, `BookSourceDao`, `BookshelfStateTracker`.
+- Tests: `test/features/explore/`, `test/features/search/`, and engine parser tests when rule parsing changes.
 
-## 參考對應
+## Dependencies And Impact
 
-- `legado/app/src/main/java/io/legado/app/ui/main/explore`
-- `legado/app/src/main/java/io/legado/app/ui/book/explore`
-- `legado/app/src/main/java/io/legado/app/ui/book/search`
-- `legado/app/src/main/java/io/legado/app/ui/book/searchContent`
-- `legado/app/src/main/java/io/legado/app/model/webBook/SearchModel.kt`
+- Depends on source availability, source runtime health, `BookSourceService`, `WebBook`, rule parsers, search/explore URLs, cancellation tokens, search history storage, and bookshelf markers.
+- Impacts Book Detail entry data, source switch candidates, cover search, Source Manager health policies, and Settings preferences that affect precision/search behavior.
+- Source validation or import changes can alter which sources participate in discovery/search.
 
-## 可參考模式
+## Key Flows
 
-- 探索入口、探索結果與搜尋結果應分開管理，避免單一 provider 同時持有來源分類、分頁資料與搜尋狀態。
-- 多來源搜尋要保留取消、失敗來源統計與結果合併策略，讓慢源或失敗源不拖住整體 UI。
-- 搜尋結果合併要明確定義「同源重複」與「跨源同名」的差別，避免污染換源或詳情入口。
+- `ExploreProvider` watches source parts from `BookSourceDao`, parses `exploreUrl` through `ExploreUrlParser`, and exposes available categories.
+- `ExploreShowProvider` calls `WebBook.exploreBookAwait`, manages paging, and uses request serials to avoid stale responses overwriting newer category state.
+- `SearchProvider` manages UI state, search history, scope, filters, and delegates concurrent work to `SearchModel`.
+- `SearchModel` runs multi-source search with cancellation and result merging, then persists `SearchBook` records.
+- Results route into Book Detail, where final book info and TOC are loaded.
 
-## 目標專案變更入口
+## Change Entry Points
 
-- 探索來源與分類：`lib/features/explore/explore_provider.dart`、`lib/core/engine/explore_url_parser.dart`。
-- 探索結果：`lib/features/explore/explore_show_provider.dart`。
-- 搜尋引擎：`lib/features/search/search_model.dart`。
-- 搜尋 UI 狀態：`lib/features/search/search_provider.dart`、`lib/features/search/search_page.dart`。
-- 測試：`flutter test test/features/explore/explore_provider_test.dart test/features/explore/explore_show_provider_test.dart test/features/search/search_model_test.dart test/features/search/search_provider_test.dart`。
+- Explore category parsing: `lib/core/engine/explore_url_parser.dart`, `lib/features/explore/explore_provider.dart`.
+- Explore result paging: `lib/features/explore/explore_show_provider.dart`.
+- Search concurrency/merge/sort: `lib/features/search/search_model.dart`.
+- Search UI state, history, scope, filters: `lib/features/search/search_provider.dart`, `widgets/search_scope_sheet.dart`, `models/search_scope.dart`.
+- Eligibility from source health: `lib/core/services/check_source_service.dart`, `lib/features/source_manager/`.
+- Tests: `flutter test test/features/explore test/features/search`.
 
-## 目標專案變更路線
+## Change Routes
 
-- 修改探索分類：先看 `ExploreUrlParser` 與 `ExploreProvider`，再檢查 `BookSource.enabledExplore`、runtime health 與 `legado_explore_kind_flow.dart` 是否仍匹配。
-- 修改探索結果分頁：先更新 `ExploreShowProvider` request serial 與分頁狀態，再驗證 stale response 不會覆蓋新分類。
-- 修改搜尋合併或排序：先更新 `search_model.dart` 的 normalization、duplicate 與 relevance 規則，再同步 `SearchProvider` 篩選、換源候選與相關測試。
-- 若來源可搜尋/可探索資格變更，回頭檢查 `Source Manager And Browser` 的健康度與停用策略。
+- Change explore categories: update parser and provider, then verify source `enabledExplore`, runtime health, category cache keys, and explore tests.
+- Change paged result behavior: update `ExploreShowProvider` request serial/pagination state and verify stale responses cannot overwrite new results.
+- Change search result merging: update `SearchModel` normalization, duplicate grouping, relevance, and source-origin handling, then sync provider filters and source-switch expectations.
+- Change source eligibility: coordinate with Source Manager And Browser so health tags, disabled flags, and source filters stay consistent.
+- If discovery/search contracts change, update Book Detail and Source Manager docs if their routing or eligibility assumptions changed.
 
-## 已知風險
+## Known Risks
 
-- `SearchModel` 使用共享 `CancelToken` 與 pool 並行，修改取消或 timeout 時要防止舊結果回寫新搜尋。
-- `ExploreShowProvider` 用 request serial 避免 stale response；變更分頁或 refresh 時要保留這個防護。
-- 精準搜尋使用全半形與空白 normalization；排序、合併或篩選規則變更可能影響既有測試與換源候選。
-- 探索分類快取以 `bookSourceUrl + exploreUrl` 為 key；變更書源規則或快取清理時要避免沿用舊分類。
+- Search uses shared cancellation and concurrent source calls; stale results can corrupt a newer search if generation checks are bypassed.
+- `ExploreShowProvider` relies on request serial protection for refresh/pagination.
+- Precision search and normalization affect test expectations and source-switch candidate ranking.
+- Explore category caching is keyed by source URL and explore URL; changing parser semantics can leave old categories misleading unless cache invalidation is considered.
 
-## 不要做
+## Reference Notes
 
-- 不把探索頁擴張成內容平台或 RSS 入口，除非使用者另行要求。
-- 不因為 `legado` 有搜內文等更多搜尋變體就新增需求；只有明確 parity 工作才進入功能流程。
-- 不在搜尋 provider 裡直接處理書源編輯、校驗或登入流程。
+- Useful Legado counterparts: `ui/main/explore`, `ui/book/explore`, `ui/book/search`, `ui/book/searchContent`, and `model/webBook/SearchModel.kt`.
+- Legado is useful for concurrent source search, pause/cancel patterns, result merging, and separating explore/search concerns. It is not a mandate to add search-content parity or RSS discovery.
+
+## Do Not Do
+
+- Do not place source editing, login, or validation logic inside search/explore providers.
+- Do not add Legado search variants unless explicitly requested.
+- Do not bypass Book Detail for final book info and chapter loading.

@@ -1,62 +1,69 @@
 # Rules And Local Books
 
-## 目標專案目前狀態
+## Current Responsibility
 
-- 書源規則解析核心在 `lib/core/engine`，包含 `AnalyzeRule`、`AnalyzeUrl`、`RuleAnalyzer`、CSS/JSONPath/XPath/regex parser、JavaScript engine extensions、TTF 查詢與 web book parser。
-- `BookSourceService` 是書源業務調度門面，包裝 `WebBook.getBookInfoAwait`、`getChapterListAwait`、`getContentAwait`、`searchBookAwait`、`exploreBookAwait`。
-- 替換規則 UI 與狀態在 `lib/features/replace_rule`，閱讀器內替換規則入口在 `lib/features/reader_v2/features/replace_rule`。
-- 本地書解析在 `lib/core/local_book` 與 `LocalBookService`，目前支援 TXT、EPUB、UMD；`local_book_formats.dart` 是支援格式白名單。
-- 字典規則與 TXT 目錄規則相關資料表仍存在於 database/model/dao，主要作為相容層，不是目前使用者主入口。
+- Owns the source-rule execution engine, URL analysis, CSS/JSONPath/XPath/regex parsing, JavaScript extensions and async bridge, WebBook parsers, replace rules, Chinese content conversion helpers, and local TXT/EPUB/UMD parsing.
+- Future work should start here when source content is parsed incorrectly, Legado rule compatibility is in question, JS behavior differs, replacement output changes, or local-book import/read behavior is wrong.
 
-## 目標專案上下游
+## Scope
 
-- 上游依賴：`BookSource` 規則模型、`NetworkService`、`CookieStore`、`flutter_js`、HTML/CSS/XPath/JSONPath 套件、`EpubService`、`ResourceService`、`fast_gbk`。
-- 下游影響：搜尋、探索、詳情、閱讀正文、書源除錯、來源校驗、替換規則、簡繁轉換、本地書匯入與 reader_v2 內容載入。
-- 規則解析是來源相容性的核心契約；任何解析語義變更都要優先跑 engine 與 source compatibility 測試。
+- Rule engine: `lib/core/engine/analyze_rule.dart`, `analyze_url.dart`, `rule_analyzer.dart`, `analyze_rule/`, `rule_analyzer/`, `parsers/`.
+- JS bridge/extensions: `lib/core/engine/js/`, including encode, extension, and TTF query helpers.
+- Web book services/parsers: `lib/core/engine/web_book/`, `lib/core/services/book_source_service.dart`.
+- Reader content helpers: `lib/core/engine/reader/content_processor.dart`, `chinese_text_converter.dart`.
+- Replace rules: `lib/features/replace_rule/`, reader-v2 replace-rule feature, `ReplaceRuleDao`.
+- Local books: `lib/core/local_book/`, `lib/core/services/local_book_service.dart`, `epub_service.dart`, `resource_service.dart`, `encoding_detect.dart`.
+- Tests/tools: `test/core/engine/`, `test/core/local_book/`, `test/core/models/replace_rule_test.dart`, `tool/flutter_test_with_quickjs.sh`.
 
-## 參考對應
+## Dependencies And Impact
 
-- `legado/app/src/main/java/io/legado/app/model/analyzeRule`
-- `legado/app/src/main/java/io/legado/app/model/webBook`
-- `legado/app/src/main/java/io/legado/app/help/JsExtensions.kt`
-- `legado/app/src/main/java/io/legado/app/help/ReplaceAnalyzer.kt`
-- `legado/app/src/main/java/io/legado/app/ui/replace`
-- `legado/app/src/main/java/io/legado/app/model/localBook`
-- `legado/modules/book`
+- Depends on `BookSource` rule models, network/cookie services, `flutter_js`, HTML/CSS/XPath/JSONPath packages, crypto/encoding helpers, EPUB/UMD/TXT parsers, and storage services.
+- Impacts Discovery/Search, Book Detail, Reader Runtime content loading, Source Manager debug/validation, Settings/Cache replace-rule toggles, and local-book bookshelf import.
+- Rule semantics are the source-compatibility core; parser changes require focused tests and, for JS, QuickJS-enabled test execution.
 
-## 可參考模式
+## Key Flows
 
-- 規則解析、網路請求、JavaScript 擴充、資料模型轉換要維持可測試的細分層，避免把 parser 行為藏在 UI provider。
-- 書源相容性可以參考 Legado 的語義，但應由 `reader` 的 tests/fixtures 鎖定實際行為。
-- 本地書解析要把格式判定、metadata、章節索引與正文讀取分離；TXT offset、EPUB href、UMD parsed cache 都是不同責任。
+- `AnalyzeUrl` builds source requests, applies headers/cookies/variables, and returns response data for parser stages.
+- `AnalyzeRule`, `RuleAnalyzer`, and parser implementations evaluate source rules against HTML/JSON/text inputs.
+- `WebBook` parsers convert source responses into search books, book info, chapter lists, and chapter content.
+- JS helpers expose compatible extension functions and async promise handling for source rules.
+- Replace rules transform chapter content before reader layout.
+- Local book services detect supported formats, parse metadata/chapter indexes, and provide chapter content fallback for reader runtime.
 
-## 目標專案變更入口
+## Change Entry Points
 
-- 規則解析：`lib/core/engine/analyze_rule.dart`、`lib/core/engine/rule_analyzer.dart`、`lib/core/engine/parsers/`。
-- URL 與 WebBook：`lib/core/engine/analyze_url.dart`、`lib/core/engine/web_book/`、`lib/core/services/book_source_service.dart`。
-- JS：`lib/core/engine/js/`。
-- 替換規則：`lib/features/replace_rule/`、`lib/features/reader_v2/features/replace_rule/`、`lib/core/database/dao/replace_rule_dao.dart`。
-- 本地書：`lib/core/local_book/`、`lib/core/services/local_book_service.dart`、`lib/core/services/epub_service.dart`。
-- 測試：`tool/flutter_test_with_quickjs.sh test/core/engine`，以及 `flutter test test/core/local_book test/core/models/replace_rule_test.dart test/features/reader_v2/reader_v2_content_transformer_test.dart`。
+- Rule syntax or parser behavior: `lib/core/engine/analyze_rule.dart`, `rule_analyzer.dart`, `parsers/`.
+- URL/request behavior: `lib/core/engine/analyze_url.dart`, `lib/core/services/network_service.dart`, `cookie_store.dart`, WebView/backstage paths if verification is involved.
+- JS behavior: `lib/core/engine/js/`.
+- Search/detail/toc/content parsing: `lib/core/engine/web_book/`, `lib/core/services/book_source_service.dart`.
+- Replace rules: `lib/features/replace_rule/`, `lib/features/reader_v2/features/replace_rule/`, `lib/core/models/replace_rule.dart`.
+- Local books: `lib/core/local_book/`, `lib/core/services/local_book_service.dart`, `epub_service.dart`.
+- Tests: `tool/flutter_test_with_quickjs.sh test/core/engine`, plus local-book and replace-rule tests.
 
-## 目標專案變更路線
+## Change Routes
 
-- 修改規則語義：先看 `AnalyzeRule`、`RuleAnalyzer` 或目標 parser，再補對應 `test/core/engine` fixture；若與 Legado parity 有關，記錄差異是故意保留還是待補。
-- 修改 URL/request 規則：先更新 `AnalyzeUrl` 與 network/cookie/webview 邊界，再驗證 search/explore/detail/toc/content 五段流程。
-- 修改 JS extension：先更新 `lib/core/engine/js/`，再跑 QuickJS 專用腳本與 async bridge 測試，避免同步/非同步語義漂移。
-- 修改本地書解析：先從格式 parser 與 `LocalBookService` 下手，再同步書架匯入、章節 offset、reader fallback 與本地書測試。
-- 修改替換規則：先看核心模型與 DAO，再檢查一般替換 UI、閱讀器內替換入口與 content transformer。
+- Change parser semantics: add or update focused fixtures in `test/core/engine`, then check search/detail/toc/content integration paths.
+- Change URL/request handling: synchronize `AnalyzeUrl`, network/cookie/WebView boundaries, and Source Manager validation/debug expectations.
+- Change JS extension/async bridge: update JS engine helpers and run QuickJS test script; verify timeout, promise, and result bridge behavior.
+- Change local-book parsing: update format parser and `LocalBookService`, then verify bookshelf import, chapter offset/href handling, reader fallback, and backup implications.
+- Change replace rules: update model/DAO/provider and reader content transformer together.
+- If rule compatibility or local-book ownership changes, update Source Manager, Reader Runtime, Discovery/Search, Book Detail, and Data Model docs as needed.
 
-## 已知風險
+## Known Risks
 
-- Legado 規則語義龐大，`reader` 目前是 Flutter/Dart 實作；不要假設 Kotlin 行為已完整覆蓋。
-- JavaScript engine 與 async rewrite 對 timeout、promise bridge、extension API 敏感；相關變更要使用 QuickJS/JS 專用測試腳本。
-- TXT 讀取依賴 byte offset 與 charset；重新解析或複製檔案路徑變更會讓已存章節 offset 失效。
-- UMD 解析有小型 LRU future cache；錯誤時要清除 failed future，避免後續讀取永遠失敗。
-- 字典規則與 TXT 目錄規則保留資料相容性；刪除表或 DAO 會影響備份還原與舊資料。
+- Legado rule semantics are broad; `reader` has a Dart implementation and tests are the contract for what is actually supported.
+- JS async rewrite, promise bridge, timeout, and extension APIs are fragile and need QuickJS-enabled tests.
+- TXT uses byte offsets and charset; reparsing or moving files can invalidate saved chapter offsets.
+- EPUB href/resource resolution and UMD cache behavior affect reader content fallback.
+- Dict rules and TXT TOC rule tables/models exist for compatibility even if they are not prominent UI surfaces.
 
-## 不要做
+## Reference Notes
 
-- 不新增未規劃的本地格式或規則體系，除非使用者明確要求。
-- 不為了追 Legado 完整功能而改變 `reader` 已有 parser 對測試 fixture 的相容性；parity 工作要用測試鎖定差異。
-- 不在本地書服務中處理書架 UI 或閱讀器 viewport。
+- Useful Legado counterparts: `model/analyzeRule`, `model/webBook`, `help/JsExtensions.kt`, `help/ReplaceAnalyzer.kt`, `ui/replace`, `model/localBook`, and `modules/book`.
+- Legado is useful for conceptual rule semantics and local-book format boundaries. Do not assume all Kotlin behavior is implemented in Dart unless reader tests or code prove it.
+
+## Do Not Do
+
+- Do not change parser semantics without tests that name the intended compatibility behavior.
+- Do not put UI workflow logic into engine/parser files.
+- Do not add new local formats, source types, or full Legado parity unless explicitly requested.

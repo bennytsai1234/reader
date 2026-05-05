@@ -1,57 +1,65 @@
 # App Shell
 
-## 目標專案目前狀態
+## Current Responsibility
 
-- `reader` 是 Flutter/Dart 專案，app 顯示名稱是 `墨頁`，`pubspec.yaml` 專案名是 `inkpage_reader`。
-- 主入口在 `lib/main.dart`：設定 `runZonedGuarded`、Flutter error widget、`configureDependencies()`、`MultiProvider`、`MaterialApp`、`SourceVerificationCoordinator` 與 `SplashPage`。
-- 全域服務註冊在 `lib/core/di/injection.dart`，目前註冊 Drift `AppDatabase`、DAO、`NetworkService`、`TTSService`、`CrashHandler` 與 logger。
-- 全域 Provider 組裝在 `lib/app_providers.dart`，主要包含 `BookshelfProvider`、`SettingsProvider`、`ChangeCoverProvider`、`DownloadService` 與 get_it 的 `TTSService`。
-- 主導航在 `lib/features/welcome/main_page.dart`，使用 `NavigationBar` 與 `IndexedStack` 維持書架、發現、我的三個分頁狀態；啟動畫面與必要初始化在 `lib/features/welcome/splash_page.dart`。
+- 負責 `inkpage_reader` 的啟動殼層、DI、全域 Provider、根 `MaterialApp`、主導航、主題/語系套用、啟動畫面、啟動失敗回復、全域驗證協調器與 Workmanager 背景入口。
+- 未來工作若發生在進入 feature 前、全域服務初始化、根 navigation、啟動錯誤畫面、延後初始化或 app-level provider 組裝，應從這裡開始。
 
-## 目標專案上下游
+## Scope
 
-- 上游依賴：`lib/core/di/injection.dart`、`lib/core/database`、`lib/core/services/default_data.dart`、`lib/features/settings/settings_provider.dart`、`lib/shared/theme/app_theme.dart`。
-- 下游影響：所有功能頁、全域 provider、`Workmanager` 後台任務、Source verification 全域路由、主題與語系設定。
-- 新增全域服務、DAO 或 UI 狀態時，通常要同時檢查 `configureDependencies()` 與 `AppProviders.providers`。
+- 入口與根 app：`lib/main.dart`、`lib/app_providers.dart`。
+- 啟動與主導航：`lib/features/welcome/splash_page.dart`、`startup_failure_panel.dart`、`main_page.dart`。
+- 全域 DI：`lib/core/di/injection.dart`。
+- 全域 UI 基礎：`lib/shared/theme/app_theme.dart`、`lib/shared/widgets/`、`lib/core/widgets/book_cover_widget.dart`。
+- Android/build boundary：`android/`、`.github/workflows/android-release.yml` when the task is app shell or release wiring.
+- Representative checks: `flutter analyze lib/main.dart lib/app_providers.dart lib/features/welcome` and relevant widget compile tests.
 
-## 參考對應
+## Dependencies And Impact
 
-- `legado/app/src/main/java/io/legado/app/ui/main/MainActivity.kt`
-- `legado/app/src/main/java/io/legado/app/ui/main/MainViewModel.kt`
-- `legado/app/src/main/java/io/legado/app/ui/welcome/WelcomeActivity.kt`
-- `legado/app/src/main/java/io/legado/app/help/DefaultData.kt`
-- `legado/app/src/main/java/io/legado/app/help/CrashHandler.kt`
+- Depends on Drift `AppDatabase`, DAO registration, `NetworkService`, `TTSService`, `CrashHandler`, `DefaultData`, `SettingsProvider`, `BookshelfProvider`, `DownloadService`, `SourceVerificationCoordinator`, `Workmanager`, and `SharedPreferences`.
+- Impacts all feature pages, global provider lifecycle, root navigator behavior, source verification routing, theme/locale propagation, startup recovery, and background update entrypoints.
+- New global services usually require synchronized changes in `lib/core/di/injection.dart` and `lib/app_providers.dart`.
 
-## 可參考模式
+## Key Flows
 
-- 把必要啟動與延後初始化分開，避免首頁因非必要資料卡住。
-- 啟動錯誤要落在可恢復的 UI，而不是讓 app 黑屏或無法重試。
-- 主導航只負責分頁與全域殼層，不直接承擔 feature-specific 邏輯。
+- `main()` wraps `_startApp()` in `runZonedGuarded`, installs the Flutter error widget, configures dependencies, then runs `MultiProvider` with `LegadoReaderApp`.
+- `LegadoReaderApp` consumes `SettingsProvider` for theme and locale, installs `rootNavigatorKey` and `SourceVerificationCoordinator`, then opens `SplashPage`.
+- `SplashPage` runs `DefaultData.initEssential()` and navigates to `MainPage`; non-critical default data is deferred from `MainPage` through `DefaultData.initDeferred()`.
+- `callbackDispatcher()` reinitializes DI inside the Workmanager isolate before reading bookshelf data for background tasks.
+- Startup failure uses `_StartupFailureApp` and `StartupFailurePanel` with retry that resets get_it before restarting.
 
-## 目標專案變更入口
+## Change Entry Points
 
-- 啟動與 crash：`lib/main.dart`、`lib/features/welcome/splash_page.dart`、`lib/features/welcome/startup_failure_panel.dart`。
-- 導航：`lib/features/welcome/main_page.dart`。
-- DI：`lib/core/di/injection.dart`、`lib/core/database/app_database.dart`。
-- Provider：`lib/app_providers.dart`。
-- 基礎檢查：`flutter analyze lib/main.dart lib/app_providers.dart lib/features/welcome`，必要時加上 `flutter test test/features/settings/settings_pages_compile_test.dart`。
+- Startup/crash behavior: `lib/main.dart`, `lib/features/welcome/splash_page.dart`, `lib/features/welcome/startup_failure_panel.dart`.
+- Root navigation: `lib/features/welcome/main_page.dart`, `rootNavigatorKey` usage in `lib/main.dart`.
+- Global services: `lib/core/di/injection.dart`.
+- Global state: `lib/app_providers.dart`.
+- Theme and shared shell widgets: `lib/shared/theme/app_theme.dart`, `lib/shared/widgets/`.
+- CI/release shell: `.github/workflows/android-release.yml`.
 
-## 目標專案變更路線
+## Change Routes
 
-- 新增全域服務：先在服務自身建立可重複初始化或明確生命週期，再更新 `lib/core/di/injection.dart`；若 UI 要監聽狀態，再同步 `lib/app_providers.dart` 與相關 widget 測試。
-- 修改啟動流程：先從 `lib/main.dart` 的必要初始化與 post-first-frame 任務分界下手，再檢查 `SplashPage`、`StartupFailurePanel` 與 `Workmanager` callback 是否仍能在失敗時回復。
-- 修改主導航或根 `Navigator`：先看 `main_page.dart` 與 `rootNavigatorKey` 使用點，再驗證 `SourceVerificationCoordinator`、deep link 匯入與啟動後導頁沒有被破壞。
-- 若啟動責任、全域 provider 或主流程改變，更新本模組與受影響 feature 模組文檔。
+- New global service: implement lifecycle in the service, register it in `configureDependencies()`, add Provider only if UI observes it, then check tests that initialize app providers.
+- Startup sequence change: inspect required initialization in `lib/main.dart`, essential data in `SplashPage`, deferred data in `MainPage`, and error recovery before touching feature code.
+- Root navigation change: update `MainPage` or navigator keys, then verify source verification, association flows, and splash-to-main transition still route correctly.
+- Background task change: verify DI and service dependencies work in a background isolate and do not assume Provider state from the main isolate.
+- If startup ownership, global providers, or root route contracts change, update this module and affected feature modules.
 
-## 已知風險
+## Known Risks
 
-- `configureDependencies()` 使用 get_it 註冊單例；`_retryCriticalStartup()` 會先 reset，但其他重複呼叫路徑仍要避免 duplicate registration。
-- `Workmanager` callback 在背景 isolate 重新初始化 DI；新增服務時要確認背景任務可用，不能依賴主 isolate 的 provider 狀態。
-- `MaterialApp.builder` 包住 `SourceVerificationCoordinator`；修改 navigation key 或 route 行為會影響驗證流程。
-- `SplashPage` 會在必要初始化完成後進入 `MainPage`，延後初始化失敗目前只寫 log，不能假設所有 default data 都已經存在。
+- `configureDependencies()` registers singletons; retry code resets get_it first, but other repeated initialization paths can still duplicate registrations.
+- Workmanager runs in a background isolate and cannot share main-isolate Provider state.
+- `MaterialApp.builder` wraps all routes in `SourceVerificationCoordinator`; root navigator changes can break WebView or verification-code prompts.
+- Deferred initialization failures currently log instead of blocking the app; later code must not assume all optional default data exists immediately.
 
-## 不要做
+## Reference Notes
 
-- 不為了對齊 `legado` 重寫整個首頁資訊架構或導入 RSS 等未要求入口。
-- 不把 feature-specific provider 或頁面流程塞進 app 啟動層。
-- 不在這個模組直接改書源解析、閱讀器 runtime 或資料 schema；只保留殼層與全域組裝責任。
+- Useful Legado counterparts: `app/src/main/java/io/legado/app/ui/main/MainActivity.kt`, `MainViewModel.kt`, `ui/welcome/WelcomeActivity.kt`, `help/DefaultData.kt`, `help/CrashHandler.kt`.
+- Reference guidance is limited to startup sequencing, recoverable failure UI, and keeping the main shell separate from feature-specific business logic.
+- Do not treat Legado's Android activity/view model structure as the target architecture; `reader` uses Flutter widgets, Provider, get_it, and Drift.
+
+## Do Not Do
+
+- Do not move book-source parsing, reader runtime behavior, or feature-specific state into the app shell.
+- Do not introduce new global providers when local feature ownership is enough.
+- Do not change release signing, secrets, or generated Android artifacts unless the task explicitly targets release publishing.

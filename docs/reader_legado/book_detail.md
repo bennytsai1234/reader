@@ -1,55 +1,63 @@
 # Book Detail
 
-## 目標專案目前狀態
+## Current Responsibility
 
-- 主要目錄是 `lib/features/book_detail`，核心狀態在 `book_detail_provider.dart`，UI 在 `book_detail_page.dart` 與 `widgets/`。
-- `BookDetailProvider` 會載入既有書籍、來源、書籍詳情、章節目錄、封面資產與單本快取狀態。
-- 詳情頁支援加入/移出書架、目錄搜尋與倒序、換源、換封面、檢查更新、清理快取、排程下載全書/範圍/缺失章節。
-- 換源候選在 `source/book_detail_change_source_provider.dart`，封面搜尋在 `change_cover_provider.dart` 與 `change_cover_sheet.dart`。
+- Owns the detail screen boundary between search/explore/bookshelf and reader runtime: book info, TOC, add/remove bookshelf, change source, change cover, single-book cache status, update checks, and download scheduling entrypoints.
+- Future work should start here when data is correct before detail but wrong after detail load, or when source switching, TOC, cover, cache status, or opening reader is inconsistent.
 
-## 目標專案上下游
+## Scope
 
-- 上游依賴：`BookDao`、`ChapterDao`、`BookSourceDao`、`ReaderChapterContentDao`、`BookSourceService`、`BookCoverStorageService`、`DownloadService`、`ReaderChapterContentStore`、`SearchBook`。
-- 下游影響：`Reader Runtime` 開啟閱讀、`Bookshelf` 同步、`Source Manager` 書源狀態、下載任務、封面儲存與單本正文快取。
-- 詳情頁是搜尋/探索/書架到閱讀器之間的資料邊界；修改書籍主資料時要保留進度、書架狀態、自訂封面、自訂簡介與章節 index。
+- Provider and UI: `lib/features/book_detail/book_detail_provider.dart`, `book_detail_page.dart`, `widgets/`.
+- Source switching: `lib/features/book_detail/source/book_detail_change_source_provider.dart`, `widgets/change_source_sheet.dart`, `widgets/book_detail_change_source_item.dart`.
+- Cover changes: `lib/features/book_detail/change_cover_provider.dart`, `change_cover_sheet.dart`, `widgets/cover/`.
+- Services/data: `BookSourceService`, `BookCoverStorageService`, `DownloadService`, `ReaderChapterContentStore`, `BookDao`, `ChapterDao`, `BookSourceDao`, `ReaderChapterContentDao`.
+- Tests: `test/features/book_detail/` and related service tests for cache/download behavior.
 
-## 參考對應
+## Dependencies And Impact
 
-- `legado/app/src/main/java/io/legado/app/ui/book/info`
-- `legado/app/src/main/java/io/legado/app/ui/book/toc`
-- `legado/app/src/main/java/io/legado/app/ui/book/changesource`
-- `legado/app/src/main/java/io/legado/app/ui/book/changecover`
+- Depends on book/search result models, source rules, chapter metadata, content storage, cover storage, download scheduling, reader runtime health, and bookshelf state.
+- Impacts Reader Runtime open-book behavior, Bookshelf state/progress, Settings/Cache download/cache UI, Source Manager health, and backup data correctness.
+- Detail is a key preservation boundary: source updates and source switches must not lose user-owned progress, bookshelf membership, custom cover, custom intro, or local state.
 
-## 可參考模式
+## Key Flows
 
-- 書籍資訊、目錄、操作區、換源與換封面應各自保留邊界，避免詳情頁變成跨功能控制中心。
-- 換源時可參考 Legado 的「保留使用者書籍狀態、替換來源資料」流程，但要以 `reader` 的 `Book.migrateTo` 與內容儲存模型為主。
-- 章節與正文快取應用明確 key 與 origin 判定，避免舊來源內容被新來源誤用。
+- `BookDetailProvider` initializes existing book/source state, loads book info, chapters, cover assets, and cache status.
+- Add/remove bookshelf writes book state and triggers bookshelf refresh through shared events/services.
+- Source switching loads candidate source info and chapters, then migrates the old book state onto the new source data.
+- Cache/download actions ensure chapter metadata exists before scheduling tasks through `DownloadService`.
+- Cover selection updates local or remote cover state through cover storage and detail provider state.
 
-## 目標專案變更入口
+## Change Entry Points
 
-- 詳情狀態：`lib/features/book_detail/book_detail_provider.dart`。
-- 詳情 UI：`lib/features/book_detail/book_detail_page.dart`、`lib/features/book_detail/widgets/`。
-- 換源：`lib/features/book_detail/source/book_detail_change_source_provider.dart`、`lib/features/book_detail/widgets/change_source_sheet.dart`。
-- 換封面：`lib/features/book_detail/change_cover_provider.dart`、`lib/features/book_detail/change_cover_sheet.dart`。
-- 測試：`flutter test test/features/book_detail/book_detail_provider_test.dart test/features/book_detail/book_detail_page_compile_test.dart test/features/book_detail/book_info_header_smoke_test.dart`。
+- Detail state loading: `book_detail_provider.dart`, especially initialization, source load, book info load, and chapter load paths.
+- Detail UI: `book_detail_page.dart`, `widgets/book_info_header.dart`, `book_info_toc_bar.dart`, `book_info_intro.dart`.
+- Source switch: `source/book_detail_change_source_provider.dart`, `widgets/change_source_sheet.dart`.
+- Cover change: `change_cover_provider.dart`, `change_cover_sheet.dart`, `widgets/cover/`.
+- Cache/download: detail provider cache status helpers, `DownloadService`, `ReaderChapterContentStore`.
+- Tests: `flutter test test/features/book_detail`.
 
-## 目標專案變更路線
+## Change Routes
 
-- 修改詳情載入：先看 `BookDetailProvider._init()`、`_loadSource()`、`_loadBookInfo()`、`_loadChapters()`，再確認失敗 fallback、來源健康度訊息與 UI loading 狀態。
-- 修改換源：先更新 `book_detail_change_source_provider.dart` 的候選邏輯，再檢查 `Book.migrateTo`、章節清理、正文快取與書架進度保留。
-- 修改快取或下載入口：先從 `BookDetailCacheStatus` 與 `StorageDownloadQueueResult` 下手，再同步 `DownloadService`、`ReaderChapterContentStore` 與 `Settings And Cache`。
-- 修改封面：先查 `ChangeCoverProvider` 與 `BookCoverStorageService`，再驗證詳情頁、書架與備份是否使用相同封面欄位。
+- Change detail loading: update provider loading/error state first, then verify source health messages, chapter fallback, and UI compile tests.
+- Change source switching: update candidate search and migration, then check `Book.migrateTo`, chapter cleanup, content cache invalidation, progress preservation, and bookshelf refresh.
+- Change cache/download entrypoints: synchronize detail cache status, download scheduler, reader content store, and Settings/Cache download manager.
+- Change covers: update `ChangeCoverProvider` and cover storage, then verify detail, bookshelf, backup, and local asset handling.
+- If detail contracts change, update Reader Runtime, Bookshelf, Data Model, or Settings/Cache docs where downstream assumptions changed.
 
-## 已知風險
+## Known Risks
 
-- `changeSource()` 會先取得候選來源詳情與章節，再用舊書資料遷移；任何欄位漏保留都可能造成進度、書架狀態或自訂資訊遺失。
-- 快取狀態只計入同 `origin` 且 ready 的 `ReaderChapterContentEntry`；改變儲存 key 或 origin 判定會影響詳情頁與閱讀器。
-- 下載排程前會確保章節 metadata；章節列表空、來源 disabled、runtime health 不允許閱讀時要回傳清楚訊息。
-- 目錄搜尋 debounce 與 provider dispose 有關，新增 async 流程要避免 dispose 後 notify。
+- Source switch can silently lose progress, bookshelf state, or custom metadata if migration fields drift.
+- Cache status counts ready entries with matching origin; key or origin changes affect detail, download, and reader runtime.
+- Download scheduling depends on complete and current chapter metadata.
+- Debounced TOC search and async provider work must avoid `notifyListeners()` after dispose.
 
-## 不要做
+## Reference Notes
 
-- 不把詳情頁擴張成書源管理頁或閱讀器設定頁。
-- 不為了對齊 `legado` 新增 `reader` 沒有的詳情頁分支，除非這次功能工作明確要求 parity。
-- 不在詳情頁直接解析規則；應委派 `BookSourceService` 與 engine。
+- Useful Legado counterparts: `ui/book/info`, `ui/book/toc`, `ui/book/changesource`, `ui/book/changecover`.
+- Legado is useful for preserving user book state while replacing source-derived data. It is not a reason to add unrequested detail subflows.
+
+## Do Not Do
+
+- Do not turn detail into source management or reader settings.
+- Do not parse source rules directly in the detail layer; use `BookSourceService` and engine services.
+- Do not add missing Legado detail features unless a later task explicitly asks for parity.

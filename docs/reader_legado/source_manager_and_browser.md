@@ -1,63 +1,67 @@
 # Source Manager And Browser
 
-## 目標專案目前狀態
+## Current Responsibility
 
-- 書源管理在 `lib/features/source_manager`，核心狀態是 `source_manager_provider.dart`，支援匯入 JSON/URL、預覽新增/更新/無變化、篩選、排序、分組、選取、分享、匯出與批次操作。
-- 書源匯入由 `SourceImportService` 處理，解析時會把非純文字小說書源停用並加入標籤。
-- 書源校驗在 `lib/core/services/check_source_service.dart`，支援搜尋/發現/詳情/目錄/正文階段、timeout、取消、runtime health 標籤、清理候選與進度 log。
-- 書源除錯在 `source_debug_provider.dart` 與 `SourceDebugService`。
-- WebView 與驗證在 `lib/features/browser`：`BrowserProvider` 解析 `AnalyzeUrl`、同步 Cookie、保存驗證結果；`SourceVerificationCoordinator` 監聽 `SourceVerificationService` 並排隊開啟 browser 或驗證碼對話框。
+- Owns book-source import, preview, list state, filtering, sorting, grouping, selection, share/export, editing, debug, batch validation, runtime health annotations, WebView login, verification-code prompts, cookie writeback, and source verification coordination.
+- Future work should start here when a task involves source health, source JSON import/export, rule editing UI, source debug output, login/cookie behavior, browser verification, or source validation affecting search/detail/reader.
 
-## 目標專案上下游
+## Scope
 
-- 上游依賴：`BookSourceDao`、`BookSource`/`BookSourcePart`、`NetworkService`、`BookSourceService`、`AnalyzeUrl`、`CookieStore`、`WebViewDataService`、`SourceVerificationService`、`SourceValidationContext`。
-- 下游影響：`Discovery And Search`、`Book Detail`、`Reader Runtime`、設定頁、來源健康度、登入 Cookie 與所有書源規則執行。
-- 書源資料模型與 runtime health 是跨模組契約；修改欄位、group/comment 健康標記或啟用條件時，要同步檢查搜尋、探索、詳情與閱讀。
+- Source manager UI/state: `lib/features/source_manager/source_manager_provider.dart`, `source_manager_page.dart`, `source_editor_page.dart`, `source_group_manage_page.dart`, `source_subscription_page.dart`, `views/`, `widgets/`.
+- Import service: `SourceImportService` inside `source_manager_provider.dart`.
+- Debug/validation: `lib/core/services/check_source_service.dart`, `source_debug_service.dart`, `source_validation_context.dart`, `tool/source_validation_support.dart`, `tool/run_source_validation.sh`.
+- Browser/verification: `lib/features/browser/`, `lib/core/services/source_verification_service.dart`, `cookie_store.dart`, `webview_data_service.dart`, `backstage_webview.dart`.
+- Data/model: `BookSource`, `BookSourcePart`, `BookSourceDao`, source rule models.
+- Tests: `test/features/source_manager/`, `test/features/browser/`, `test/core/services/check_source_service_test.dart`, `source_verification_service_test.dart`, `test/tool/source_validation_support_test.dart`.
 
-## 參考對應
+## Dependencies And Impact
 
-- `legado/app/src/main/java/io/legado/app/ui/book/source`
-- `legado/app/src/main/java/io/legado/app/ui/book/source/debug`
-- `legado/app/src/main/java/io/legado/app/ui/book/source/edit`
-- `legado/app/src/main/java/io/legado/app/ui/book/source/manage`
-- `legado/app/src/main/java/io/legado/app/ui/browser`
-- `legado/app/src/main/java/io/legado/app/ui/login`
-- `legado/app/src/main/java/io/legado/app/service/CheckSourceService.kt`
-- `legado/app/src/main/java/io/legado/app/help/source/SourceVerificationHelp.kt`
+- Depends on source models/serialization, rule engine, network/cookie services, WebView, source validation context, DAO access, import dialogs, and QuickJS-enabled tests for rules.
+- Impacts Discovery/Search, Book Detail, Reader Runtime, Rules And Local Books, Settings/Cache validation settings, and every source-backed content flow.
+- Runtime health annotations and enabled flags are cross-module contracts; changing them affects source eligibility outside this module.
 
-## 可參考模式
+## Key Flows
 
-- 書源清單、編輯器、除錯器、校驗器、登入/驗證應各自保留入口，透過資料模型與服務層銜接。
-- 校驗流程可參考 Legado 的分階段健康判定，但 `reader` 應保留目前的非互動批次策略、timeout budget 與 runtime health 分類。
-- 驗證流程要把人工互動從批次校驗中隔離，避免整批來源被單一驗證頁卡住。
+- `SourceImportService` parses JSON/URL input, prepares preview rows, identifies add/update/no-change cases, disables non-text novel sources where required, and applies import results.
+- `SourceManagerProvider` maintains visible-source cache, filters, sort mode, group state, selected sources, and batch actions.
+- `CheckSourceService` runs staged validation for search, discovery, info, TOC, and content with timeout/cancel behavior and writes health information back to source group/comment.
+- `SourceDebugService` and debug provider expose source-rule execution diagnostics.
+- Browser verification routes through `SourceVerificationCoordinator`, `SourceVerificationService`, `BrowserProvider`, WebView, verification-code dialog, and CookieStore/WebView data services.
 
-## 目標專案變更入口
+## Change Entry Points
 
-- 書源清單與匯入：`lib/features/source_manager/source_manager_provider.dart`、`widgets/import_preview_dialog.dart`。
-- 書源 UI：`source_manager_page.dart`、`source_editor_page.dart`、`source_group_manage_page.dart`、`source_subscription_page.dart`。
-- 書源校驗：`lib/core/services/check_source_service.dart`、`tool/source_validation_support.dart`、`tool/run_source_validation.sh`。
-- 除錯：`lib/features/source_manager/source_debug_provider.dart`、`lib/core/services/source_debug_service.dart`。
-- Browser/驗證：`lib/features/browser/browser_provider.dart`、`source_verification_coordinator.dart`、`lib/core/services/source_verification_service.dart`。
-- 測試：`flutter test test/features/source_manager/source_manager_provider_test.dart test/features/source_manager/source_manager_page_smoke_test.dart test/features/source_manager/source_login_test.dart test/core/services/check_source_service_test.dart test/core/services/source_verification_service_test.dart test/tool/source_validation_support_test.dart`。
+- Import/preview/apply: `lib/features/source_manager/source_manager_provider.dart`, `widgets/import_preview_dialog.dart`.
+- List filters/sort/selection: `source_manager_provider.dart`, `widgets/source_filter_bar.dart`, `source_batch_toolbar.dart`, `source_item_tile.dart`.
+- Editor forms: `source_editor_page.dart`, `views/source_edit_*.dart`, `dynamic_form_builder.dart`, `widgets/rule_text_field.dart`.
+- Validation: `lib/core/services/check_source_service.dart`, `source_validation_context.dart`, `tool/source_validation_support.dart`.
+- Debug: `lib/features/source_manager/source_debug_provider.dart`, `lib/core/services/source_debug_service.dart`.
+- Browser/login: `lib/features/browser/browser_provider.dart`, `source_verification_coordinator.dart`, `verification_code_dialog.dart`, `lib/core/services/source_verification_service.dart`.
+- Tests: `flutter test test/features/source_manager test/features/browser test/core/services/check_source_service_test.dart test/core/services/source_verification_service_test.dart`.
 
-## 目標專案變更路線
+## Change Routes
 
-- 修改書源匯入：先更新 `SourceImportService` 的 parse/preview/prepare 流程，再檢查 import preview UI、非小說來源標籤、`BookSource` serialization 與匯入測試。
-- 修改書源列表篩選或排序：先看 `SourceManagerProvider` 的 visible cache dirty flag，再同步 `source_filter_bar.dart`、`source_batch_toolbar.dart` 與 smoke tests。
-- 修改校驗策略：先更新 `CheckSourceService` 與 `SourceValidationContext`，再同步 runtime health 寫回、清理候選、tool validation support 與搜尋/探索啟用條件。
-- 修改登入或驗證：先看 `BrowserProvider`、`SourceVerificationCoordinator` 與 `SourceVerificationService`，再驗證 Cookie normalization、排隊策略與 source login tests。
-- 若 parity 要追 `legado` 書源管理能力，先把來源類型、資料欄位、校驗語義和 UI 入口分成獨立 feature boundaries。
+- Import behavior change: update parse/preview/apply logic, then sync source serialization, import preview UI, non-novel source tagging, and import tests.
+- Filter/sort/group change: update provider cache invalidation and UI controls, then run smoke/provider tests.
+- Validation strategy change: update `CheckSourceService` and `SourceValidationContext`, then verify health writeback, cleanup candidates, source eligibility, and CLI validation support.
+- Login/verification change: update browser provider/coordinator/service together, then check cookie domain normalization, queueing, refetch-after-success behavior, and source login tests.
+- Rule-editor field change: update model serialization, editor forms, import/export, and rule engine expectations together.
+- If source health or source model contracts change, update Discovery/Search, Book Detail, Reader Runtime, Rules And Local Books, and Data Model docs as needed.
 
-## 已知風險
+## Known Risks
 
-- `CheckSourceService` 會把健康狀態寫回 source group/comment；變更標籤或 message 合成會影響清理候選、搜尋池與 UI 分組。
-- 批次校驗使用 worker concurrency、stage timeout、source timeout 與 cancel token；修改時要避免慢源佔滿 worker 或 cancel 後仍寫回資料庫。
-- 非小說來源目前會被停用並標記，這是匯入層與校驗層共同假設。
-- `BrowserProvider.saveVerificationResult()` 可能回寫 Cookie 並重新抓取 HTML；修改驗證流程要確認 Cookie domain normalization。
-- Source manager provider cache `_visibleSourcesCache` 依 dirty flag 更新；新增過濾或排序條件時要記得標記 dirty。
+- `CheckSourceService` writes health information into source group/comment; message format changes can break cleanup, grouping, or UI assumptions.
+- Batch validation uses concurrency, stage timeout, source timeout, and cancellation; cancel-after-writeback and slow-source starvation are common failure modes.
+- Non-text novel sources are currently disabled/tagged during import; source eligibility depends on that import-layer assumption.
+- Browser verification can refetch HTML and write cookies; domain normalization bugs affect later rule execution.
+- `SourceManagerProvider` uses a visible-source cache with dirty flags; new filters or sort keys must mark cache dirty.
 
-## 不要做
+## Reference Notes
 
-- 不把 WebView 擴張成一般瀏覽器產品。
-- 不因為 `legado` 支援更多來源類型就新增 `reader` 未要求的 RSS、音訊或漫畫來源能力；明確 parity 工作也要拆獨立範圍。
-- 不在書源管理 UI 直接實作規則解析；規則執行仍屬 `core/engine` 與 `BookSourceService`。
+- Useful Legado counterparts: `ui/book/source`, `ui/book/source/debug`, `ui/book/source/edit`, `ui/book/source/manage`, `ui/browser`, `ui/login`, `service/CheckSourceService.kt`, `help/source/SourceVerificationHelp.kt`.
+- Legado is useful for staged health checks, separating source edit/debug/manage/login responsibilities, and keeping human verification out of non-interactive batches. Feature parity is disabled, so RSS/audio/comic source support is not implied.
+
+## Do Not Do
+
+- Do not turn WebView into a general browser product.
+- Do not implement rule execution directly in source manager UI; use `core/engine` and `BookSourceService`.
+- Do not add unsupported source types solely because Legado has them.
